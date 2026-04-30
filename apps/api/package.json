@@ -1,0 +1,22 @@
+{
+  "name": "@rta/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "lint": "echo 'No lint configured for api'"
+  },
+  "dependencies": {
+    "@rta/services": "1.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "tsx": "^4.19.1"
+  }
+}

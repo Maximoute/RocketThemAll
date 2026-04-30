@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: rta-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: collector
+      POSTGRES_PASSWORD: collector
+      POSTGRES_DB: collector
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  minio:
+    image: minio/minio:latest
+    container_name: rta-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing local/card-images;
+      mc anonymous set download local/card-images;
+      exit 0;
+      "
+
+  api:
+    image: node:20
+    container_name: rta-api
+    working_dir: /workspace
+    command: sh -c "npm install && npm run prisma:generate && npm run -w @rta/api dev"
+    env_file:
+      - .env.example
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./:/workspace
+    depends_on:
+      - postgres
+      - minio
+
+  bot:
+    image: node:20
+    container_name: rta-bot
+    working_dir: /workspace
+    command: sh -c "npm install && npm run -w @rta/bot dev"
+    env_file:
+      - .env.example
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
+      DISCORD_SPAWN_CHANNEL_ID: ${DISCORD_SPAWN_CHANNEL_ID}
+      ADMIN_ROLE_ID: ${ADMIN_ROLE_ID}
+    volumes:
+      - ./:/workspace
+    depends_on:
+      - api
+
+  web:
+    image: node:20
+    container_name: rta-web
+    working_dir: /workspace
+    command: sh -c "npm install && npm run -w @rta/web prisma:generate && npm run -w @rta/web dev"
+    env_file:
+      - .env.example
+    environment:
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      DATABASE_URL: postgresql://collector:collector@postgres:5432/collector
+      PRISMA_QUERY_ENGINE_LIBRARY: /workspace/packages/database/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+      API_BASE_URL: ${API_BASE_URL}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/workspace
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  minio-data:
