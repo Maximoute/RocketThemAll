@@ -1,11 +1,39 @@
 import { prisma } from "@rta/database";
 import { RARITIES, DECKS } from "@rta/shared";
+import CollectionFiltersClient from "./filters.client";
+
+const POP_CATEGORIES: { value: string; label: string }[] = [
+  { value: "movie", label: "🎬 Films" },
+  { value: "tv", label: "📺 Séries" },
+  { value: "anime", label: "🎌 Anime" },
+  { value: "manga", label: "📖 Manga" },
+  { value: "video_game", label: "🎮 Jeux vidéo" },
+  { value: "meme", label: "😂 Mèmes" },
+  { value: "music", label: "🎵 Musique" },
+  { value: "internet", label: "🌐 Internet" },
+  { value: "comics", label: "🦸 Comics" },
+  { value: "sport", label: "⚽ Sport" },
+  { value: "manual", label: "📋 Manuel" },
+  { value: "body", label: "🚗 Body" },
+  { value: "decal", label: "🎨 Decal" },
+  { value: "wheels", label: "🛞 Wheels" },
+  { value: "rocket_boost", label: "💨 Rocket Boost" },
+  { value: "goal_explosion", label: "💥 Goal Explosion" },
+  { value: "trail", label: "🛤️ Trail" },
+  { value: "topper", label: "🎩 Topper" },
+  { value: "antenna", label: "📡 Antenna" },
+  { value: "player_banner", label: "🏳️ Banner" },
+  { value: "player_title", label: "🏷️ Title" },
+  { value: "unknown", label: "❓ Unknown" },
+];
 
 type SearchParams = {
   deck?: string;
   rarity?: string;
+  category?: string;
   q?: string;
   sort?: string;
+  order?: "asc" | "desc";
 };
 
 export default async function CollectionPage({ searchParams }: { searchParams: SearchParams }) {
@@ -13,16 +41,24 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
     where: {
       name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
       deck: searchParams.deck ? { name: searchParams.deck } : undefined,
-      rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined
+      rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
+      category: searchParams.category ? searchParams.category : undefined
     },
     include: { deck: true, rarity: true }
   });
 
   const sort = searchParams.sort ?? "name";
+  const order = searchParams.order ?? "asc";
   const sorted = [...cards].sort((a, b) => {
-    if (sort === "rarity") return a.rarity.name.localeCompare(b.rarity.name);
-    if (sort === "deck") return a.deck.name.localeCompare(b.deck.name);
-    return a.name.localeCompare(b.name);
+    const dir = order === "asc" ? 1 : -1;
+    if (sort === "rarity") {
+      const byWeight = (a.rarity.weight - b.rarity.weight) * dir;
+      if (byWeight !== 0) return byWeight;
+      return a.name.localeCompare(b.name);
+    }
+    if (sort === "deck") return a.deck.name.localeCompare(b.deck.name) * dir;
+    if (sort === "category") return (a.category ?? "").localeCompare(b.category ?? "") * dir;
+    return a.name.localeCompare(b.name) * dir;
   });
 
   const rarityColor: Record<string, string> = {
@@ -36,37 +72,26 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
     Limited: "#ffd700"
   };
 
+  const categoryLabel = (cat: string | null) =>
+    POP_CATEGORIES.find((c) => c.value === cat)?.label ?? (cat ?? "");
+
   return (
     <section className="card">
       <h1>Collection ({sorted.length} cartes)</h1>
 
-      <form method="GET" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1.5rem", alignItems: "center" }}>
-        <input
-          name="q"
-          defaultValue={searchParams.q ?? ""}
-          placeholder="Rechercher..."
-          style={{ padding: "0.4rem 0.7rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }}
-        />
-        <select name="deck" defaultValue={searchParams.deck ?? ""} style={{ padding: "0.4rem 0.7rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }}>
-          <option value="">Tous les decks</option>
-          {DECKS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select name="rarity" defaultValue={searchParams.rarity ?? ""} style={{ padding: "0.4rem 0.7rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }}>
-          <option value="">Toutes les raretés</option>
-          {RARITIES.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <select name="sort" defaultValue={sort} style={{ padding: "0.4rem 0.7rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }}>
-          <option value="name">Tri : Alphabétique</option>
-          <option value="rarity">Tri : Rareté</option>
-          <option value="deck">Tri : Deck</option>
-        </select>
-        <button type="submit" style={{ padding: "0.4rem 1rem", borderRadius: "6px", background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer", fontSize: "0.9rem" }}>
-          Filtrer
-        </button>
-        <a href="/collection" style={{ padding: "0.4rem 0.8rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem", textDecoration: "none", color: "var(--ink)" }}>
-          Réinitialiser
-        </a>
-      </form>
+      <CollectionFiltersClient
+        decks={DECKS.map((d) => ({ value: d, label: d }))}
+        rarities={RARITIES.map((r) => ({ value: r, label: r }))}
+        categories={POP_CATEGORIES}
+        initial={{
+          q: searchParams.q,
+          deck: searchParams.deck,
+          rarity: searchParams.rarity,
+          category: searchParams.category,
+          sort,
+          order
+        }}
+      />
 
       {sorted.length === 0 ? (
         <p style={{ color: "var(--muted)" }}>Aucune carte trouvée.</p>
@@ -82,6 +107,11 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
                 {card.rarity.name}
               </span>
               <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{card.deck.name}</span>
+              {card.category && (
+                <span style={{ fontSize: "0.75rem", background: "rgba(0,0,0,0.07)", borderRadius: "4px", padding: "0.15rem 0.4rem", alignSelf: "flex-start" }}>
+                  {categoryLabel(card.category)}
+                </span>
+              )}
               {card.description && (
                 <span style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: "0.2rem" }}>{card.description}</span>
               )}

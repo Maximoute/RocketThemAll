@@ -11,7 +11,7 @@ export const RARITIES: Readonly<RarityName[]> = [
   "Limited"
 ];
 
-export const DECKS = ["Rocket League-like", "Pop Culture", "Pokemon"] as const;
+export const DECKS = ["rocket", "Rocket League-like", "Pop Culture", "Pokemon"] as const;
 
 export const DEFAULT_XP_BY_RARITY: Record<RarityName, number> = {
   Common: 10,

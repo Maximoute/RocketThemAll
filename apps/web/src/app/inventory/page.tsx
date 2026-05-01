@@ -3,12 +3,40 @@ import { authOptions } from "../../lib/auth";
 import { prisma } from "@rta/database";
 import { redirect } from "next/navigation";
 import { RARITIES, DECKS } from "@rta/shared";
+import InventoryFiltersClient from "./filters.client";
+
+const POP_CATEGORIES: { value: string; label: string }[] = [
+  { value: "movie", label: "🎬 Films" },
+  { value: "tv", label: "📺 Séries" },
+  { value: "anime", label: "🎌 Anime" },
+  { value: "manga", label: "📖 Manga" },
+  { value: "video_game", label: "🎮 Jeux vidéo" },
+  { value: "meme", label: "😂 Mèmes" },
+  { value: "music", label: "🎵 Musique" },
+  { value: "internet", label: "🌐 Internet" },
+  { value: "comics", label: "🦸 Comics" },
+  { value: "sport", label: "⚽ Sport" },
+  { value: "manual", label: "📋 Manuel" },
+  { value: "body", label: "🚗 Body" },
+  { value: "decal", label: "🎨 Decal" },
+  { value: "wheels", label: "🛞 Wheels" },
+  { value: "rocket_boost", label: "💨 Rocket Boost" },
+  { value: "goal_explosion", label: "💥 Goal Explosion" },
+  { value: "trail", label: "🛤️ Trail" },
+  { value: "topper", label: "🎩 Topper" },
+  { value: "antenna", label: "📡 Antenna" },
+  { value: "player_banner", label: "🏳️ Banner" },
+  { value: "player_title", label: "🏷️ Title" },
+  { value: "unknown", label: "❓ Unknown" },
+];
 
 type SearchParams = {
   deck?: string;
   rarity?: string;
+  category?: string;
   q?: string;
   sort?: string;
+  order?: "asc" | "desc";
 };
 
 export default async function InventoryPage({ searchParams }: { searchParams: SearchParams }) {
@@ -28,30 +56,27 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
       card: {
         name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
         deck: searchParams.deck ? { name: searchParams.deck } : undefined,
-        rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined
+        rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
+        category: searchParams.category ? searchParams.category : undefined
       }
     },
     include: { card: { include: { deck: true, rarity: true } } }
   });
 
   const sort = searchParams.sort ?? "name";
+  const order = searchParams.order ?? "asc";
   const sorted = [...items].sort((a, b) => {
-    if (sort === "quantity") return b.quantity - a.quantity;
-    if (sort === "rarity") return a.card.rarity.name.localeCompare(b.card.rarity.name);
-    if (sort === "deck") return a.card.deck.name.localeCompare(b.card.deck.name);
-    return a.card.name.localeCompare(b.card.name);
+    const dir = order === "asc" ? 1 : -1;
+    if (sort === "quantity") return (a.quantity - b.quantity) * dir;
+    if (sort === "rarity") {
+      const byWeight = (a.card.rarity.weight - b.card.rarity.weight) * dir;
+      if (byWeight !== 0) return byWeight;
+      return a.card.name.localeCompare(b.card.name);
+    }
+    if (sort === "deck") return a.card.deck.name.localeCompare(b.card.deck.name) * dir;
+    if (sort === "category") return (a.card.category ?? "").localeCompare(b.card.category ?? "") * dir;
+    return a.card.name.localeCompare(b.card.name) * dir;
   });
-
-  const params = (extra: Record<string, string>) => {
-    const p = new URLSearchParams({
-      ...(searchParams.q ? { q: searchParams.q } : {}),
-      ...(searchParams.deck ? { deck: searchParams.deck } : {}),
-      ...(searchParams.rarity ? { rarity: searchParams.rarity } : {}),
-      ...(searchParams.sort ? { sort: searchParams.sort } : {}),
-      ...extra
-    });
-    return `?${p.toString()}`;
-  };
 
   const rarityColor: Record<string, string> = {
     Common: "#9e9e9e",
@@ -64,39 +89,26 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
     Limited: "#ffd700"
   };
 
+  const categoryLabel = (cat: string | null) =>
+    POP_CATEGORIES.find((c) => c.value === cat)?.label ?? (cat ?? "");
+
   return (
     <section className="card">
       <h1>Mon Inventaire ({sorted.length} cartes)</h1>
 
-      {/* Filters */}
-      <form method="GET" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1.5rem", alignItems: "center" }}>
-        <input
-          name="q"
-          defaultValue={searchParams.q ?? ""}
-          placeholder="Rechercher..."
-          style={{ padding: "0.4rem 0.7rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }}
-        />
-        <select name="deck" defaultValue={searchParams.deck ?? ""} style={{ padding: "0.4rem 0.7rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }}>
-          <option value="">Tous les decks</option>
-          {DECKS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select name="rarity" defaultValue={searchParams.rarity ?? ""} style={{ padding: "0.4rem 0.7rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }}>
-          <option value="">Toutes les raretés</option>
-          {RARITIES.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <select name="sort" defaultValue={sort} style={{ padding: "0.4rem 0.7rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }}>
-          <option value="name">Tri : Alphabétique</option>
-          <option value="quantity">Tri : Quantité</option>
-          <option value="rarity">Tri : Rareté</option>
-          <option value="deck">Tri : Deck</option>
-        </select>
-        <button type="submit" style={{ padding: "0.4rem 1rem", borderRadius: "6px", background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer", fontSize: "0.9rem" }}>
-          Filtrer
-        </button>
-        <a href="/inventory" style={{ padding: "0.4rem 0.8rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem", textDecoration: "none", color: "var(--ink)" }}>
-          Réinitialiser
-        </a>
-      </form>
+      <InventoryFiltersClient
+        decks={DECKS.map((d) => ({ value: d, label: d }))}
+        rarities={RARITIES.map((r) => ({ value: r, label: r }))}
+        categories={POP_CATEGORIES}
+        initial={{
+          q: searchParams.q,
+          deck: searchParams.deck,
+          rarity: searchParams.rarity,
+          category: searchParams.category,
+          sort,
+          order
+        }}
+      />
 
       {sorted.length === 0 ? (
         <p style={{ color: "var(--muted)" }}>Aucune carte trouvée.</p>
@@ -112,6 +124,11 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
                 {item.card.rarity.name}
               </span>
               <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{item.card.deck.name}</span>
+              {item.card.category && (
+                <span style={{ fontSize: "0.75rem", background: "rgba(0,0,0,0.07)", borderRadius: "4px", padding: "0.15rem 0.4rem", alignSelf: "flex-start" }}>
+                  {categoryLabel(item.card.category)}
+                </span>
+              )}
               <span style={{ fontSize: "0.85rem", marginTop: "auto" }}>×{item.quantity}</span>
             </article>
           ))}

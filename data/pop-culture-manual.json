@@ -1,0 +1,250 @@
+[
+  {
+    "name": "Doge",
+    "category": "meme",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/5/5f/Original_Doge_meme.jpg",
+    "description": "Such wow. Very meme. The most iconic Shiba Inu on the internet.",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Trollface",
+    "category": "meme",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/9/9a/Trollface_non-free.png",
+    "description": "Problem? L'un des premiers mèmes d'internet, né sur 4chan en 2008.",
+    "rarity": "Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Rickroll",
+    "category": "meme",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/a/a7/Camponotus_flavomarginatus_ant.jpg",
+    "description": "Never gonna give you up. La blague internet la plus persistante de l'histoire.",
+    "rarity": "Import",
+    "source": "manual"
+  },
+  {
+    "name": "Nyan Cat",
+    "category": "meme",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/c/c2/Nyan_Cat.gif",
+    "description": "Un chat arc-en-ciel volant dans l'espace sur une musique entêtante. Poptart cat.",
+    "rarity": "Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Drake Pointing",
+    "category": "meme",
+    "imageUrl": "https://i.imgur.com/jkPGz7X.jpg",
+    "description": "Nah / Yeah. Le format mème le plus utilisé sur les réseaux sociaux depuis 2017.",
+    "rarity": "Common",
+    "source": "manual"
+  },
+  {
+    "name": "This is Fine",
+    "category": "meme",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/6/6b/This_is_fine.png",
+    "description": "Un chien assis dans une maison en feu. Résumé parfait d'une situation catastrophique.",
+    "rarity": "Uncommon",
+    "source": "manual"
+  },
+  {
+    "name": "Distracted Boyfriend",
+    "category": "meme",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/2/2b/Distracted_boyfriend_meme.jpg",
+    "description": "Le mème stock photo le plus détourné de l'histoire. Primé par une agence internationale.",
+    "rarity": "Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Pepe the Frog",
+    "category": "meme",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/8/81/Pepe_the_frog_by_Matt_Furie.jpg",
+    "description": "Feels good man. La grenouille la plus célèbre d'internet, créée par Matt Furie.",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Michael Jackson Popcorn",
+    "category": "meme",
+    "imageUrl": "https://i.imgur.com/3VpuFkQ.gif",
+    "description": "MJ qui mange du pop-corn en spectateur. Réaction ultime pour les dramas en ligne.",
+    "rarity": "Uncommon",
+    "source": "manual"
+  },
+  {
+    "name": "Woman Yelling at Cat",
+    "category": "meme",
+    "imageUrl": "https://i.imgur.com/s7uiEGk.jpg",
+    "description": "La femme qui crie vs le chat blanc impassible à table. Format universel depuis 2019.",
+    "rarity": "Common",
+    "source": "manual"
+  },
+  {
+    "name": "Michael Jackson — Thriller",
+    "category": "music",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/5/55/Michael_Jackson_-_Thriller.png",
+    "description": "L'album le plus vendu de l'histoire. Thriller (1982) a redéfini la pop music mondiale.",
+    "rarity": "Exotic",
+    "source": "manual"
+  },
+  {
+    "name": "Daft Punk",
+    "category": "music",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/2/26/Daft_Punk_-_Around_the_World.jpg",
+    "description": "Le duo français qui a révolutionné l'électro. Casques dorés, musique intemporelle.",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Nirvana — Nevermind",
+    "category": "music",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/b/b7/NirvanaNevermindalbumcover.jpg",
+    "description": "Le bébé dans la piscine. L'album de 1991 qui a propulsé le grunge au sommet.",
+    "rarity": "Exotic",
+    "source": "manual"
+  },
+  {
+    "name": "Beyoncé",
+    "category": "music",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/5/52/Beyonce_Lemonade.jpg",
+    "description": "Queen B. Icône musicale, culturelle et féministe du XXIe siècle.",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "The Beatles — Abbey Road",
+    "category": "music",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/4/42/Beatles_-_Abbey_Road.jpg",
+    "description": "La pochette la plus imitée de l'histoire. Dernier album studio des Fab Four.",
+    "rarity": "Black Market",
+    "source": "manual"
+  },
+  {
+    "name": "Eminem — Slim Shady LP",
+    "category": "music",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/c/c0/Eminemslimshady.jpg",
+    "description": "Le rap blanc débarque. Provocateur, technique, incontournable.",
+    "rarity": "Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Spider-Man",
+    "category": "comics",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/2/21/Web_of_Spider-Man_Vol_1_129-1.png",
+    "description": "Le héros de Queens. Peter Parker, votre voisin préféré depuis Amazing Fantasy #15 (1962).",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Batman",
+    "category": "comics",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/6/6a/Detective27.jpg",
+    "description": "Le Chevalier Noir. Bruce Wayne combat le crime dans Gotham depuis Detective Comics #27 (1939).",
+    "rarity": "Exotic",
+    "source": "manual"
+  },
+  {
+    "name": "Astérix",
+    "category": "comics",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/1/10/Asterix_and_the_laurel_wreath.jpg",
+    "description": "Petit village gaulois, irréductible résistance. 38 albums, 380 millions d'exemplaires.",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Naruto Uzumaki",
+    "category": "comics",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/9/94/NarutoCoverTankobon1.jpg",
+    "description": "Croyez en votre ninja way. Le manga de Masashi Kishimoto, 250M d'exemplaires vendus.",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Wonder Woman",
+    "category": "comics",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/9/93/WonderWoman1942.jpg",
+    "description": "Princesse de Themyscira. Symbole du féminisme et superhéroïne DC depuis 1941.",
+    "rarity": "Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Lionel Messi",
+    "category": "sport",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b4/Lionel-Messi-Argentina-2022-FIFA-World-Cup_%28cropped%29.jpg",
+    "description": "8 Ballons d'Or. Champion du Monde 2022. Le meilleur joueur de l'histoire du football.",
+    "rarity": "Black Market",
+    "source": "manual"
+  },
+  {
+    "name": "Michael Jordan",
+    "category": "sport",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ae/Michael_Jordan_in_2014.jpg",
+    "description": "6 titres NBA, 6 Finals MVP. The GOAT du basketball et icône culturelle mondiale.",
+    "rarity": "Exotic",
+    "source": "manual"
+  },
+  {
+    "name": "Serena Williams",
+    "category": "sport",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a8/Serena_Williams_2013_US_Open.jpg",
+    "description": "23 Grand Chelems. La joueuse de tennis la plus dominante de tous les temps.",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Usain Bolt",
+    "category": "sport",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/6/60/Usain_Bolt_2012_Olympics_2.jpg",
+    "description": "9.58s sur 100m. Lightning Bolt, l'homme le plus rapide de l'histoire.",
+    "rarity": "Exotic",
+    "source": "manual"
+  },
+  {
+    "name": "Coupe du Monde 1998",
+    "category": "sport",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a4/FIFA_World_Cup_1998_Final.jpg",
+    "description": "France 3 - Brésil 0. La nuit de Saint-Denis. Zizou double et la France devient championne du monde.",
+    "rarity": "Import",
+    "source": "manual"
+  },
+  {
+    "name": "Rickard Rakuten",
+    "category": "internet",
+    "imageUrl": "https://i.imgur.com/placeholder.jpg",
+    "description": "Personnage fictif représentant la culture marketing d'internet. Tout vendre, partout.",
+    "rarity": "Common",
+    "source": "manual"
+  },
+  {
+    "name": "Reddit Upvote",
+    "category": "internet",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/en/b/bd/Reddit_Logo_Icon.svg",
+    "description": "La flèche orange qui décide de la visibilité d'une idée sur internet. Pouvoir de la masse.",
+    "rarity": "Uncommon",
+    "source": "manual"
+  },
+  {
+    "name": "Twitch",
+    "category": "internet",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/2/26/Twitch_logo.svg",
+    "description": "La plateforme de streaming qui a transformé le gaming en spectacle de masse.",
+    "rarity": "Rare",
+    "source": "manual"
+  },
+  {
+    "name": "YouTube",
+    "category": "internet",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg",
+    "description": "Broadcast Yourself. 500 heures de vidéo uploadées par minute. Internet dans une box rouge.",
+    "rarity": "Very Rare",
+    "source": "manual"
+  },
+  {
+    "name": "Wikipedia Zero",
+    "category": "internet",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/6/63/Wikipedia-logo.png",
+    "description": "La somme de toutes les connaissances humaines, éditée bénévolement. La libre encyclopédie.",
+    "rarity": "Import",
+    "source": "manual"
+  }
+]

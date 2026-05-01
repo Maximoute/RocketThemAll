@@ -49,6 +49,9 @@ services:
     command: sh -c "npm install && npm run prisma:generate && npm run -w @rta/api dev"
     env_file:
       - .env.example
+      - .env
+    environment:
+      DATABASE_URL: postgresql://collector:collector@postgres:5432/collector
     ports:
       - "4000:4000"
     volumes:
@@ -64,6 +67,7 @@ services:
     command: sh -c "npm install && npm run -w @rta/bot dev"
     env_file:
       - .env.example
+      - .env
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
@@ -83,6 +87,7 @@ services:
     command: sh -c "npm install && npm run -w @rta/web prisma:generate && npm run -w @rta/web dev"
     env_file:
       - .env.example
+      - .env
     environment:
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
@@ -91,6 +96,7 @@ services:
       DATABASE_URL: postgresql://collector:collector@postgres:5432/collector
       PRISMA_QUERY_ENGINE_LIBRARY: /workspace/packages/database/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
       API_BASE_URL: ${API_BASE_URL}
+      INTERNAL_API_URL: http://api:4000
     ports:
       - "3000:3000"
     volumes:

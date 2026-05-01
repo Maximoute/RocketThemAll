@@ -13,7 +13,14 @@
     "lint": "npm run -ws lint",
     "prisma:generate": "npm run -w @rta/database prisma:generate",
     "prisma:migrate": "npm run -w @rta/database prisma:migrate",
-    "prisma:seed": "npm run -w @rta/database prisma:seed"
+    "prisma:seed": "npm run -w @rta/database prisma:seed",
+    "init:pokemon": "tsx scripts/init-pokemon.ts",
+    "import:pop": "tsx scripts/import-pop.ts",
+    "import:pop:movies": "tsx scripts/import-pop-movies.ts",
+    "import:pop:anime": "tsx scripts/import-pop-anime.ts",
+    "import:pop:games": "tsx scripts/import-pop-games.ts",
+    "import:pop:manual": "tsx scripts/import-pop-manual.ts",
+    "import:pop:all": "tsx scripts/import-pop-all.ts"
   },
   "devDependencies": {
     "prisma": "^7.8.0",

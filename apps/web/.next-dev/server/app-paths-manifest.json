@@ -1,10 +1,5 @@
 {
   "/admin/cards/page": "app/admin/cards/page.js",
-  "/inventory/page": "app/inventory/page.js",
-  "/profile/page": "app/profile/page.js",
-  "/page": "app/page.js",
-  "/collection/page": "app/collection/page.js",
-  "/trades/page": "app/trades/page.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/admin/page": "app/admin/page.js"
+  "/_not-found/page": "app/_not-found/page.js"
 }

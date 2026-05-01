@@ -13,6 +13,15 @@ export class CaptureService {
   private static currentSpawn: SpawnState | null = null;
   private static userCooldown = new Map<string, number>();
 
+  private setSpawn(cardId: string, channelId: string) {
+    CaptureService.currentSpawn = {
+      cardId,
+      channelId,
+      spawnedAt: Date.now(),
+      captured: false
+    };
+  }
+
   async spawnRandomCard(channelId: string) {
     const cards = await prisma.card.findMany({ include: { rarity: true, deck: true } });
     if (cards.length === 0) {
@@ -28,14 +37,22 @@ export class CaptureService {
       if (roll <= 0) { random = card; break; }
     }
 
-    CaptureService.currentSpawn = {
-      cardId: random.id,
-      channelId,
-      spawnedAt: Date.now(),
-      captured: false
-    };
+    this.setSpawn(random.id, channelId);
 
     return random;
+  }
+
+  async spawnCardById(channelId: string, cardId: string) {
+    const card = await prisma.card.findUnique({
+      where: { id: cardId },
+      include: { rarity: true, deck: true }
+    });
+    if (!card) {
+      throw new AppError("Card not found", 404);
+    }
+
+    this.setSpawn(card.id, channelId);
+    return card;
   }
 
   async capture(userId: string, channelId: string, cardName: string) {
@@ -60,11 +77,27 @@ export class CaptureService {
       throw new AppError("Wrong card name", 409);
     }
 
-    CaptureService.currentSpawn.captured = true;
-
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new AppError("User not found", 404);
+    }
+
+    // Jet de des selon le catchRate de la rarete
+    const catchRate = (card.rarity as unknown as { catchRate?: number }).catchRate ?? 1.0;
+    const caught = Math.random() < catchRate;
+
+    // La carte disparaît dans tous les cas (capturée ou échappée)
+    CaptureService.currentSpawn.captured = true;
+
+    if (!caught) {
+      return {
+        caught: false as const,
+        card,
+        gainedXp: 0,
+        level: user.level,
+        xp: user.xp,
+        boostersGained: 0,
+      };
     }
 
     const gainedXp = card.xpReward || xpForRarity(card.rarity.name as never);
@@ -100,6 +133,7 @@ export class CaptureService {
     });
 
     return {
+      caught: true as const,
       card,
       gainedXp,
       level: progress.level,

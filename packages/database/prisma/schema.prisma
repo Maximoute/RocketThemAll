@@ -50,10 +50,11 @@ model Deck {
 }
 
 model Rarity {
-  id     String @id @default(uuid())
-  name   String @unique
-  weight Int
-  cards  Card[]
+  id        String @id @default(uuid())
+  name      String @unique
+  weight    Int
+  catchRate Float  @default(1.0)
+  cards     Card[]
 }
 
 model Card {
@@ -65,11 +66,18 @@ model Card {
   description String?
   xpReward    Int
   dropRate    Float
+  source      String?         @default("manual")
+  sourceId    String?
+  category    String?
   deck        Deck            @relation(fields: [deckId], references: [id])
   rarity      Rarity          @relation(fields: [rarityId], references: [id])
   inventory   InventoryItem[]
   tradeItems  TradeItem[]
   captures    CaptureLog[]
+
+  @@index([source])
+  @@index([sourceId])
+  @@index([category])
 }
 
 model InventoryItem {
@@ -162,4 +170,5 @@ model AppConfig {
   captureCooldownS Int  @default(5)
   spawnChannelId String?
   forceSpawnRequestedAt DateTime?
+  forceSpawnCardId String?
 }

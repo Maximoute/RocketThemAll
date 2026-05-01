@@ -1,6 +1,8 @@
 import { prisma } from "@rta/database";
 import { requireAdmin } from "../../../lib/guard";
 import { revalidatePath } from "next/cache";
+import { RARITIES, DECKS } from "@rta/shared";
+import AdminCardsFiltersClient from "./filters.client";
 
 const rarityColor: Record<string, string> = {
   Common: "#9e9e9e",
@@ -43,7 +45,41 @@ const EXAMPLE_CARDS = [
   }
 ];
 
-export default async function AdminCardsPage() {
+const POP_CATEGORIES: { value: string; label: string }[] = [
+  { value: "movie", label: "Films" },
+  { value: "tv", label: "Series" },
+  { value: "anime", label: "Anime" },
+  { value: "manga", label: "Manga" },
+  { value: "video_game", label: "Jeux video" },
+  { value: "meme", label: "Memes" },
+  { value: "music", label: "Musique" },
+  { value: "internet", label: "Internet" },
+  { value: "comics", label: "Comics" },
+  { value: "sport", label: "Sport" },
+  { value: "manual", label: "Manuel" },
+  { value: "body", label: "Body" },
+  { value: "decal", label: "Decal" },
+  { value: "wheels", label: "Wheels" },
+  { value: "rocket_boost", label: "Rocket Boost" },
+  { value: "goal_explosion", label: "Goal Explosion" },
+  { value: "trail", label: "Trail" },
+  { value: "topper", label: "Topper" },
+  { value: "antenna", label: "Antenna" },
+  { value: "player_banner", label: "Player Banner" },
+  { value: "player_title", label: "Player Title" },
+  { value: "unknown", label: "Unknown" }
+];
+
+type SearchParams = {
+  q?: string;
+  deck?: string;
+  rarity?: string;
+  category?: string;
+  sort?: "name" | "rarity" | "deck" | "category";
+  order?: "asc" | "desc";
+};
+
+export default async function AdminCardsPage({ searchParams }: { searchParams: SearchParams }) {
   const currentAdmin = await requireAdmin();
 
   async function createDeck(formData: FormData) {
@@ -79,7 +115,23 @@ export default async function AdminCardsPage() {
       return;
     }
 
+    // Get all card IDs in this deck
+    const cards = await prisma.card.findMany({ where: { deckId: id }, select: { id: true } });
+    const cardIds = cards.map(c => c.id);
+
+    if (cardIds.length > 0) {
+      // Delete all related records in the correct order (respecting foreign keys)
+      await prisma.inventoryItem.deleteMany({ where: { cardId: { in: cardIds } } });
+      await prisma.tradeItem.deleteMany({ where: { cardId: { in: cardIds } } });
+      await prisma.captureLog.deleteMany({ where: { cardId: { in: cardIds } } });
+    }
+
+    // Then delete all cards in this deck
+    await prisma.card.deleteMany({ where: { deckId: id } });
+    
+    // Finally delete the deck itself
     await prisma.deck.delete({ where: { id } });
+    
     await prisma.adminLog.create({
       data: {
         adminId: admin.id,
@@ -124,6 +176,8 @@ export default async function AdminCardsPage() {
     const name = String(formData.get("name") ?? "").trim();
     const deckId = String(formData.get("deckId") ?? "");
     const rarityId = String(formData.get("rarityId") ?? "");
+    const categoryRaw = String(formData.get("category") ?? "").trim();
+    const category = categoryRaw || null;
     const description = String(formData.get("description") ?? "").trim() || null;
     const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
     const xpReward = Number(formData.get("xpReward") ?? 10);
@@ -138,6 +192,7 @@ export default async function AdminCardsPage() {
         name,
         deckId,
         rarityId,
+        category,
         description,
         imageUrl,
         xpReward: Number.isFinite(xpReward) ? Math.max(0, Math.floor(xpReward)) : 0,
@@ -163,6 +218,8 @@ export default async function AdminCardsPage() {
     const name = String(formData.get("name") ?? "").trim();
     const deckId = String(formData.get("deckId") ?? "");
     const rarityId = String(formData.get("rarityId") ?? "");
+    const categoryRaw = String(formData.get("category") ?? "").trim();
+    const category = categoryRaw || null;
     const description = String(formData.get("description") ?? "").trim() || null;
     const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
     const xpReward = Number(formData.get("xpReward") ?? 10);
@@ -178,6 +235,7 @@ export default async function AdminCardsPage() {
         name,
         deckId,
         rarityId,
+        category,
         description,
         imageUrl,
         xpReward: Number.isFinite(xpReward) ? Math.max(0, Math.floor(xpReward)) : 0,
@@ -264,17 +322,174 @@ export default async function AdminCardsPage() {
     revalidatePath("/admin/cards");
   }
 
-  const cards = await prisma.card.findMany({
-    include: { deck: true, rarity: true },
-    orderBy: { name: "asc" }
+  async function forceRandomSpawn() {
+    "use server";
+    const admin = await requireAdmin();
+
+    await prisma.appConfig.upsert({
+      where: { id: "default" },
+      update: { forceSpawnRequestedAt: new Date(), forceSpawnCardId: null },
+      create: {
+        id: "default",
+        spawnIntervalS: 300,
+        captureCooldownS: 5,
+        forceSpawnRequestedAt: new Date(),
+        forceSpawnCardId: null
+      }
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "CONFIG_FORCE_RANDOM_SPAWN_REQUESTED",
+        target: "default"
+      }
+    });
+
+    revalidatePath("/admin/cards");
+  }
+
+  async function forceSpecificSpawn(formData: FormData) {
+    "use server";
+    const admin = await requireAdmin();
+    const cardId = String(formData.get("cardId") ?? "").trim();
+    if (!cardId) return;
+
+    const card = await prisma.card.findUnique({ where: { id: cardId } });
+    if (!card) return;
+
+    await prisma.appConfig.upsert({
+      where: { id: "default" },
+      update: { forceSpawnRequestedAt: new Date(), forceSpawnCardId: cardId },
+      create: {
+        id: "default",
+        spawnIntervalS: 300,
+        captureCooldownS: 5,
+        forceSpawnRequestedAt: new Date(),
+        forceSpawnCardId: cardId
+      }
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "CONFIG_FORCE_TARGET_SPAWN_REQUESTED",
+        target: cardId,
+        metadata: { cardName: card.name }
+      }
+    });
+
+    revalidatePath("/admin/cards");
+  }
+
+  async function giveCardToUser(formData: FormData) {
+    "use server";
+    const admin = await requireAdmin();
+    const cardId = String(formData.get("cardId") ?? "").trim();
+    const username = String(formData.get("username") ?? "").trim();
+    const quantityRaw = Number(formData.get("quantity") ?? 1);
+    const quantity = Number.isFinite(quantityRaw) ? Math.max(1, Math.floor(quantityRaw)) : 1;
+
+    if (!cardId || !username) return;
+
+    const user = await prisma.user.findFirst({
+      where: { username: { equals: username, mode: "insensitive" } }
+    });
+    if (!user) return;
+
+    const card = await prisma.card.findUnique({ where: { id: cardId } });
+    if (!card) return;
+
+    await prisma.inventoryItem.upsert({
+      where: { userId_cardId: { userId: user.id, cardId } },
+      update: { quantity: { increment: quantity } },
+      create: { userId: user.id, cardId, quantity }
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "CARD_GRANTED_TO_USER",
+        target: `${user.id}:${cardId}`,
+        metadata: { username: user.username, cardName: card.name, quantity }
+      }
+    });
+
+    revalidatePath("/admin/cards");
+  }
+
+  const sort = searchParams.sort ?? "name";
+  const order = searchParams.order ?? "asc";
+
+  const cardsRaw = await prisma.card.findMany({
+    where: {
+      name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
+      deck: searchParams.deck ? { name: searchParams.deck } : undefined,
+      rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
+      category: searchParams.category ? searchParams.category : undefined
+    },
+    include: { deck: true, rarity: true }
   });
+
+  const cards = [...cardsRaw].sort((a, b) => {
+    const dir = order === "asc" ? 1 : -1;
+
+    if (sort === "rarity") {
+      const byWeight = (a.rarity.weight - b.rarity.weight) * dir;
+      if (byWeight !== 0) return byWeight;
+      return a.name.localeCompare(b.name);
+    }
+
+    if (sort === "deck") {
+      const byDeck = a.deck.name.localeCompare(b.deck.name) * dir;
+      if (byDeck !== 0) return byDeck;
+      return a.name.localeCompare(b.name);
+    }
+
+    if (sort === "category") {
+      const byCategory = (a.category ?? "").localeCompare(b.category ?? "") * dir;
+      if (byCategory !== 0) return byCategory;
+      return a.name.localeCompare(b.name);
+    }
+
+    return a.name.localeCompare(b.name) * dir;
+  });
+
   const decks = await prisma.deck.findMany({ orderBy: { name: "asc" } });
   const rarities = await prisma.rarity.findMany({ orderBy: { weight: "desc" } });
+  const users = await prisma.user.findMany({ select: { username: true }, orderBy: { username: "asc" }, take: 250 });
 
   return (
     <section className="card">
       <h1>Admin Cards & Bibliotheques</h1>
       <p>Connecte en admin: {currentAdmin.username}</p>
+
+      <article className="card">
+        <h2>Actions rapides</h2>
+        <form action={forceRandomSpawn}>
+          <button type="submit">Forcer un spawn aleatoire maintenant</button>
+        </form>
+        <p style={{ color: "var(--muted)", marginTop: "0.5rem" }}>
+          Pour un spawn cible, utilise le bouton "Spawn cette carte" dans chaque carte.
+        </p>
+      </article>
+
+      <article className="card">
+        <h2>Filtres & tri</h2>
+        <AdminCardsFiltersClient
+          decks={DECKS.map((d) => ({ value: d, label: d }))}
+          rarities={RARITIES.map((r) => ({ value: r, label: r }))}
+          categories={POP_CATEGORIES}
+          initial={{
+            q: searchParams.q,
+            deck: searchParams.deck,
+            rarity: searchParams.rarity,
+            category: searchParams.category,
+            sort,
+            order
+          }}
+        />
+      </article>
 
       <article className="card">
         <h2>Bibliotheques (Decks)</h2>
@@ -298,6 +513,7 @@ export default async function AdminCardsPage() {
             <input type="hidden" name="rarityId" value={rarity.id} />
             <span>{rarity.name}</span>
             <input name="weight" type="number" min={1} defaultValue={rarity.weight} />
+            <input name="catchRate" type="number" min={0} max={1} step="0.01" defaultValue={rarity.catchRate ?? 1} />
             <button type="submit">Mettre a jour</button>
           </form>
         ))}
@@ -319,6 +535,12 @@ export default async function AdminCardsPage() {
               <option key={rarity.id} value={rarity.id}>{rarity.name}</option>
             ))}
           </select>
+          <select name="category" defaultValue="">
+            <option value="">Sans categorie</option>
+            {POP_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
           <input name="imageUrl" type="url" placeholder="Image URL (optionnel)" />
           <textarea name="description" placeholder="Description (optionnelle)" rows={2} />
           <input name="xpReward" type="number" min={0} defaultValue={20} required />
@@ -331,7 +553,13 @@ export default async function AdminCardsPage() {
         </form>
       </article>
 
-      <p style={{ marginTop: "8px" }}>Gestion complete: decks, raretes, cartes et exemples.</p>
+      <p style={{ marginTop: "8px" }}>Gestion complete: decks, raretes, cartes, spawn force et dons utilisateurs.</p>
+
+      <datalist id="admin-usernames">
+        {users.map((u) => (
+          <option key={u.username} value={u.username} />
+        ))}
+      </datalist>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "1rem", marginTop: "1.5rem" }}>
         {cards.map((card) => (
@@ -346,6 +574,28 @@ export default async function AdminCardsPage() {
                 {card.rarity.name}
               </span>
               <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{card.deck.name}</span>
+              {card.category ? (
+                <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Categorie: {card.category}</span>
+              ) : null}
+
+              <form action={forceSpecificSpawn} style={{ marginTop: "6px" }}>
+                <input type="hidden" name="cardId" value={card.id} />
+                <button type="submit" style={{ width: "100%" }}>Spawn cette carte</button>
+              </form>
+
+              <form action={giveCardToUser} style={{ display: "grid", gap: "6px", marginTop: "6px" }}>
+                <input type="hidden" name="cardId" value={card.id} />
+                <input
+                  name="username"
+                  type="text"
+                  list="admin-usernames"
+                  placeholder="Username destinataire"
+                  required
+                  style={{ fontSize: "0.82rem", padding: "4px 6px" }}
+                />
+                <input name="quantity" type="number" min={1} defaultValue={1} style={{ fontSize: "0.82rem", padding: "4px 6px" }} />
+                <button type="submit" style={{ fontSize: "0.82rem", padding: "4px 8px" }}>Donner la carte</button>
+              </form>
 
               {/* Edit form */}
               <details style={{ marginTop: "0.5rem" }}>
@@ -361,6 +611,12 @@ export default async function AdminCardsPage() {
                   <select name="rarityId" defaultValue={card.rarityId} required style={{ fontSize: "0.82rem", padding: "4px 6px" }}>
                     {rarities.map((rarity) => (
                       <option key={rarity.id} value={rarity.id}>{rarity.name}</option>
+                    ))}
+                  </select>
+                  <select name="category" defaultValue={card.category ?? ""} style={{ fontSize: "0.82rem", padding: "4px 6px" }}>
+                    <option value="">Sans categorie</option>
+                    {POP_CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </select>
                   <input name="imageUrl" type="url" defaultValue={card.imageUrl ?? ""} placeholder="Image URL" style={{ fontSize: "0.82rem", padding: "4px 6px" }} />

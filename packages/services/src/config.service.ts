@@ -5,7 +5,13 @@ export class ConfigService {
     return prisma.appConfig.findUnique({ where: { id: "default" } });
   }
 
-  patchConfig(data: { spawnIntervalS?: number; captureCooldownS?: number; spawnChannelId?: string | null; forceSpawnRequestedAt?: Date | null }) {
+  patchConfig(data: {
+    spawnIntervalS?: number;
+    captureCooldownS?: number;
+    spawnChannelId?: string | null;
+    forceSpawnRequestedAt?: Date | null;
+    forceSpawnCardId?: string | null;
+  }) {
     return prisma.appConfig.update({
       where: { id: "default" },
       data

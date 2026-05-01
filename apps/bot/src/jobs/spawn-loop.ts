@@ -7,9 +7,11 @@ const configService = new ConfigService();
 export async function startSpawnLoop(client: Client) {
   let nextAutoSpawnAt = Date.now();
 
-  const runSpawn = async (channelId: string, forced: boolean) => {
+  const runSpawn = async (channelId: string, forced: boolean, forcedCardId?: string | null) => {
     try {
-      const card = await captureService.spawnRandomCard(channelId);
+      const card = forcedCardId
+        ? await captureService.spawnCardById(channelId, forcedCardId)
+        : await captureService.spawnRandomCard(channelId);
       const channel = await client.channels.fetch(channelId);
       if (channel && "send" in channel) {
         const rarityName = card.rarity?.name ?? '?';
@@ -24,7 +26,7 @@ export async function startSpawnLoop(client: Client) {
 
         await channel.send({
           content: forced
-            ? "Apparition forcee par un admin ! Utilisez `/capture <nom>` pour l'attraper !"
+            ? `Apparition forcee par un admin${forcedCardId ? ` (carte ciblee: ${card.name})` : ""} ! Utilisez \`/capture <nom>\` pour l'attraper !`
             : "Utilisez `/capture <nom>` pour l'attraper !",
           embeds: [embed]
         });
@@ -40,16 +42,17 @@ export async function startSpawnLoop(client: Client) {
       const intervalS = Math.max(5, cfg?.spawnIntervalS ?? 300);
       const channelId = cfg?.spawnChannelId || process.env.DISCORD_SPAWN_CHANNEL_ID;
       const forced = Boolean(cfg?.forceSpawnRequestedAt);
+      const forcedCardId = cfg?.forceSpawnCardId ?? null;
       const autoDue = Date.now() >= nextAutoSpawnAt;
 
       if (!channelId) {
         console.warn("Spawn loop skipped: no spawn channel configured");
       } else if (forced || autoDue) {
-        await runSpawn(channelId, forced);
+        await runSpawn(channelId, forced, forcedCardId);
         nextAutoSpawnAt = Date.now() + intervalS * 1000;
 
         if (forced) {
-          await configService.patchConfig({ forceSpawnRequestedAt: null });
+          await configService.patchConfig({ forceSpawnRequestedAt: null, forceSpawnCardId: null });
         }
       }
     } catch (error) {
