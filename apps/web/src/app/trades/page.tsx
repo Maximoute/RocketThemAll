@@ -18,7 +18,7 @@ export default async function TradesPage() {
     where: {
       OR: [{ user1Id: user.id }, { user2Id: user.id }]
     },
-    include: { items: true },
+    include: { items: { include: { card: true } }, user1: true, user2: true },
     orderBy: { createdAt: "desc" }
   });
 
@@ -29,7 +29,18 @@ export default async function TradesPage() {
         <article key={trade.id} className="card">
           <p>ID: {trade.id}</p>
           <p>Status: {trade.status}</p>
+          <p>{trade.user1.username} ↔ {trade.user2.username}</p>
+          <p>Crédits proposés: {trade.user1.username} {trade.user1Credits} | {trade.user2.username} {trade.user2Credits}</p>
           <p>Items: {trade.items.length}</p>
+          {trade.items.length > 0 && (
+            <ul>
+              {trade.items.map((item) => (
+                <li key={item.id}>
+                  {item.userId === trade.user1Id ? trade.user1.username : trade.user2.username} propose {item.quantity}x {item.card.name}
+                </li>
+              ))}
+            </ul>
+          )}
         </article>
       ))}
     </section>

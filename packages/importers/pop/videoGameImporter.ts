@@ -4,11 +4,22 @@
  */
 import axios from "axios";
 import { prisma } from "@rta/database";
+import { z } from "zod";
 import { getRarityIdByName } from "../src/rarityService";
 
 const RAWG_BASE = "https://api.rawg.io/api";
 const REQUEST_DELAY_MS = 300;
 const MAX_RETRIES = 3;
+const MAX_IMPORT_LIMIT = 100;
+
+const rawgItemSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string().min(1),
+  background_image: z.string().url().nullable().optional(),
+  description_raw: z.string().optional(),
+  rating: z.number().optional(),
+  ratings_count: z.number().int().optional()
+}).strict();
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -44,6 +55,7 @@ const rarityDrop: Record<string, number> = {
 };
 
 export async function importVideoGames(limit = 100, pages = 4): Promise<number> {
+  const safeLimit = Math.max(1, Math.min(limit, MAX_IMPORT_LIMIT));
   const apiKey = process.env.RAWG_API_KEY;
   if (!apiKey) throw new Error("RAWG_API_KEY is not set. Add it to .env to import video games.");
 
@@ -52,25 +64,20 @@ export async function importVideoGames(limit = 100, pages = 4): Promise<number> 
 
   let imported = 0;
 
-  for (let p = 1; p <= pages && imported < limit; p++) {
+  for (let p = 1; p <= pages && imported < safeLimit; p++) {
     const response = await withRetry(
       () => axios.get(`${RAWG_BASE}/games`, {
-        params: { key: apiKey, page: p, page_size: 25, ordering: "-rating", dates: "2000-01-01,2026-12-31" }
+        params: { key: apiKey, page: p, page_size: 25, ordering: "-rating", dates: "2000-01-01,2026-12-31" },
+        timeout: 10_000
       }),
       `RAWG page ${p}`
     );
 
-    const items = (response.data.results || []) as Array<{
-      id: number;
-      name: string;
-      background_image?: string | null;
-      description_raw?: string;
-      rating?: number;
-      ratings_count?: number;
-    }>;
+    const parsed = z.array(rawgItemSchema).safeParse(response.data.results || []);
+    const items = parsed.success ? parsed.data : [];
 
     for (const item of items) {
-      if (imported >= limit) break;
+      if (imported >= safeLimit) break;
       if (!item.background_image) continue;
 
       const sourceId = `rawg-game-${item.id}`;

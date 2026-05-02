@@ -4,6 +4,7 @@
  */
 import axios from "axios";
 import { prisma } from "@rta/database";
+import { z } from "zod";
 import { getRarityIdByName } from "../src/rarityService";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
@@ -11,6 +12,17 @@ const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 const REQUEST_DELAY_MS = 200;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 500;
+const MAX_IMPORT_LIMIT = 100;
+
+const tmdbItemSchema = z.object({
+  id: z.number().int().positive(),
+  title: z.string().optional(),
+  name: z.string().optional(),
+  poster_path: z.string().nullable().optional(),
+  overview: z.string().optional(),
+  popularity: z.number().optional(),
+  media_type: z.enum(["movie", "tv", "person"]).optional()
+}).strict();
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -45,6 +57,7 @@ const rarityDrop: Record<string, number> = {
 };
 
 export async function importTmdbMoviesAndSeries(limit = 150, startPage = 1, maxPages = 3): Promise<number> {
+  const safeLimit = Math.max(1, Math.min(limit, MAX_IMPORT_LIMIT));
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) throw new Error("TMDB_API_KEY is not set");
 
@@ -53,26 +66,20 @@ export async function importTmdbMoviesAndSeries(limit = 150, startPage = 1, maxP
 
   let imported = 0;
 
-  for (let p = startPage; p <= maxPages && imported < limit; p++) {
+  for (let p = startPage; p <= maxPages && imported < safeLimit; p++) {
     const response = await withRetry(
       () => axios.get(`${TMDB_BASE}/trending/all/week?page=${p}&language=fr-FR`, {
-        headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" }
+        headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+        timeout: 10_000
       }),
       `TMDb page ${p}`
     );
 
-    const items = (response.data.results || []) as Array<{
-      id: number;
-      title?: string;
-      name?: string;
-      poster_path?: string | null;
-      overview: string;
-      popularity: number;
-      media_type?: "movie" | "tv" | "person";
-    }>;
+    const parsedItems = z.array(tmdbItemSchema).safeParse(response.data.results || []);
+    const items = parsedItems.success ? parsedItems.data : [];
 
     for (const item of items) {
-      if (imported >= limit) break;
+      if (imported >= safeLimit) break;
       // Exclure les personnes
       if (!item.media_type || item.media_type === "person") continue;
       if (!item.poster_path) continue;

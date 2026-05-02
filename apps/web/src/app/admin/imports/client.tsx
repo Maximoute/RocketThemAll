@@ -28,8 +28,16 @@ const IMPORT_ACTIONS: ImportAction[] = [
     label: "Films & Séries",
     emoji: "🎬",
     endpoint: "/import/pop/movies",
-    body: { limit: 150, pages: 3 },
+    body: { limit: 150, pages: 10 },
     description: "Tendances TMDb (films + séries) — nécessite TMDB_API_KEY"
+  },
+  {
+    id: "pop-cinema-films",
+    label: "Deck Cinema Films",
+    emoji: "🍿",
+    endpoint: "/import/pop/cinema-films",
+    body: { limit: 500, pages: 30 },
+    description: "Deck jouable cinema_films (image obligatoire, aliases, rareté custom)"
   },
   {
     id: "pop-anime",
@@ -63,11 +71,22 @@ const IMPORT_ACTIONS: ImportAction[] = [
     body: { tmdbLimit: 150, animeLimit: 100, gameLimit: 100 },
     description: "Import complet : TMDb + Jikan + RAWG + Manuel"
   },
+  {
+    id: "pop-nekos",
+    label: "Neko Cards",
+    emoji: "🐱",
+    endpoint: "/import/pop/nekos",
+    body: { limit: 100 },
+    description: "Images neko anime via nekos.best — 100 cartes, gratuit"
+  },
 ];
 
 interface ImportResult {
   success: boolean;
   count?: number;
+  imported?: number;
+  blacklisted?: number;
+  skipped?: number;
   total?: number;
   tmdb?: number;
   anime?: number;
@@ -109,8 +128,14 @@ export default function AdminImportsClient() {
   function formatResult(result: ImportResult): string {
     if (!result.success && result.message === "En cours...") return "⏳ En cours...";
     if (!result.success) return `❌ ${result.error ?? result.message ?? "Erreur"}`;
+    if (result.imported !== undefined) {
+      return `✅ ${result.imported} importées | 🚫 ${result.blacklisted ?? 0} blacklistées (image manquante) | ⏭️ ${result.skipped ?? 0} filtrées`;
+    }
     if (result.total !== undefined) {
       return `✅ ${result.total} cartes — TMDb: ${result.tmdb ?? 0} | Anime: ${result.anime ?? 0} | Jeux: ${result.games ?? 0} | Manuel: ${result.manual ?? 0}`;
+    }
+    if ((result.count ?? 0) === 0) {
+      return "✅ 0 nouvelle carte (déjà importées ou filtrées)";
     }
     return `✅ ${result.count ?? 0} cartes importées`;
   }

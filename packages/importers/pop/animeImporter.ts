@@ -4,11 +4,26 @@
  */
 import axios from "axios";
 import { prisma } from "@rta/database";
+import { z } from "zod";
 import { getRarityIdByName } from "../src/rarityService";
 
 const JIKAN_BASE = "https://api.jikan.moe/v4";
 const REQUEST_DELAY_MS = 500; // Jikan recommande max 3 req/sec
 const MAX_RETRIES = 3;
+const MAX_IMPORT_LIMIT = 100;
+
+const jikanItemSchema = z.object({
+  mal_id: z.number().int().positive(),
+  title: z.string().min(1),
+  title_french: z.string().optional(),
+  images: z.object({
+    jpg: z.object({ large_image_url: z.string().url().optional() }).optional()
+  }).optional(),
+  synopsis: z.string().optional(),
+  score: z.number().optional(),
+  members: z.number().int().optional(),
+  type: z.string().optional()
+}).strict();
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,20 +68,12 @@ async function importJikanType(type: JikanType, limitPerType: number, pages: num
 
   for (let p = 1; p <= pages && imported < limitPerType; p++) {
     const response = await withRetry(
-      () => axios.get(`${JIKAN_BASE}/top/${type}?page=${p}&limit=25`),
+      () => axios.get(`${JIKAN_BASE}/top/${type}?page=${p}&limit=25`, { timeout: 10_000 }),
       `Jikan ${type} page ${p}`
     );
 
-    const items = (response.data.data || []) as Array<{
-      mal_id: number;
-      title: string;
-      title_french?: string;
-      images?: { jpg?: { large_image_url?: string } };
-      synopsis?: string;
-      score?: number;
-      members?: number;
-      type?: string;
-    }>;
+    const parsed = z.array(jikanItemSchema).safeParse(response.data.data || []);
+    const items = parsed.success ? parsed.data : [];
 
     for (const item of items) {
       if (imported >= limitPerType) break;
@@ -115,7 +122,8 @@ async function importJikanType(type: JikanType, limitPerType: number, pages: num
 }
 
 export async function importAnimeAndManga(limit = 100, pages = 4): Promise<number> {
-  const half = Math.floor(limit / 2);
+  const safeLimit = Math.max(1, Math.min(limit, MAX_IMPORT_LIMIT));
+  const half = Math.floor(safeLimit / 2);
   const animeCount = await importJikanType("anime", half, pages);
   const mangaCount = await importJikanType("manga", half, pages);
   const total = animeCount + mangaCount;

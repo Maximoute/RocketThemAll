@@ -19,6 +19,7 @@
     "import:pop:movies": "tsx scripts/import-pop-movies.ts",
     "import:pop:anime": "tsx scripts/import-pop-anime.ts",
     "import:pop:games": "tsx scripts/import-pop-games.ts",
+    "import:cinema:films": "tsx scripts/import-cinema-films.ts",
     "import:pop:manual": "tsx scripts/import-pop-manual.ts",
     "import:pop:all": "tsx scripts/import-pop-all.ts"
   },

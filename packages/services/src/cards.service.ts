@@ -13,8 +13,14 @@ export class CardsService {
     return prisma.card.update({ where: { id }, data });
   }
 
-  deleteCard(id: string) {
-    return prisma.card.delete({ where: { id } });
+  async deleteCard(id: string) {
+    return prisma.$transaction(async (tx) => {
+      await tx.inventoryItem.deleteMany({ where: { cardId: id } });
+      await tx.tradeItem.deleteMany({ where: { cardId: id } });
+      await tx.captureLog.deleteMany({ where: { cardId: id } });
+      await tx.spawnLog.deleteMany({ where: { cardId: id } });
+      return tx.card.delete({ where: { id } });
+    });
   }
 
   listDecks() {
@@ -25,8 +31,21 @@ export class CardsService {
     return prisma.deck.create({ data: { name } });
   }
 
-  deleteDeck(id: string) {
-    return prisma.deck.delete({ where: { id } });
+  async deleteDeck(id: string) {
+    return prisma.$transaction(async (tx) => {
+      const cards = await tx.card.findMany({ where: { deckId: id }, select: { id: true } });
+      const cardIds = cards.map((c) => c.id);
+
+      if (cardIds.length > 0) {
+        await tx.inventoryItem.deleteMany({ where: { cardId: { in: cardIds } } });
+        await tx.tradeItem.deleteMany({ where: { cardId: { in: cardIds } } });
+        await tx.captureLog.deleteMany({ where: { cardId: { in: cardIds } } });
+        await tx.spawnLog.deleteMany({ where: { cardId: { in: cardIds } } });
+        await tx.card.deleteMany({ where: { id: { in: cardIds } } });
+      }
+
+      return tx.deck.delete({ where: { id } });
+    });
   }
 
   listRarities() {

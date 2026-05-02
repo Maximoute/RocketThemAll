@@ -14,7 +14,9 @@ export class UsersService {
         username,
         avatarUrl,
         level: 1,
-        xp: 0
+        xp: 0,
+        credits: 0,
+        fragments: 0
       }
     });
   }
@@ -26,11 +28,11 @@ export class UsersService {
     });
   }
 
-  async patchInventory(userId: string, cardId: string, quantity: number) {
+  async patchInventory(userId: string, cardId: string, quantity: number, variant: "normal" | "shiny" | "holo" = "normal") {
     return prisma.inventoryItem.upsert({
-      where: { userId_cardId: { userId, cardId } },
+      where: { userId_cardId_variant: { userId, cardId, variant } },
       update: { quantity },
-      create: { userId, cardId, quantity }
+      create: { userId, cardId, variant, quantity }
     });
   }
 }

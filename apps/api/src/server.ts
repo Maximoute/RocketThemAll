@@ -9,18 +9,20 @@ import configRoutes from "./routes/config.routes.js";
 import importRoutes from "./routes/import/index.js";
 import adminRoutes from "./routes/admin.routes.js";
 import { errorHandler } from "./middleware/error-handler.js";
-import { mockAuth } from "./middleware/auth.js";
+import { actionRateLimit, globalRateLimit } from "./middleware/rate-limit.js";
 import { prisma } from "@rta/database";
 import {
   importPokemon,
   importManualPopCulture,
-  importTmdbMoviesAndSeries
+  importPopMovies
 } from "@rta/importers";
 
 const app = express();
-app.use(cors());
+const allowedOrigin = process.env.FRONTEND_ORIGIN ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+app.use(cors({ origin: allowedOrigin, credentials: true }));
 app.use(express.json({ limit: "5mb" }));
-app.use(mockAuth);
+app.use(globalRateLimit);
+app.use(["/capture", "/spawn", "/images/upload", "/import"], actionRateLimit);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
@@ -72,7 +74,7 @@ async function initializeIfNeeded() {
       const tmdbCount = await prisma.card.count({ where: { source: "tmdb" } });
       if (tmdbCount === 0) {
         console.log("\n🎬 No TMDb cards found. Auto-importing movies & series...");
-        const imported = await importTmdbMoviesAndSeries(150, 1, 3);
+        const imported = await importPopMovies(100);
         console.log(`✅ TMDb auto-import complete! ${imported} cards added.`);
       } else {
         console.log(`✅ Database ready with ${tmdbCount} TMDb cards.`);

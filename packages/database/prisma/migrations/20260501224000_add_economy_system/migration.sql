@@ -1,0 +1,79 @@
+ALTER TABLE "User"
+ADD COLUMN "credits" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "fragments" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "lastDailyRewardAt" TIMESTAMP(3);
+
+ALTER TABLE "Card"
+ADD COLUMN "variant" TEXT NOT NULL DEFAULT 'normal';
+
+ALTER TABLE "Booster"
+ADD COLUMN "basicQuantity" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "rareQuantity" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "epicQuantity" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "Trade"
+ADD COLUMN "user1Credits" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "user2Credits" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "AppConfig"
+ADD COLUMN "commonSellPrice" INTEGER NOT NULL DEFAULT 10,
+ADD COLUMN "uncommonSellPrice" INTEGER NOT NULL DEFAULT 20,
+ADD COLUMN "rareSellPrice" INTEGER NOT NULL DEFAULT 50,
+ADD COLUMN "veryRareSellPrice" INTEGER NOT NULL DEFAULT 100,
+ADD COLUMN "importSellPrice" INTEGER NOT NULL DEFAULT 200,
+ADD COLUMN "exoticSellPrice" INTEGER NOT NULL DEFAULT 500,
+ADD COLUMN "blackMarketSellPrice" INTEGER NOT NULL DEFAULT 1500,
+ADD COLUMN "commonRecyclePrice" INTEGER NOT NULL DEFAULT 5,
+ADD COLUMN "uncommonRecyclePrice" INTEGER NOT NULL DEFAULT 10,
+ADD COLUMN "rareRecyclePrice" INTEGER NOT NULL DEFAULT 25,
+ADD COLUMN "veryRareRecyclePrice" INTEGER NOT NULL DEFAULT 50,
+ADD COLUMN "importRecyclePrice" INTEGER NOT NULL DEFAULT 75,
+ADD COLUMN "exoticRecyclePrice" INTEGER NOT NULL DEFAULT 100,
+ADD COLUMN "blackMarketRecyclePrice" INTEGER NOT NULL DEFAULT 300,
+ADD COLUMN "commonFragmentReward" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN "uncommonFragmentReward" INTEGER NOT NULL DEFAULT 2,
+ADD COLUMN "rareFragmentReward" INTEGER NOT NULL DEFAULT 5,
+ADD COLUMN "veryRareFragmentReward" INTEGER NOT NULL DEFAULT 10,
+ADD COLUMN "importFragmentReward" INTEGER NOT NULL DEFAULT 15,
+ADD COLUMN "exoticFragmentReward" INTEGER NOT NULL DEFAULT 25,
+ADD COLUMN "blackMarketFragmentReward" INTEGER NOT NULL DEFAULT 75,
+ADD COLUMN "basicBoosterPrice" INTEGER NOT NULL DEFAULT 100,
+ADD COLUMN "rareBoosterPrice" INTEGER NOT NULL DEFAULT 300,
+ADD COLUMN "epicBoosterPrice" INTEGER NOT NULL DEFAULT 1000,
+ADD COLUMN "craftBoosterFragmentCost" INTEGER NOT NULL DEFAULT 100,
+ADD COLUMN "dailyCreditMin" INTEGER NOT NULL DEFAULT 50,
+ADD COLUMN "dailyCreditMax" INTEGER NOT NULL DEFAULT 150,
+ADD COLUMN "dailyBoosterChance" DOUBLE PRECISION NOT NULL DEFAULT 0.15;
+
+CREATE TABLE "TransactionLog" (
+  "id" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "type" TEXT NOT NULL,
+  "amount" INTEGER NOT NULL,
+  "metadata" JSONB,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "TransactionLog_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX "TransactionLog_userId_createdAt_idx" ON "TransactionLog"("userId", "createdAt");
+CREATE INDEX "TransactionLog_type_createdAt_idx" ON "TransactionLog"("type", "createdAt");
+
+ALTER TABLE "TransactionLog"
+ADD CONSTRAINT "TransactionLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE "CollectionRewardClaim" (
+  "id" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "deckId" TEXT NOT NULL,
+  "milestone" INTEGER NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "CollectionRewardClaim_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "CollectionRewardClaim_userId_deckId_milestone_key" ON "CollectionRewardClaim"("userId", "deckId", "milestone");
+
+ALTER TABLE "CollectionRewardClaim"
+ADD CONSTRAINT "CollectionRewardClaim_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "CollectionRewardClaim"
+ADD CONSTRAINT "CollectionRewardClaim_deckId_fkey" FOREIGN KEY ("deckId") REFERENCES "Deck"("id") ON DELETE CASCADE ON UPDATE CASCADE;

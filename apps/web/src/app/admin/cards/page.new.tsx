@@ -192,7 +192,13 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     const cardId = String(formData.get("cardId") ?? "");
     if (!cardId) return;
 
-    await prisma.card.delete({ where: { id: cardId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryItem.deleteMany({ where: { cardId } });
+      await tx.tradeItem.deleteMany({ where: { cardId } });
+      await tx.captureLog.deleteMany({ where: { cardId } });
+      await tx.card.delete({ where: { id: cardId } });
+    });
+
     await prisma.adminLog.create({ data: { adminId: admin.id, action: "CARD_DELETED", target: cardId } });
     revalidatePath("/admin/cards");
   }
@@ -315,9 +321,9 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     if (!card) return;
 
     await prisma.inventoryItem.upsert({
-      where: { userId_cardId: { userId: user.id, cardId } },
+      where: { userId_cardId_variant: { userId: user.id, cardId, variant: "normal" } },
       update: { quantity: { increment: quantity } },
-      create: { userId: user.id, cardId, quantity }
+      create: { userId: user.id, cardId, variant: "normal", quantity }
     });
 
     await prisma.adminLog.create({

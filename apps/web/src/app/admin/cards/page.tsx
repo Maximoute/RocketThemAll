@@ -1,7 +1,8 @@
 import { prisma } from "@rta/database";
 import { requireAdmin } from "../../../lib/guard";
 import { revalidatePath } from "next/cache";
-import { RARITIES, DECKS } from "@rta/shared";
+import { redirect } from "next/navigation";
+import { RARITIES } from "@rta/shared";
 import AdminCardsFiltersClient from "./filters.client";
 
 const rarityColor: Record<string, string> = {
@@ -77,10 +78,12 @@ type SearchParams = {
   category?: string;
   sort?: "name" | "rarity" | "deck" | "category";
   order?: "asc" | "desc";
+  flash?: "card_updated" | "card_created" | "duplicate_name";
 };
 
 export default async function AdminCardsPage({ searchParams }: { searchParams: SearchParams }) {
   const currentAdmin = await requireAdmin();
+  const flash = searchParams.flash;
 
   async function createDeck(formData: FormData) {
     "use server";
@@ -124,6 +127,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       await prisma.inventoryItem.deleteMany({ where: { cardId: { in: cardIds } } });
       await prisma.tradeItem.deleteMany({ where: { cardId: { in: cardIds } } });
       await prisma.captureLog.deleteMany({ where: { cardId: { in: cardIds } } });
+      await prisma.spawnLog.deleteMany({ where: { cardId: { in: cardIds } } });
     }
 
     // Then delete all cards in this deck
@@ -187,6 +191,19 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       return;
     }
 
+    const existingByName = await prisma.card.findUnique({ where: { name } });
+    if (existingByName) {
+      await prisma.adminLog.create({
+        data: {
+          adminId: admin.id,
+          action: "CARD_CREATE_REJECTED_DUPLICATE_NAME",
+          target: existingByName.id,
+          metadata: { attemptedName: name }
+        }
+      });
+      redirect("/admin/cards?flash=duplicate_name");
+    }
+
     await prisma.card.create({
       data: {
         name,
@@ -208,7 +225,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       }
     });
 
-    revalidatePath("/admin/cards");
+    redirect("/admin/cards?flash=card_created");
   }
 
   async function updateCard(formData: FormData) {
@@ -229,19 +246,46 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       return;
     }
 
-    await prisma.card.update({
-      where: { id },
-      data: {
+    const duplicateName = await prisma.card.findFirst({
+      where: {
         name,
-        deckId,
-        rarityId,
-        category,
-        description,
-        imageUrl,
-        xpReward: Number.isFinite(xpReward) ? Math.max(0, Math.floor(xpReward)) : 0,
-        dropRate: Number.isFinite(dropRate) ? Math.max(0.0001, dropRate) : 0.1
-      }
+        NOT: { id }
+      },
+      select: { id: true }
     });
+
+    if (duplicateName) {
+      await prisma.adminLog.create({
+        data: {
+          adminId: admin.id,
+          action: "CARD_UPDATE_REJECTED_DUPLICATE_NAME",
+          target: id,
+          metadata: { attemptedName: name, conflictingCardId: duplicateName.id }
+        }
+      });
+      redirect("/admin/cards?flash=duplicate_name");
+    }
+
+    try {
+      await prisma.card.update({
+        where: { id },
+        data: {
+          name,
+          deckId,
+          rarityId,
+          category,
+          description,
+          imageUrl,
+          xpReward: Number.isFinite(xpReward) ? Math.max(0, Math.floor(xpReward)) : 0,
+          dropRate: Number.isFinite(dropRate) ? Math.max(0.0001, dropRate) : 0.1
+        }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Unique constraint failed")) {
+        redirect("/admin/cards?flash=duplicate_name");
+      }
+      throw error;
+    }
 
     await prisma.adminLog.create({
       data: {
@@ -251,7 +295,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       }
     });
 
-    revalidatePath("/admin/cards");
+    redirect("/admin/cards?flash=card_updated");
   }
 
   async function deleteCard(formData: FormData) {
@@ -262,7 +306,14 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       return;
     }
 
-    await prisma.card.delete({ where: { id: cardId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryItem.deleteMany({ where: { cardId } });
+      await tx.tradeItem.deleteMany({ where: { cardId } });
+      await tx.captureLog.deleteMany({ where: { cardId } });
+      await tx.spawnLog.deleteMany({ where: { cardId } });
+      await tx.card.delete({ where: { id: cardId } });
+    });
+
     await prisma.adminLog.create({
       data: {
         adminId: admin.id,
@@ -322,19 +373,22 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     revalidatePath("/admin/cards");
   }
 
-  async function forceRandomSpawn() {
+  async function forceRandomSpawn(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
+    const guildIdRaw = String(formData.get("guildId") ?? "").trim();
+    const forceSpawnGuildId = guildIdRaw || null;
 
     await prisma.appConfig.upsert({
       where: { id: "default" },
-      update: { forceSpawnRequestedAt: new Date(), forceSpawnCardId: null },
+      update: { forceSpawnRequestedAt: new Date(), forceSpawnCardId: null, forceSpawnGuildId },
       create: {
         id: "default",
         spawnIntervalS: 300,
         captureCooldownS: 5,
         forceSpawnRequestedAt: new Date(),
-        forceSpawnCardId: null
+        forceSpawnCardId: null,
+        forceSpawnGuildId
       }
     });
 
@@ -342,7 +396,8 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       data: {
         adminId: admin.id,
         action: "CONFIG_FORCE_RANDOM_SPAWN_REQUESTED",
-        target: "default"
+        target: forceSpawnGuildId ?? "default",
+        metadata: { forceSpawnGuildId }
       }
     });
 
@@ -353,6 +408,8 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     "use server";
     const admin = await requireAdmin();
     const cardId = String(formData.get("cardId") ?? "").trim();
+    const guildIdRaw = String(formData.get("guildId") ?? "").trim();
+    const forceSpawnGuildId = guildIdRaw || null;
     if (!cardId) return;
 
     const card = await prisma.card.findUnique({ where: { id: cardId } });
@@ -360,13 +417,14 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
 
     await prisma.appConfig.upsert({
       where: { id: "default" },
-      update: { forceSpawnRequestedAt: new Date(), forceSpawnCardId: cardId },
+      update: { forceSpawnRequestedAt: new Date(), forceSpawnCardId: cardId, forceSpawnGuildId },
       create: {
         id: "default",
         spawnIntervalS: 300,
         captureCooldownS: 5,
         forceSpawnRequestedAt: new Date(),
-        forceSpawnCardId: cardId
+        forceSpawnCardId: cardId,
+        forceSpawnGuildId
       }
     });
 
@@ -375,7 +433,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         adminId: admin.id,
         action: "CONFIG_FORCE_TARGET_SPAWN_REQUESTED",
         target: cardId,
-        metadata: { cardName: card.name }
+        metadata: { cardName: card.name, forceSpawnGuildId }
       }
     });
 
@@ -401,9 +459,9 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     if (!card) return;
 
     await prisma.inventoryItem.upsert({
-      where: { userId_cardId: { userId: user.id, cardId } },
+      where: { userId_cardId_variant: { userId: user.id, cardId, variant: "normal" } },
       update: { quantity: { increment: quantity } },
-      create: { userId: user.id, cardId, quantity }
+      create: { userId: user.id, cardId, variant: "normal", quantity }
     });
 
     await prisma.adminLog.create({
@@ -456,6 +514,10 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
   });
 
   const decks = await prisma.deck.findMany({ orderBy: { name: "asc" } });
+  const guilds = await prisma.botGuildConfig.findMany({
+    where: { isActive: true, spawnChannelId: { not: null } },
+    orderBy: { guildName: "asc" }
+  });
   const rarities = await prisma.rarity.findMany({ orderBy: { weight: "desc" } });
   const users = await prisma.user.findMany({ select: { username: true }, orderBy: { username: "asc" }, take: 250 });
 
@@ -463,10 +525,31 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     <section className="card">
       <h1>Admin Cards & Bibliotheques</h1>
       <p>Connecte en admin: {currentAdmin.username}</p>
+      {flash === "card_updated" && (
+        <p style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#166534", padding: "8px 10px", borderRadius: "8px" }}>
+          ✅ Carte mise à jour.
+        </p>
+      )}
+      {flash === "card_created" && (
+        <p style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#166534", padding: "8px 10px", borderRadius: "8px" }}>
+          ✅ Carte créée.
+        </p>
+      )}
+      {flash === "duplicate_name" && (
+        <p style={{ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: "8px 10px", borderRadius: "8px" }}>
+          ❌ Ce nom existe déjà. Le nom de carte doit être unique.
+        </p>
+      )}
 
       <article className="card">
         <h2>Actions rapides</h2>
-        <form action={forceRandomSpawn}>
+        <form action={forceRandomSpawn} style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+          <select name="guildId" defaultValue="" style={{ minWidth: "220px" }}>
+            <option value="">Tous les serveurs actifs</option>
+            {guilds.map((guild) => (
+              <option key={guild.guildId} value={guild.guildId}>{guild.guildName}</option>
+            ))}
+          </select>
           <button type="submit">Forcer un spawn aleatoire maintenant</button>
         </form>
         <p style={{ color: "var(--muted)", marginTop: "0.5rem" }}>
@@ -477,7 +560,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       <article className="card">
         <h2>Filtres & tri</h2>
         <AdminCardsFiltersClient
-          decks={DECKS.map((d) => ({ value: d, label: d }))}
+          decks={decks.map((d) => ({ value: d.name, label: d.name }))}
           rarities={RARITIES.map((r) => ({ value: r, label: r }))}
           categories={POP_CATEGORIES}
           initial={{
@@ -580,6 +663,12 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
 
               <form action={forceSpecificSpawn} style={{ marginTop: "6px" }}>
                 <input type="hidden" name="cardId" value={card.id} />
+                <select name="guildId" defaultValue="" style={{ width: "100%", marginBottom: "6px", fontSize: "0.82rem", padding: "4px 6px" }}>
+                  <option value="">Tous les serveurs actifs</option>
+                  {guilds.map((guild) => (
+                    <option key={guild.guildId} value={guild.guildId}>{guild.guildName}</option>
+                  ))}
+                </select>
                 <button type="submit" style={{ width: "100%" }}>Spawn cette carte</button>
               </form>
 

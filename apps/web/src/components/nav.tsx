@@ -19,6 +19,7 @@ export default function Nav() {
         <Link href="/" className={cls(pathname === "/")}>Accueil</Link>
         <Link href="/profile" className={cls(pathname.startsWith("/profile"))}>Profil</Link>
         <Link href="/inventory" className={cls(pathname.startsWith("/inventory"))}>Inventaire</Link>
+        <Link href="/shop" className={cls(pathname.startsWith("/shop"))}>Boutique</Link>
         <Link href="/collection" className={cls(pathname.startsWith("/collection"))}>Collection</Link>
         <Link href="/trades" className={cls(pathname.startsWith("/trades"))}>Trades</Link>
         {status === "authenticated" ? <Link href="/admin" className={cls(pathname.startsWith("/admin"))}>Admin</Link> : null}

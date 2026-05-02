@@ -2,17 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../../lib/auth";
 import { prisma } from "@rta/database";
-
-const INTERNAL_API = process.env.INTERNAL_API_URL ?? "http://api:4000";
+import {
+  importPokemon,
+  importPopMovies,
+  importTmdbMoviesAndSeries,
+  importPopAnime,
+  importPopGames,
+  importPopAll,
+  importManualPopCulture,
+  importNekos,
+  importCinemaFilmsDeck
+} from "@rta/importers";
 
 // Endpoints autorisés (whitelist de sécurité) — chemin sans le préfixe /import/
 const ALLOWED_ENDPOINTS = new Set([
   "/pokemon",
   "/pop/movies",
+  "/pop/cinema-films",
   "/pop/anime",
   "/pop/games",
   "/pop/manual",
   "/pop/all",
+  "/pop/nekos",
 ]);
 
 export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
@@ -30,16 +41,51 @@ export async function POST(req: NextRequest, { params }: { params: { path: strin
   }
 
   const body = await req.json().catch(() => ({}));
+  const limit = typeof body?.limit === "number" ? body.limit : 100;
+  const pages = typeof body?.pages === "number" ? body.pages : 8;
 
   try {
-    const res = await fetch(`${INTERNAL_API}/import${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    if (endpoint === "/pokemon") {
+      const count = await importPokemon(limit);
+      return NextResponse.json({ success: true, count, message: `Imported ${count} Pokémon` });
+    }
 
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    if (endpoint === "/pop/movies") {
+      const count = await importTmdbMoviesAndSeries(limit, 1, pages);
+      return NextResponse.json({ success: true, count, message: `Imported ${count} movie/tv cards` });
+    }
+
+    if (endpoint === "/pop/cinema-films") {
+      const result = await importCinemaFilmsDeck(limit, pages);
+      return NextResponse.json({ success: true, ...result, message: `Imported ${result.imported} cinema films cards` });
+    }
+
+    if (endpoint === "/pop/anime") {
+      const count = await importPopAnime(limit);
+      return NextResponse.json({ success: true, count, message: `Imported ${count} anime/manga cards` });
+    }
+
+    if (endpoint === "/pop/games") {
+      const count = await importPopGames(limit);
+      return NextResponse.json({ success: true, count, message: `Imported ${count} video game cards` });
+    }
+
+    if (endpoint === "/pop/manual") {
+      const count = await importManualPopCulture();
+      return NextResponse.json({ success: true, count, message: `Imported ${count} manual pop culture cards` });
+    }
+
+    if (endpoint === "/pop/nekos") {
+      const count = await importNekos(limit);
+      return NextResponse.json({ success: true, count, message: `Imported ${count} neko cards` });
+    }
+
+    if (endpoint === "/pop/all") {
+      const total = await importPopAll(limit);
+      return NextResponse.json({ success: true, total, message: `Imported ${total} pop culture cards total` });
+    }
+
+    return NextResponse.json({ success: false, error: "Endpoint non géré" }, { status: 400 });
   } catch (err) {
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : "Erreur interne" },
