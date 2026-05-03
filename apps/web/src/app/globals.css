@@ -1,36 +1,57 @@
+/* ── Design Tokens ────────────────────────────── */
 :root {
-  --bg: #f4f0e8;
-  --card: #fffaf2;
-  --ink: #1f1b16;
-  --accent: #d97706;
-  --muted: #6b5f4f;
+  --bg: #0d1117;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-hover: rgba(255, 255, 255, 0.09);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-accent: rgba(0, 212, 255, 0.4);
+  --ink: #e6edf3;
+  --muted: #8b949e;
+  --accent: #00d4ff;
+  --accent2: #ff6b00;
+  --accent-glow: rgba(0, 212, 255, 0.25);
+  --accent2-glow: rgba(255, 107, 0, 0.25);
+
+  /* Rarity colors */
+  --rarity-common: #8b949e;
+  --rarity-uncommon: #3fb950;
+  --rarity-rare: #58a6ff;
+  --rarity-very-rare: #bc8cff;
+  --rarity-import: #ff9500;
+  --rarity-exotic: #ff4455;
+  --rarity-black-market: #f0f;
+  --rarity-limited: #ffd700;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
   color: var(--ink);
-  background: radial-gradient(circle at 20% 10%, #ffe7bf, #f4f0e8 55%);
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(255, 107, 0, 0.06) 0%, transparent 50%);
+  min-height: 100vh;
 }
 
 main {
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 28px 24px;
 }
 
+/* ── Navigation ───────────────────────────────── */
 .top-nav-wrap {
   position: sticky;
   top: 0;
   z-index: 20;
-  backdrop-filter: blur(8px);
-  background: color-mix(in srgb, var(--bg) 80%, #ffffff 20%);
-  border-bottom: 1px solid #e4d8c6;
-  padding: 10px 20px;
+  backdrop-filter: blur(16px);
+  background: rgba(13, 17, 23, 0.85);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -40,52 +61,259 @@ main {
 .top-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
 }
 
 .nav-link {
   text-decoration: none;
-  padding: 8px 10px;
+  padding: 6px 12px;
   border-radius: 8px;
-  color: var(--ink);
+  color: var(--muted);
   border: 1px solid transparent;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
 .nav-link:hover {
-  border-color: #e4d8c6;
-  background: #fff5e8;
+  color: var(--ink);
+  border-color: var(--border);
+  background: var(--surface-hover);
+  text-decoration: none;
 }
 
 .nav-link-active {
-  border-color: #d9b78a;
-  background: #ffeccf;
+  color: var(--accent);
+  border-color: var(--border-accent);
+  background: rgba(0, 212, 255, 0.08);
 }
 
 .top-nav-actions button {
-  border: 1px solid #d9b78a;
-  background: #ffe3b3;
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-
-.card {
-  background: var(--card);
-  border: 1px solid #e4d8c6;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-a {
+  border: 1px solid var(--border-accent);
+  background: rgba(0, 212, 255, 0.1);
   color: var(--accent);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 
-.grid {
-  display: grid;
+.top-nav-actions button:hover {
+  background: rgba(0, 212, 255, 0.18);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* ── Cards ────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  border-color: var(--border-accent);
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+/* ── Item cards (collection/inventory grid) ────── */
+.item-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+  cursor: default;
+}
+
+.item-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-accent);
+  box-shadow: 0 4px 24px var(--accent-glow);
+}
+
+.item-card img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+}
+
+.item-card-body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+
+.item-card-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+/* ── Rarity badges ────────────────────────────── */
+.rarity-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.rarity-Common      { color: var(--rarity-common);       background: rgba(139,148,158,0.15); border: 1px solid rgba(139,148,158,0.3); }
+.rarity-Uncommon    { color: var(--rarity-uncommon);     background: rgba(63,185,80,0.12);   border: 1px solid rgba(63,185,80,0.3); }
+.rarity-Rare        { color: var(--rarity-rare);         background: rgba(88,166,255,0.12);  border: 1px solid rgba(88,166,255,0.3); }
+.rarity-Very-Rare   { color: var(--rarity-very-rare);    background: rgba(188,140,255,0.12); border: 1px solid rgba(188,140,255,0.3); }
+.rarity-Import      { color: var(--rarity-import);       background: rgba(255,149,0,0.12);   border: 1px solid rgba(255,149,0,0.3); }
+.rarity-Exotic      { color: var(--rarity-exotic);       background: rgba(255,68,85,0.12);   border: 1px solid rgba(255,68,85,0.3); }
+.rarity-Black-Market { color: var(--rarity-black-market); background: rgba(255,0,255,0.1);   border: 1px solid rgba(255,0,255,0.35); box-shadow: 0 0 8px rgba(255,0,255,0.3); }
+.rarity-Limited     { color: var(--rarity-limited);      background: rgba(255,215,0,0.12);   border: 1px solid rgba(255,215,0,0.3); }
+
+/* ── Tag/category pill ────────────────────────── */
+.tag-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: var(--muted);
+}
+
+/* ── Owned badge ──────────────────────────────── */
+.owned-badge {
+  font-size: 0.72rem;
+  color: var(--rarity-uncommon);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Grid ─────────────────────────────────────── */
+.grid { display: grid; gap: 12px; }
+.grid.cards { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+
+/* ── Links ────────────────────────────────────── */
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Pagination ───────────────────────────────── */
+.pagination {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.page-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.page-btn:hover {
+  border-color: var(--border-accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+  text-decoration: none;
+}
+
+.page-btn-disabled {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.05);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ── Hero (homepage) ──────────────────────────── */
+.hero {
+  text-align: center;
+  padding: 80px 24px 60px;
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 800;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero p {
+  color: var(--muted);
+  font-size: 1.1rem;
+  max-width: 480px;
+  margin: 0 auto 32px;
+  line-height: 1.6;
+}
+
+.hero-cta {
+  display: inline-flex;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
-.grid.cards {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+.btn-primary {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, var(--accent), #0099bb);
+  border: none;
+  border-radius: 10px;
+  color: #0d1117;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: box-shadow 0.2s, transform 0.15s;
+  display: inline-block;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 20px var(--accent-glow);
+  transform: translateY(-1px);
+  text-decoration: none;
+  color: #0d1117;
+}
+
+.btn-secondary {
+  padding: 10px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border-accent);
+  border-radius: 10px;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: box-shadow 0.2s;
+  display: inline-block;
+}
+
+.btn-secondary:hover {
+  box-shadow: 0 0 14px var(--accent-glow);
+  text-decoration: none;
 }
