@@ -1,26 +1,32 @@
 /* ── Design Tokens ────────────────────────────── */
 :root {
-  --bg: #0d1117;
-  --surface: rgba(255, 255, 255, 0.05);
-  --surface-hover: rgba(255, 255, 255, 0.09);
-  --border: rgba(255, 255, 255, 0.1);
-  --border-accent: rgba(0, 212, 255, 0.4);
-  --ink: #e6edf3;
-  --muted: #8b949e;
-  --accent: #00d4ff;
-  --accent2: #ff6b00;
-  --accent-glow: rgba(0, 212, 255, 0.25);
-  --accent2-glow: rgba(255, 107, 0, 0.25);
+  --bg: #0a0418;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --border: rgba(167, 139, 250, 0.15);
+  --border-accent: rgba(167, 139, 250, 0.5);
+  --ink: #ede9fe;
+  --muted: #9b8fb8;
+  --accent: #a78bfa;        /* center star violet */
+  --accent2: #f59e0b;       /* sunset orange */
+  --accent-glow: rgba(167, 139, 250, 0.3);
+  --accent2-glow: rgba(245, 158, 11, 0.25);
 
-  /* Rarity colors */
-  --rarity-common: #8b949e;
-  --rarity-uncommon: #3fb950;
-  --rarity-rare: #58a6ff;
-  --rarity-very-rare: #bc8cff;
-  --rarity-import: #ff9500;
-  --rarity-exotic: #ff4455;
-  --rarity-black-market: #f0f;
-  --rarity-limited: #ffd700;
+  /* Quadrant colors from palette */
+  --q-orange: #f59e0b;
+  --q-purple: #a855f7;
+  --q-green: #10b981;
+  --q-blue: #3b82f6;
+
+  /* Rarity colors mapped to palette */
+  --rarity-common: #9b8fb8;
+  --rarity-uncommon: #10b981;
+  --rarity-rare: #3b82f6;
+  --rarity-very-rare: #a855f7;
+  --rarity-import: #f59e0b;
+  --rarity-exotic: #ec4899;
+  --rarity-black-market: #d946ef;
+  --rarity-limited: #fbbf24;
 }
 
 * { box-sizing: border-box; }
@@ -31,8 +37,10 @@ body {
   color: var(--ink);
   background: var(--bg);
   background-image:
-    radial-gradient(ellipse at 20% 10%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 80%, rgba(255, 107, 0, 0.06) 0%, transparent 50%);
+    radial-gradient(ellipse at 15% 15%, rgba(245, 158, 11, 0.10) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 15%, rgba(168, 85, 247, 0.12) 0%, transparent 45%),
+    radial-gradient(ellipse at 15% 85%, rgba(16, 185, 129, 0.10) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 85%, rgba(59, 130, 246, 0.10) 0%, transparent 45%);
   min-height: 100vh;
 }
 
@@ -48,7 +56,7 @@ main {
   top: 0;
   z-index: 20;
   backdrop-filter: blur(16px);
-  background: rgba(13, 17, 23, 0.85);
+  background: rgba(10, 4, 24, 0.85);
   border-bottom: 1px solid var(--border);
   padding: 0 24px;
   height: 60px;
@@ -85,12 +93,12 @@ main {
 .nav-link-active {
   color: var(--accent);
   border-color: var(--border-accent);
-  background: rgba(0, 212, 255, 0.08);
+  background: rgba(167, 139, 250, 0.1);
 }
 
 .top-nav-actions button {
   border: 1px solid var(--border-accent);
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(167, 139, 250, 0.12);
   color: var(--accent);
   border-radius: 8px;
   padding: 7px 14px;
@@ -101,7 +109,7 @@ main {
 }
 
 .top-nav-actions button:hover {
-  background: rgba(0, 212, 255, 0.18);
+  background: rgba(167, 139, 250, 0.22);
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
@@ -174,14 +182,14 @@ main {
   align-self: flex-start;
 }
 
-.rarity-Common      { color: var(--rarity-common);       background: rgba(139,148,158,0.15); border: 1px solid rgba(139,148,158,0.3); }
-.rarity-Uncommon    { color: var(--rarity-uncommon);     background: rgba(63,185,80,0.12);   border: 1px solid rgba(63,185,80,0.3); }
-.rarity-Rare        { color: var(--rarity-rare);         background: rgba(88,166,255,0.12);  border: 1px solid rgba(88,166,255,0.3); }
-.rarity-Very-Rare   { color: var(--rarity-very-rare);    background: rgba(188,140,255,0.12); border: 1px solid rgba(188,140,255,0.3); }
-.rarity-Import      { color: var(--rarity-import);       background: rgba(255,149,0,0.12);   border: 1px solid rgba(255,149,0,0.3); }
-.rarity-Exotic      { color: var(--rarity-exotic);       background: rgba(255,68,85,0.12);   border: 1px solid rgba(255,68,85,0.3); }
-.rarity-Black-Market { color: var(--rarity-black-market); background: rgba(255,0,255,0.1);   border: 1px solid rgba(255,0,255,0.35); box-shadow: 0 0 8px rgba(255,0,255,0.3); }
-.rarity-Limited     { color: var(--rarity-limited);      background: rgba(255,215,0,0.12);   border: 1px solid rgba(255,215,0,0.3); }
+.rarity-Common      { color: var(--rarity-common);       background: rgba(155,143,184,0.12); border: 1px solid rgba(155,143,184,0.3); }
+.rarity-Uncommon    { color: var(--rarity-uncommon);     background: rgba(16,185,129,0.12);  border: 1px solid rgba(16,185,129,0.35); }
+.rarity-Rare        { color: var(--rarity-rare);         background: rgba(59,130,246,0.12);  border: 1px solid rgba(59,130,246,0.35); }
+.rarity-Very-Rare   { color: var(--rarity-very-rare);    background: rgba(168,85,247,0.12);  border: 1px solid rgba(168,85,247,0.35); }
+.rarity-Import      { color: var(--rarity-import);       background: rgba(245,158,11,0.12);  border: 1px solid rgba(245,158,11,0.35); }
+.rarity-Exotic      { color: var(--rarity-exotic);       background: rgba(236,72,153,0.12);  border: 1px solid rgba(236,72,153,0.35); }
+.rarity-Black-Market { color: var(--rarity-black-market); background: rgba(217,70,239,0.12); border: 1px solid rgba(217,70,239,0.4); box-shadow: 0 0 8px rgba(217,70,239,0.3); }
+.rarity-Limited     { color: var(--rarity-limited);      background: rgba(251,191,36,0.12);  border: 1px solid rgba(251,191,36,0.35); }
 
 /* ── Tag/category pill ────────────────────────── */
 .tag-pill {
@@ -257,7 +265,7 @@ a:hover { text-decoration: underline; }
   font-size: clamp(2rem, 5vw, 3.5rem);
   font-weight: 800;
   margin-bottom: 16px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  background: linear-gradient(135deg, var(--q-orange) 0%, var(--q-purple) 35%, var(--q-blue) 70%, var(--q-green) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -280,10 +288,10 @@ a:hover { text-decoration: underline; }
 
 .btn-primary {
   padding: 10px 24px;
-  background: linear-gradient(135deg, var(--accent), #0099bb);
+  background: linear-gradient(135deg, var(--q-purple), var(--q-blue));
   border: none;
   border-radius: 10px;
-  color: #0d1117;
+  color: #fff;
   font-weight: 700;
   font-size: 0.95rem;
   cursor: pointer;
@@ -293,10 +301,10 @@ a:hover { text-decoration: underline; }
 }
 
 .btn-primary:hover {
-  box-shadow: 0 0 20px var(--accent-glow);
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.5);
   transform: translateY(-1px);
   text-decoration: none;
-  color: #0d1117;
+  color: #fff;
 }
 
 .btn-secondary {
