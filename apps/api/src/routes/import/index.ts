@@ -9,7 +9,8 @@ import {
   importAllPopCulture,
   importManualPopCulture,
   importNekos,
-  importCinemaFilmsDeck
+  importCinemaFilmsDeck,
+  importRocketLeagueItems
 } from "@rta/importers";
 import { requireAdmin, requireAuth } from "../../middleware/auth.js";
 import { importRateLimit } from "../../middleware/rate-limit.js";
@@ -198,6 +199,23 @@ router.post("/pop/all", async (req, res) => {
     res.json({ success: true, ...result, message: `Imported ${result.total} pop culture cards total` });
   } catch (error) {
     console.error("[API] Full pop import error:", error);
+    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+  }
+});
+
+// POST /import/rocket-league/items — source principale @rocketleagueapi/items + fusion images externe
+router.post("/rocket-league/items", async (_req, res) => {
+  try {
+    const result = await runImportWithRetry(() => importRocketLeagueItems(), "rocket-league/items");
+    res.json({
+      success: true,
+      imported: result.created + result.updated,
+      blacklisted: result.blacklisted,
+      skipped: result.skipped,
+      message: `Rocket League import done: created=${result.created}, updated=${result.updated}`
+    });
+  } catch (error) {
+    console.error("[API] Rocket League import error:", error);
     res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
   }
 });

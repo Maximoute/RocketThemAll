@@ -11,7 +11,8 @@ import {
   importPopAll,
   importManualPopCulture,
   importNekos,
-  importCinemaFilmsDeck
+  importCinemaFilmsDeck,
+  importRocketLeagueItems
 } from "@rta/importers";
 
 // Endpoints autorisés (whitelist de sécurité) — chemin sans le préfixe /import/
@@ -24,6 +25,7 @@ const ALLOWED_ENDPOINTS = new Set([
   "/pop/manual",
   "/pop/all",
   "/pop/nekos",
+  "/rocket-league/items",
 ]);
 
 export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
@@ -83,6 +85,17 @@ export async function POST(req: NextRequest, { params }: { params: { path: strin
     if (endpoint === "/pop/all") {
       const total = await importPopAll(limit);
       return NextResponse.json({ success: true, total, message: `Imported ${total} pop culture cards total` });
+    }
+
+    if (endpoint === "/rocket-league/items") {
+      const result = await importRocketLeagueItems();
+      return NextResponse.json({
+        success: true,
+        imported: result.created + result.updated,
+        blacklisted: result.blacklisted,
+        skipped: result.skipped,
+        message: `Rocket League items import complete (created: ${result.created}, updated: ${result.updated})`
+      });
     }
 
     return NextResponse.json({ success: false, error: "Endpoint non géré" }, { status: 400 });

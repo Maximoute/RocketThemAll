@@ -79,6 +79,14 @@ const IMPORT_ACTIONS: ImportAction[] = [
     body: { limit: 100 },
     description: "Images neko anime via nekos.best — 100 cartes, gratuit"
   },
+  {
+    id: "rocket-league-items",
+    label: "Rocket League Items",
+    emoji: "🚘",
+    endpoint: "/import/rocket-league/items",
+    body: {},
+    description: "Source principale @rocketleagueapi/items + fusion images externe + blacklist auto si image absente"
+  },
 ];
 
 interface ImportResult {

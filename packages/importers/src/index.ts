@@ -1,6 +1,7 @@
 export { importPokemon } from "./pokemonImporter";
 export { importMovies, importPopCulture } from "./tmdbImporter";
 export { importGames } from "./igdbImporter";
+export { importRocketLeagueItems } from "./rocketLeagueItemsImporter";
 export * from "./rarityService";
 export * from "./transformService";
 export * from "./types";

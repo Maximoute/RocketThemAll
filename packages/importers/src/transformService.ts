@@ -36,22 +36,32 @@ export async function transformMovieToCard(movie: any): Promise<Card> {
 }
 
 function determinePokemonRarity(pokemon: any, isShiny: boolean = false): string {
-  // Shiny variants are MUCH rarer
+  const baseExp: number = pokemon.base_experience ?? 0;
+
   if (isShiny) {
-    const LEGENDARY_IDS = [144, 145, 146, 149, 150, 151, 243, 244, 245, 249, 250];
-    if (LEGENDARY_IDS.includes(pokemon.id)) return "Black Market";
-    return "Exotic";
+    // Shiny Pokémon are always at least Rare, boosted by base_experience
+    if (baseExp >= 280) return "Black Market";
+    if (baseExp >= 220) return "Exotic";
+    if (baseExp >= 155) return "Import";
+    if (baseExp >= 100) return "Very Rare";
+    return "Rare";
   }
 
-  const LEGENDARY_IDS = [144, 145, 146, 149, 150, 151, 243, 244, 245, 249, 250];
-  if (LEGENDARY_IDS.includes(pokemon.id)) return "Black Market";
-
-  const STARTER_IDS = [1, 4, 7];
-  if (STARTER_IDS.includes(pokemon.id)) return "Rare";
-
-  if (pokemon.id === 25) return "Very Rare";
-
-  return Math.random() > 0.7 ? "Uncommon" : "Common";
+  // Regular Pokémon: tier based on base_experience
+  // >= 300 → Black Market (legendaries/mythicals)
+  // 240-299 → Exotic (pseudo-legendaries: Dragonite, Tyranitar, etc.)
+  // 178-239 → Import (strong fully evolved)
+  // 128-177 → Very Rare (starters final, Eevee evos, etc.)
+  // 90-127  → Rare (mid-tier evolutions)
+  // 50-89   → Uncommon (basic evolutions)
+  // < 50    → Common
+  if (baseExp >= 300) return "Black Market";
+  if (baseExp >= 240) return "Exotic";
+  if (baseExp >= 178) return "Import";
+  if (baseExp >= 128) return "Very Rare";
+  if (baseExp >= 90) return "Rare";
+  if (baseExp >= 50) return "Uncommon";
+  return "Common";
 }
 
 function determineMovieRarity(movie: any): string {

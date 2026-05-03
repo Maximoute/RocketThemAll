@@ -3,7 +3,7 @@ import { authOptions } from "../../lib/auth";
 import { prisma } from "@rta/database";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { RARITIES, DECKS } from "@rta/shared";
+import { RARITIES } from "@rta/shared";
 import InventoryFiltersClient from "./filters.client";
 import { FRAGMENT_CHAIN, FRAGMENT_CRAFT_COST, getSourceRarityForTarget, getUserFragmentBalances, type FragmentRarity } from "../../lib/fragments";
 import { getDynamicCardValue, getDynamicCardValuesBatch, getUserInventoryValue } from "../../lib/economy";
@@ -40,6 +40,7 @@ type SearchParams = {
   q?: string;
   sort?: string;
   order?: "asc" | "desc";
+  page?: string;
 };
 
 const RECYCLE_PRICE_KEYS = {
@@ -294,7 +295,13 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
     revalidatePath("/profile");
   }
 
-  const items = await prisma.inventoryItem.findMany({
+  const sort = searchParams.sort ?? "name";
+  const order = searchParams.order ?? "asc";
+  const pageRaw = Number(searchParams.page ?? "1");
+  const page = Number.isFinite(pageRaw) ? Math.max(1, Math.floor(pageRaw)) : 1;
+  const pageSize = 100;
+
+  const where = {
     where: {
       userId: user.id,
       card: {
@@ -303,23 +310,33 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
         rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
         category: searchParams.category ? searchParams.category : undefined
       }
-    },
-    include: { card: { include: { deck: true, rarity: true } } }
-  });
-
-  const sort = searchParams.sort ?? "name";
-  const order = searchParams.order ?? "asc";
-  const sorted = [...items].sort((a, b) => {
-    const dir = order === "asc" ? 1 : -1;
-    if (sort === "quantity") return (a.quantity - b.quantity) * dir;
-    if (sort === "rarity") {
-      const byWeight = (a.card.rarity.weight - b.card.rarity.weight) * dir;
-      if (byWeight !== 0) return byWeight;
-      return a.card.name.localeCompare(b.card.name);
     }
-    if (sort === "deck") return a.card.deck.name.localeCompare(b.card.deck.name) * dir;
-    if (sort === "category") return (a.card.category ?? "").localeCompare(b.card.category ?? "") * dir;
-    return a.card.name.localeCompare(b.card.name) * dir;
+  };
+
+  const orderBy =
+    sort === "quantity"
+      ? [{ quantity: order }]
+      : sort === "rarity"
+      ? [{ card: { rarity: { weight: order } } }, { card: { name: "asc" as const } }]
+      : sort === "deck"
+      ? [{ card: { deck: { name: order } } }, { card: { name: "asc" as const } }]
+      : sort === "category"
+      ? [{ card: { category: order } }, { card: { name: "asc" as const } }]
+      : [{ card: { name: order } }];
+
+  const [totalItems, deckRows] = await Promise.all([
+    prisma.inventoryItem.count(where),
+    prisma.deck.findMany({ orderBy: { name: "asc" }, select: { name: true } })
+  ]);
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const items = await prisma.inventoryItem.findMany({
+    ...where,
+    include: { card: { include: { deck: true, rarity: true } } },
+    orderBy,
+    skip: (safePage - 1) * pageSize,
+    take: pageSize
   });
 
   const rarityColor: Record<string, string> = {
@@ -337,11 +354,23 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
     POP_CATEGORIES.find((c) => c.value === cat)?.label ?? (cat ?? "");
   const fragmentBalances = await getUserFragmentBalances(user.id);
   const totalInventoryValue = await getUserInventoryValue(user.id);
-  const dynamicValues = await getDynamicCardValuesBatch(sorted.map((item) => ({ cardId: item.cardId, variant: item.variant })));
+  const dynamicValues = await getDynamicCardValuesBatch(items.map((item) => ({ cardId: item.cardId, variant: item.variant })));
+
+  function buildPageHref(targetPage: number): string {
+    const params = new URLSearchParams();
+    if (searchParams.q) params.set("q", searchParams.q);
+    if (searchParams.deck) params.set("deck", searchParams.deck);
+    if (searchParams.rarity) params.set("rarity", searchParams.rarity);
+    if (searchParams.category) params.set("category", searchParams.category);
+    if (sort) params.set("sort", sort);
+    if (order) params.set("order", order);
+    params.set("page", String(targetPage));
+    return `/inventory?${params.toString()}`;
+  }
 
   return (
     <section className="card">
-      <h1>Mon Inventaire ({sorted.length} cartes)</h1>
+      <h1>Mon Inventaire ({totalItems} cartes)</h1>
       <p>Crédits: {user.credits} | Fragments: {user.fragments}</p>
       <p>Valeur dynamique totale inventaire: {totalInventoryValue} crédits</p>
       <h2>Fragments par tier</h2>
@@ -364,7 +393,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
       </form>
 
       <InventoryFiltersClient
-        decks={DECKS.map((d) => ({ value: d, label: d }))}
+        decks={deckRows.map((d) => ({ value: d.name, label: d.name }))}
         rarities={RARITIES.map((r) => ({ value: r, label: r }))}
         categories={POP_CATEGORIES}
         initial={{
@@ -377,11 +406,34 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
         }}
       />
 
-      {sorted.length === 0 ? (
+      <article className="card" style={{ marginTop: "0.75rem", marginBottom: "1rem" }}>
+        <h2>Pagination</h2>
+        <p style={{ color: "var(--muted)" }}>
+          Page {safePage} / {totalPages} - {items.length} cartes affichées.
+        </p>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {safePage > 1 ? (
+            <a href={buildPageHref(safePage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              ← Page précédente
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page précédente</span>
+          )}
+          {safePage < totalPages ? (
+            <a href={buildPageHref(safePage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              Page suivante →
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
+          )}
+        </div>
+      </article>
+
+      {items.length === 0 ? (
         <p style={{ color: "var(--muted)" }}>Aucune carte trouvée.</p>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "1rem" }}>
-          {sorted.map((item) => {
+          {items.map((item) => {
             const dynamic = dynamicValues.get(`${item.cardId}:${item.variant}`);
             return (
             <article key={item.id} style={{ background: "var(--card)", borderRadius: "10px", padding: "0.8rem", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>

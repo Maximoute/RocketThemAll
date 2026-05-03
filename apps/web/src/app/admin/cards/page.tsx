@@ -78,6 +78,7 @@ type SearchParams = {
   category?: string;
   sort?: "name" | "rarity" | "deck" | "category";
   order?: "asc" | "desc";
+  page?: string;
   flash?: "card_updated" | "card_created" | "duplicate_name";
 };
 
@@ -153,21 +154,23 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     const rarityId = String(formData.get("rarityId") ?? "");
     const weight = Number(formData.get("weight") ?? 1);
     const safeWeight = Number.isFinite(weight) ? Math.max(1, Math.floor(weight)) : 1;
+    const catchRateRaw = Number(formData.get("catchRate") ?? 1);
+    const safeCatchRate = Number.isFinite(catchRateRaw) ? Math.min(1, Math.max(0, catchRateRaw)) : 1;
     if (!rarityId) {
       return;
     }
 
     await prisma.rarity.update({
       where: { id: rarityId },
-      data: { weight: safeWeight }
+      data: { weight: safeWeight, catchRate: safeCatchRate }
     });
 
     await prisma.adminLog.create({
       data: {
         adminId: admin.id,
-        action: "RARITY_WEIGHT_UPDATED",
+        action: "RARITY_UPDATED",
         target: rarityId,
-        metadata: { weight: safeWeight }
+        metadata: { weight: safeWeight, catchRate: safeCatchRate }
       }
     });
 
@@ -478,40 +481,51 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
 
   const sort = searchParams.sort ?? "name";
   const order = searchParams.order ?? "asc";
+  const pageRaw = Number(searchParams.page ?? "1");
+  const page = Number.isFinite(pageRaw) ? Math.max(1, Math.floor(pageRaw)) : 1;
+  const pageSize = 100;
 
-  const cardsRaw = await prisma.card.findMany({
+  const where = {
     where: {
       name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
       deck: searchParams.deck ? { name: searchParams.deck } : undefined,
       rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
       category: searchParams.category ? searchParams.category : undefined
-    },
-    include: { deck: true, rarity: true }
+    }
+  };
+
+  const orderBy =
+    sort === "rarity"
+      ? [{ rarity: { weight: order } }, { name: "asc" as const }]
+      : sort === "deck"
+      ? [{ deck: { name: order } }, { name: "asc" as const }]
+      : sort === "category"
+      ? [{ category: order }, { name: "asc" as const }]
+      : [{ name: order }];
+
+  const totalCards = await prisma.card.count(where);
+  const totalPages = Math.max(1, Math.ceil(totalCards / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const cards = await prisma.card.findMany({
+    ...where,
+    include: { deck: true, rarity: true },
+    orderBy,
+    skip: (safePage - 1) * pageSize,
+    take: pageSize
   });
 
-  const cards = [...cardsRaw].sort((a, b) => {
-    const dir = order === "asc" ? 1 : -1;
-
-    if (sort === "rarity") {
-      const byWeight = (a.rarity.weight - b.rarity.weight) * dir;
-      if (byWeight !== 0) return byWeight;
-      return a.name.localeCompare(b.name);
-    }
-
-    if (sort === "deck") {
-      const byDeck = a.deck.name.localeCompare(b.deck.name) * dir;
-      if (byDeck !== 0) return byDeck;
-      return a.name.localeCompare(b.name);
-    }
-
-    if (sort === "category") {
-      const byCategory = (a.category ?? "").localeCompare(b.category ?? "") * dir;
-      if (byCategory !== 0) return byCategory;
-      return a.name.localeCompare(b.name);
-    }
-
-    return a.name.localeCompare(b.name) * dir;
-  });
+  function buildPageHref(targetPage: number): string {
+    const params = new URLSearchParams();
+    if (searchParams.q) params.set("q", searchParams.q);
+    if (searchParams.deck) params.set("deck", searchParams.deck);
+    if (searchParams.rarity) params.set("rarity", searchParams.rarity);
+    if (searchParams.category) params.set("category", searchParams.category);
+    if (sort) params.set("sort", sort);
+    if (order) params.set("order", order);
+    params.set("page", String(targetPage));
+    return `/admin/cards?${params.toString()}`;
+  }
 
   const decks = await prisma.deck.findMany({ orderBy: { name: "asc" } });
   const guilds = await prisma.botGuildConfig.findMany({
@@ -594,10 +608,16 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         {rarities.map((rarity) => (
           <form key={rarity.id} action={updateRarity} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center", flexWrap: "wrap" }}>
             <input type="hidden" name="rarityId" value={rarity.id} />
-            <span>{rarity.name}</span>
-            <input name="weight" type="number" min={1} defaultValue={rarity.weight} />
-            <input name="catchRate" type="number" min={0} max={1} step="0.01" defaultValue={rarity.catchRate ?? 1} />
-            <button type="submit">Mettre a jour</button>
+            <span style={{ minWidth: "120px", fontWeight: "bold" }}>{rarity.name}</span>
+            <label style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              Poids
+              <input name="weight" type="number" min={1} defaultValue={rarity.weight} style={{ width: "70px" }} />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              Taux de capture (0-1)
+              <input name="catchRate" type="number" min={0} max={1} step="0.01" defaultValue={rarity.catchRate ?? 1} style={{ width: "80px" }} />
+            </label>
+            <button type="submit">Sauvegarder</button>
           </form>
         ))}
       </article>
@@ -637,6 +657,29 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       </article>
 
       <p style={{ marginTop: "8px" }}>Gestion complete: decks, raretes, cartes, spawn force et dons utilisateurs.</p>
+
+      <article className="card" style={{ marginTop: "1rem" }}>
+        <h2>Pagination</h2>
+        <p style={{ color: "var(--muted)" }}>
+          {totalCards} cartes au total. Page {safePage} / {totalPages}.
+        </p>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {safePage > 1 ? (
+            <a href={buildPageHref(safePage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              ← Page precedente
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page precedente</span>
+          )}
+          {safePage < totalPages ? (
+            <a href={buildPageHref(safePage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              Page suivante →
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
+          )}
+        </div>
+      </article>
 
       <datalist id="admin-usernames">
         {users.map((u) => (

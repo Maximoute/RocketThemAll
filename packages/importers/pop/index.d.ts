@@ -5,6 +5,7 @@ export { importTmdbMoviesAndSeries } from "./tmdbImporter";
 export { importAnimeAndManga } from "./animeImporter";
 export { importVideoGames } from "./videoGameImporter";
 export { importManualPopCulture } from "./manualPopImporter";
+export { importCinemaFilmsDeck, calculateMovieRarity } from "./cinemaFilmsImporter";
 export type { ManualPopCard } from "./manualPopImporter";
 /**
  * Import complet : TMDb + Jikan + RAWG + Manuel

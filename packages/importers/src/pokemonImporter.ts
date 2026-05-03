@@ -110,7 +110,7 @@ export async function importPokemon(limit: number = 10000): Promise<number> {
           }
 
           // Import Shiny variant
-          const shinyName = `${displayName} ✨ Shiny`;
+          const shinyName = `${displayName} Shiny`;
           const shinyExists = await prisma.card.findFirst({
             where: { 
               name: shinyName,

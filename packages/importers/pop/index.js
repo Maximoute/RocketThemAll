@@ -5,6 +5,7 @@ export { importTmdbMoviesAndSeries } from "./tmdbImporter";
 export { importAnimeAndManga } from "./animeImporter";
 export { importVideoGames } from "./videoGameImporter";
 export { importManualPopCulture } from "./manualPopImporter";
+export { importCinemaFilmsDeck, calculateMovieRarity } from "./cinemaFilmsImporter";
 /**
  * Import complet : TMDb + Jikan + RAWG + Manuel
  * Chaque source est optionnelle si la clé API manque.

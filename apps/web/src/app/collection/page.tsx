@@ -36,22 +36,49 @@ type SearchParams = {
   q?: string;
   sort?: string;
   order?: "asc" | "desc";
+  page?: string;
 };
 
 export default async function CollectionPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getServerSession(authOptions);
-  const [cards, deckRows] = await Promise.all([
-    prisma.card.findMany({
-      where: {
-        name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
-        deck: searchParams.deck ? { name: searchParams.deck } : undefined,
-        rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
-        category: searchParams.category ? searchParams.category : undefined
-      },
-      include: { deck: true, rarity: true }
-    }),
+  const sort = searchParams.sort ?? "name";
+  const order = searchParams.order ?? "asc";
+  const pageRaw = Number(searchParams.page ?? "1");
+  const page = Number.isFinite(pageRaw) ? Math.max(1, Math.floor(pageRaw)) : 1;
+  const pageSize = 100;
+
+  const where = {
+    name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
+    deck: searchParams.deck ? { name: searchParams.deck } : undefined,
+    rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
+    category: searchParams.category ? searchParams.category : undefined
+  };
+
+  const orderBy =
+    sort === "rarity"
+      ? [{ rarity: { weight: order } }, { name: "asc" as const }]
+      : sort === "deck"
+      ? [{ deck: { name: order } }, { name: "asc" as const }]
+      : sort === "category"
+      ? [{ category: order }, { name: "asc" as const }]
+      : [{ name: order }];
+
+  const [totalCards, deckRows] = await Promise.all([
+    prisma.card.count({ where }),
     prisma.deck.findMany({ orderBy: { name: "asc" } })
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCards / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const cards = await prisma.card.findMany({
+    where,
+    include: { deck: true, rarity: true },
+    orderBy,
+    skip: (safePage - 1) * pageSize,
+    take: pageSize
+  });
+
   const allDecks = deckRows.map((deck) => deck.name);
   const user = session?.user?.name
     ? await prisma.user.findFirst({ where: { username: session.user.name } })
@@ -63,8 +90,13 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
     ? await prisma.collectionRewardClaim.findMany({ where: { userId: user.id } })
     : [];
   const ownedIds = new Set(inventory.map((item) => item.cardId));
+  const filteredDeckCards = await prisma.card.findMany({
+    where,
+    select: { id: true, deckId: true, deck: { select: { name: true } } }
+  });
+
   const deckProgress = allDecks.map((deckName) => {
-    const deckCards = cards.filter((card) => card.deck.name === deckName);
+    const deckCards = filteredDeckCards.filter((card) => card.deck.name === deckName);
     const total = deckCards.length;
     const owned = deckCards.filter((card) => ownedIds.has(card.id)).length;
     return {
@@ -77,19 +109,17 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
     };
   }).filter((deck) => deck.total > 0);
 
-  const sort = searchParams.sort ?? "name";
-  const order = searchParams.order ?? "asc";
-  const sorted = [...cards].sort((a, b) => {
-    const dir = order === "asc" ? 1 : -1;
-    if (sort === "rarity") {
-      const byWeight = (a.rarity.weight - b.rarity.weight) * dir;
-      if (byWeight !== 0) return byWeight;
-      return a.name.localeCompare(b.name);
-    }
-    if (sort === "deck") return a.deck.name.localeCompare(b.deck.name) * dir;
-    if (sort === "category") return (a.category ?? "").localeCompare(b.category ?? "") * dir;
-    return a.name.localeCompare(b.name) * dir;
-  });
+  function buildPageHref(targetPage: number): string {
+    const params = new URLSearchParams();
+    if (searchParams.q) params.set("q", searchParams.q);
+    if (searchParams.deck) params.set("deck", searchParams.deck);
+    if (searchParams.rarity) params.set("rarity", searchParams.rarity);
+    if (searchParams.category) params.set("category", searchParams.category);
+    if (sort) params.set("sort", sort);
+    if (order) params.set("order", order);
+    params.set("page", String(targetPage));
+    return `/collection?${params.toString()}`;
+  }
 
   const rarityColor: Record<string, string> = {
     Common: "#9e9e9e",
@@ -107,7 +137,7 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
 
   return (
     <section className="card">
-      <h1>Collection ({sorted.length} cartes)</h1>
+      <h1>Collection ({totalCards} cartes)</h1>
       {user && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.75rem", marginBottom: "1rem" }}>
           {deckProgress.map((deck) => (
@@ -137,11 +167,34 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
         }}
       />
 
-      {sorted.length === 0 ? (
+      <article className="card" style={{ marginTop: "0.75rem", marginBottom: "1rem" }}>
+        <h2>Pagination</h2>
+        <p style={{ color: "var(--muted)" }}>
+          Page {safePage} / {totalPages} - {cards.length} cartes affichées.
+        </p>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {safePage > 1 ? (
+            <a href={buildPageHref(safePage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              ← Page précédente
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page précédente</span>
+          )}
+          {safePage < totalPages ? (
+            <a href={buildPageHref(safePage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              Page suivante →
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
+          )}
+        </div>
+      </article>
+
+      {cards.length === 0 ? (
         <p style={{ color: "var(--muted)" }}>Aucune carte trouvée.</p>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "1rem" }}>
-          {sorted.map((card) => (
+          {cards.map((card) => (
             <article key={card.id} style={{ background: "var(--card)", borderRadius: "10px", padding: "0.8rem", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
               {card.imageUrl && (
                 <img src={card.imageUrl} alt={card.name} style={{ width: "100%", height: "140px", objectFit: "cover", borderRadius: "6px" }} />
