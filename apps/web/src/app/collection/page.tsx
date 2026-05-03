@@ -121,16 +121,6 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
     return `/collection?${params.toString()}`;
   }
 
-  const rarityColor: Record<string, string> = {
-    Common: "#9e9e9e",
-    Uncommon: "#4caf50",
-    Rare: "#2196f3",
-    "Very Rare": "#9c27b0",
-    Import: "#ff9800",
-    Exotic: "#f44336",
-    "Black Market": "#212121",
-    Limited: "#ffd700"
-  };
 
   const categoryLabel = (cat: string | null) =>
     POP_CATEGORIES.find((c) => c.value === cat)?.label ?? (cat ?? "");
@@ -167,54 +157,45 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
         }}
       />
 
-      <article className="card" style={{ marginTop: "0.75rem", marginBottom: "1rem" }}>
-        <h2>Pagination</h2>
-        <p style={{ color: "var(--muted)" }}>
-          Page {safePage} / {totalPages} - {cards.length} cartes affichées.
+      <div style={{ marginTop: "0.75rem", marginBottom: "1rem" }}>
+        <p style={{ color: "var(--muted)", margin: "0 0 8px", fontSize: "0.85rem" }}>
+          Page {safePage} / {totalPages} — {cards.length} cartes affichées
         </p>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          {safePage > 1 ? (
-            <a href={buildPageHref(safePage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
-              ← Page précédente
-            </a>
-          ) : (
-            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page précédente</span>
-          )}
-          {safePage < totalPages ? (
-            <a href={buildPageHref(safePage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
-              Page suivante →
-            </a>
-          ) : (
-            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
-          )}
+        <div className="pagination">
+          {safePage > 1
+            ? <a href={buildPageHref(safePage - 1)} className="page-btn">← Précédent</a>
+            : <span className="page-btn-disabled">← Précédent</span>}
+          {safePage < totalPages
+            ? <a href={buildPageHref(safePage + 1)} className="page-btn">Suivant →</a>
+            : <span className="page-btn-disabled">Suivant →</span>}
         </div>
-      </article>
+      </div>
 
       {cards.length === 0 ? (
         <p style={{ color: "var(--muted)" }}>Aucune carte trouvée.</p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "1rem" }}>
-          {cards.map((card) => (
-            <article key={card.id} style={{ background: "var(--card)", borderRadius: "10px", padding: "0.8rem", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-              {card.imageUrl && (
-                <img src={card.imageUrl} alt={card.name} style={{ width: "100%", height: "140px", objectFit: "cover", borderRadius: "6px" }} />
-              )}
-              <strong style={{ fontSize: "0.95rem" }}>{card.name}</strong>
-              {user && ownedIds.has(card.id) && <span style={{ fontSize: "0.75rem", color: "#2e7d32", fontWeight: 700 }}>Possédée</span>}
-              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: rarityColor[card.rarity.name] ?? "#333" }}>
-                {card.rarity.name}
-              </span>
-              <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{card.deck.name}</span>
-              {card.category && (
-                <span style={{ fontSize: "0.75rem", background: "rgba(0,0,0,0.07)", borderRadius: "4px", padding: "0.15rem 0.4rem", alignSelf: "flex-start" }}>
-                  {categoryLabel(card.category)}
-                </span>
-              )}
-              {card.description && (
-                <span style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: "0.2rem" }}>{card.description}</span>
-              )}
-            </article>
-          ))}
+        <div className="grid cards">
+          {cards.map((card) => {
+            const rarityClass = "rarity-" + card.rarity.name.replace(/\s+/g, "-");
+            return (
+              <article key={card.id} className="item-card">
+                {card.imageUrl && (
+                  <img src={card.imageUrl} alt={card.name} />
+                )}
+                <div className="item-card-body">
+                  <span className="item-card-name">{card.name}</span>
+                  {user && ownedIds.has(card.id) && (
+                    <span className="owned-badge">✓ Possédée</span>
+                  )}
+                  <span className={`rarity-badge ${rarityClass}`}>{card.rarity.name}</span>
+                  <span className="tag-pill">{card.deck.name}</span>
+                  {card.category && (
+                    <span className="tag-pill">{categoryLabel(card.category)}</span>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
