@@ -1,31 +1,39 @@
-/* ── Design Tokens ────────────────────────────── */
+/* ── Design Tokens (extracted from RTA logo) ──── */
 :root {
   --bg: #0a0418;
-  --surface: rgba(255, 255, 255, 0.04);
-  --surface-hover: rgba(255, 255, 255, 0.08);
-  --border: rgba(167, 139, 250, 0.15);
-  --border-accent: rgba(167, 139, 250, 0.5);
+  --bg-deep: #050211;
+  --surface: rgba(167, 139, 250, 0.05);
+  --surface-hover: rgba(167, 139, 250, 0.10);
+  --border: rgba(167, 139, 250, 0.18);
+  --border-accent: rgba(196, 181, 253, 0.55);
   --ink: #ede9fe;
-  --muted: #9b8fb8;
-  --accent: #a78bfa;        /* center star violet */
-  --accent2: #f59e0b;       /* sunset orange */
-  --accent-glow: rgba(167, 139, 250, 0.3);
-  --accent2-glow: rgba(245, 158, 11, 0.25);
+  --muted: #8b7eb8;
 
-  /* Quadrant colors from palette */
-  --q-orange: #f59e0b;
-  --q-purple: #a855f7;
-  --q-green: #10b981;
-  --q-blue: #3b82f6;
+  /* Center star accents */
+  --accent: #c4b5fd;          /* light violet — star center */
+  --accent-mid: #a78bfa;      /* mid violet — star aura */
+  --accent-deep: #7c3aed;     /* royal violet — outer ring */
+  --accent-glow: rgba(167, 139, 250, 0.35);
+  --accent2: #f59e0b;         /* sunset (legacy alias) */
 
-  /* Rarity colors mapped to palette */
-  --rarity-common: #9b8fb8;
+  /* 4 quadrant colors */
+  --q-orange: #f59e0b;        /* sunset sky */
+  --q-orange-bright: #fbbf24; /* sun */
+  --q-purple: #7c3aed;        /* night sky */
+  --q-purple-light: #a78bfa;  /* moon area */
+  --q-green: #10b981;         /* forest sky */
+  --q-green-deep: #047857;    /* tree silhouette */
+  --q-blue: #3b82f6;          /* city sky */
+  --q-blue-deep: #1e40af;     /* deep night blue */
+
+  /* Rarity mapping → 8 tiers from quadrant palette */
+  --rarity-common: #8b7eb8;
   --rarity-uncommon: #10b981;
   --rarity-rare: #3b82f6;
-  --rarity-very-rare: #a855f7;
+  --rarity-very-rare: #7c3aed;
   --rarity-import: #f59e0b;
   --rarity-exotic: #ec4899;
-  --rarity-black-market: #d946ef;
+  --rarity-black-market: #c026d3;
   --rarity-limited: #fbbf24;
 }
 
