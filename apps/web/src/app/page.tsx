@@ -1,11 +1,14 @@
 export default function HomePage() {
   return (
-    <section className="card">
+    <div className="hero">
       <h1>Rocket Them All</h1>
-      <p>Collectionne des cartes sur Discord et suis ta progression sur le web.</p>
       <p>
-        <a href="/profile">Profil</a> | <a href="/inventory">Inventaire</a> | <a href="/admin/users">Gestion Utilisateurs</a>
+        Collecte des cartes Rocket League sur Discord et suis ta progression sur le web.
       </p>
-    </section>
+      <div className="hero-cta">
+        <a href="/collection" className="btn-primary">Voir la collection</a>
+        <a href="/profile" className="btn-secondary">Mon profil</a>
+      </div>
+    </div>
   );
 }
