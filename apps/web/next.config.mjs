@@ -21,7 +21,8 @@ const nextConfig = {
     contentDispositionType: "attachment"
   },
   experimental: {
-    typedRoutes: false
+    typedRoutes: false,
+    serverComponentsExternalPackages: ["@prisma/client", ".prisma/client"]
   }
 };
 
