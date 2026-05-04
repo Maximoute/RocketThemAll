@@ -8,16 +8,6 @@ export class CaptureService {
   private readonly spawnService = new SpawnService();
   private readonly collectionService = new CollectionService();
 
-  async spawnRandomCard(channelId: string) {
-    const cards = await this.spawnService.createAutoSpawn(channelId);
-    return cards[0];
-  }
-
-  async spawnCardById(channelId: string, cardId: string) {
-    const cards = await this.spawnService.createAdminSpawn(channelId, undefined, cardId);
-    return cards[0];
-  }
-
   async capture(userId: string, channelId: string, cardName: string) {
     const config = await prisma.appConfig.findUnique({ where: { id: "default" } });
     const cooldownS = config?.captureCooldownS ?? 5;

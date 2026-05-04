@@ -15,10 +15,6 @@ export class TradeService {
     return safeValue;
   }
 
-  createTrade(user1Id: string, user2Id: string) {
-    return this.startTrade(user1Id, user2Id);
-  }
-
   async startTrade(user1Id: string, user2Id: string) {
     if (user1Id === user2Id) {
       throw new AppError("Cannot trade with yourself");
