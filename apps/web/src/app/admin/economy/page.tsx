@@ -3,6 +3,34 @@ import { requireAdmin } from "../../../lib/guard";
 import { revalidatePath } from "next/cache";
 
 export default async function AdminEconomyPage() {
+  async function updateRarityCatchRates(formData: FormData) {
+    "use server";
+    const admin = await requireAdmin();
+    const rarities = await prisma.rarity.findMany({ select: { id: true, name: true, catchRate: true } });
+
+    for (const rarity of rarities) {
+      const fleePercentRaw = Number(formData.get(`fleePercent:${rarity.id}`) ?? (1 - (rarity.catchRate ?? 1)) * 100);
+      const safeFleePercent = Number.isFinite(fleePercentRaw) ? Math.min(100, Math.max(0, fleePercentRaw)) : 0;
+      const nextCatchRate = Math.max(0, Math.min(1, 1 - safeFleePercent / 100));
+
+      await prisma.rarity.update({
+        where: { id: rarity.id },
+        data: { catchRate: nextCatchRate }
+      });
+    }
+
+    await prisma.economyLog.create({
+      data: {
+        userId: admin.id,
+        type: "admin_update",
+        metadata: { action: "update_flee_chances_by_rarity" }
+      }
+    });
+
+    revalidatePath("/admin/economy");
+    revalidatePath("/admin/cards");
+  }
+
   async function updateUserCredits(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
@@ -75,12 +103,13 @@ export default async function AdminEconomyPage() {
 
   await requireAdmin();
 
-  const [users, config, economyLogs, soldStatsRaw, circulation] = await Promise.all([
+  const [users, config, economyLogs, soldStatsRaw, circulation, rarities] = await Promise.all([
     prisma.user.findMany({ orderBy: { credits: "desc" }, take: 50 }),
     prisma.appConfig.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } }),
     prisma.economyLog.findMany({ orderBy: { createdAt: "desc" }, take: 80, include: { user: true } }),
     prisma.economyLog.findMany({ where: { type: "sell" }, orderBy: { createdAt: "desc" }, take: 500 }),
-    prisma.inventoryItem.groupBy({ by: ["cardId"], _sum: { quantity: true }, orderBy: { _sum: { quantity: "asc" } }, take: 20 })
+    prisma.inventoryItem.groupBy({ by: ["cardId"], _sum: { quantity: true }, orderBy: { _sum: { quantity: "asc" } }, take: 20 }),
+    prisma.rarity.findMany({ orderBy: { weight: "desc" } })
   ]);
 
   const soldByCard = new Map<string, number>();
@@ -232,6 +261,55 @@ export default async function AdminEconomyPage() {
 
           <button type="submit" style={{ padding: "8px 20px", fontWeight: 600, fontSize: "1rem" }}>
             💾 Enregistrer la config économie
+          </button>
+        </details>
+      </form>
+
+      <form action={updateRarityCatchRates}>
+        <details open style={{ marginBottom: "16px" }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "1.1rem", marginBottom: "12px" }}>🏃 Chances de fuite par rareté</summary>
+          <p style={{ fontSize: "0.85rem", color: "var(--muted)" }}>
+            Lecture simple: plus le pourcentage de fuite est élevé, plus la capture est difficile. Fuite = 100% - chance de capture.
+          </p>
+          <div style={{ display: "grid", gap: "8px", maxWidth: "920px" }}>
+            {rarities.map((rarity) => {
+              const catchPercent = Math.round((rarity.catchRate ?? 1) * 10000) / 100;
+              const fleePercent = Math.round((100 - catchPercent) * 100) / 100;
+              return (
+                <div
+                  key={rarity.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(140px, 180px) minmax(140px, 180px) minmax(160px, 220px)",
+                    gap: "12px",
+                    alignItems: "center",
+                    padding: "10px 12px",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px"
+                  }}
+                >
+                  <strong>{rarity.name}</strong>
+                  <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                    Capture: {catchPercent.toFixed(2)}% | Fuite: {fleePercent.toFixed(2)}%
+                  </span>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-start" }}>
+                    Fuite (%)
+                    <input
+                      name={`fleePercent:${rarity.id}`}
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      defaultValue={fleePercent.toFixed(2)}
+                      style={{ width: "110px", padding: "4px 6px" }}
+                    />
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+          <button type="submit" style={{ marginTop: "12px", padding: "8px 20px", fontWeight: 600, fontSize: "1rem" }}>
+            💾 Enregistrer les chances de fuite
           </button>
         </details>
       </form>

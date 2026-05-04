@@ -47,10 +47,11 @@ export class SpawnService {
     const deckFilter = allowedDecks && allowedDecks.length > 0 ? { deck: { name: { in: allowedDecks } } } : {};
     const cards = await prisma.card.findMany({ where: deckFilter, include: { rarity: true, deck: true } });
     const spawnableCards = cards.filter((card) => {
+      const notDeleted = (card as { deletedAt?: Date | null }).deletedAt == null;
       const hasImage = Boolean(card.imageUrl);
       const enabled = card.spawnEnabled !== false;
       const notBlacklisted = card.blacklistReason == null && card.category !== "blacklisted" && card.category !== "pending_image";
-      return hasImage && enabled && notBlacklisted;
+      return notDeleted && hasImage && enabled && notBlacklisted;
     });
     if (spawnableCards.length === 0) {
       throw new AppError("No cards available for spawn", 500);
@@ -262,6 +263,45 @@ export class SpawnService {
       throw new AppError("User not found", 404);
     }
 
+    const catchRateRaw = match.card.rarity.catchRate ?? 1;
+    const catchRate = Number.isFinite(catchRateRaw) ? Math.max(0, Math.min(1, catchRateRaw)) : 1;
+    const captureRoll = Math.random();
+
+    if (captureRoll > catchRate) {
+      await prisma.$transaction(async (tx) => {
+        await tx.spawnLog.update({
+          where: { id: match.id },
+          data: { status: "expired" }
+        });
+
+        await tx.economyLog.create({
+          data: {
+            userId: capturingUserId,
+            type: "capture_failed",
+            metadata: {
+              action: "capture_failed",
+              cardId: match.card.id,
+              catchRate,
+              captureRoll,
+              channelId
+            }
+          }
+        });
+      });
+
+      return {
+        caught: false as const,
+        card: match.card,
+        catchRate,
+        captureRoll,
+        gainedXp: 0,
+        level: user.level,
+        xp: user.xp,
+        boostersGained: 0,
+        variant: undefined
+      };
+    }
+
     const gainedXp = match.card.xpReward || xpForRarity(match.card.rarity.name as never);
     const progress = applyXpGain(user.level, user.xp, gainedXp);
     const economyConfig = await prisma.appConfig.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
@@ -308,7 +348,10 @@ export class SpawnService {
     });
 
     return {
+      caught: true as const,
       card: match.card,
+      catchRate,
+      captureRoll,
       gainedXp,
       level: progress.level,
       xp: progress.xp,

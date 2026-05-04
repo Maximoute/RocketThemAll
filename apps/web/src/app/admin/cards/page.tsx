@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { RARITIES } from "@rta/shared";
 import AdminCardsFiltersClient from "./filters.client";
+import ConfirmSubmitButton from "./ConfirmSubmitButton";
 
 const rarityColor: Record<string, string> = {
   Common: "#9e9e9e",
@@ -79,7 +80,7 @@ type SearchParams = {
   sort?: "name" | "rarity" | "deck" | "category";
   order?: "asc" | "desc";
   page?: string;
-  flash?: "card_updated" | "card_created" | "duplicate_name";
+  flash?: "card_updated" | "card_created" | "duplicate_name" | "card_trashed" | "card_restored";
 };
 
 export default async function AdminCardsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -309,23 +310,44 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       return;
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.inventoryItem.deleteMany({ where: { cardId } });
-      await tx.tradeItem.deleteMany({ where: { cardId } });
-      await tx.captureLog.deleteMany({ where: { cardId } });
-      await tx.spawnLog.deleteMany({ where: { cardId } });
-      await tx.card.delete({ where: { id: cardId } });
+    await prisma.card.update({
+      where: { id: cardId },
+      data: { deletedAt: new Date() }
     });
 
     await prisma.adminLog.create({
       data: {
         adminId: admin.id,
-        action: "CARD_DELETED",
+        action: "CARD_TRASHED",
         target: cardId
       }
     });
 
-    revalidatePath("/admin/cards");
+    redirect("/admin/cards?flash=card_trashed");
+  }
+
+  async function restoreCard(formData: FormData) {
+    "use server";
+    const admin = await requireAdmin();
+    const cardId = String(formData.get("cardId") ?? "");
+    if (!cardId) {
+      return;
+    }
+
+    await prisma.card.update({
+      where: { id: cardId },
+      data: { deletedAt: null }
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "CARD_RESTORED",
+        target: cardId
+      }
+    });
+
+    redirect("/admin/cards?flash=card_restored");
   }
 
   async function addExampleCards() {
@@ -487,6 +509,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
 
   const where = {
     where: {
+      deletedAt: null,
       name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
       deck: searchParams.deck ? { name: searchParams.deck } : undefined,
       rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
@@ -513,6 +536,13 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     orderBy,
     skip: (safePage - 1) * pageSize,
     take: pageSize
+  });
+
+  const trashedCards = await prisma.card.findMany({
+    where: { deletedAt: { not: null } },
+    include: { deck: true, rarity: true },
+    orderBy: { deletedAt: "desc" },
+    take: 50
   });
 
   function buildPageHref(targetPage: number): string {
@@ -552,6 +582,16 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
       {flash === "duplicate_name" && (
         <p style={{ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: "8px 10px", borderRadius: "8px" }}>
           ❌ Ce nom existe déjà. Le nom de carte doit être unique.
+        </p>
+      )}
+      {flash === "card_trashed" && (
+        <p style={{ background: "#fef3c7", border: "1px solid #fcd34d", color: "#92400e", padding: "8px 10px", borderRadius: "8px" }}>
+          🗑️ Carte déplacée dans la corbeille.
+        </p>
+      )}
+      {flash === "card_restored" && (
+        <p style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#166534", padding: "8px 10px", borderRadius: "8px" }}>
+          ♻️ Carte restaurée depuis la corbeille.
         </p>
       )}
 
@@ -598,7 +638,9 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
           <form key={deck.id} action={deleteDeck} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center" }}>
             <input type="hidden" name="deckId" value={deck.id} />
             <span>{deck.name}</span>
-            <button type="submit">Supprimer</button>
+            <ConfirmSubmitButton message={`Supprimer définitivement le deck ${deck.name} et toutes ses cartes ?`}>
+              Supprimer
+            </ConfirmSubmitButton>
           </form>
         ))}
       </article>
@@ -762,14 +804,46 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
               {/* Delete form */}
               <form action={deleteCard} style={{ marginTop: "4px" }}>
                 <input type="hidden" name="cardId" value={card.id} />
-                <button type="submit" style={{ fontSize: "0.78rem", padding: "3px 8px", background: "#e53935", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+                <ConfirmSubmitButton
+                  message={`Déplacer ${card.name} dans la corbeille ?`}
+                  style={{ fontSize: "0.78rem", padding: "3px 8px", background: "#e53935", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                >
                   Supprimer
-                </button>
+                </ConfirmSubmitButton>
               </form>
             </div>
           </article>
         ))}
       </div>
+
+      <article className="card" style={{ marginTop: "1.5rem" }}>
+        <h2>Corbeille</h2>
+        <p style={{ color: "var(--muted)" }}>
+          Les cartes supprimées sont mises en corbeille et peuvent être restaurées.
+        </p>
+        {trashedCards.length === 0 ? (
+          <p style={{ color: "var(--muted)" }}>Corbeille vide.</p>
+        ) : (
+          <div style={{ display: "grid", gap: "8px" }}>
+            {trashedCards.map((card) => (
+              <form
+                key={card.id}
+                action={restoreCard}
+                style={{ display: "flex", gap: "12px", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", border: "1px solid #e5e7eb", borderRadius: "8px", flexWrap: "wrap" }}
+              >
+                <input type="hidden" name="cardId" value={card.id} />
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <strong>{card.name}</strong>
+                  <span style={{ fontSize: "0.85rem", color: "var(--muted)" }}>
+                    {card.deck.name} · {card.rarity.name} · supprimée le {card.deletedAt?.toLocaleString("fr-FR")}
+                  </span>
+                </div>
+                <button type="submit" style={{ padding: "6px 10px" }}>Restaurer</button>
+              </form>
+            ))}
+          </div>
+        )}
+      </article>
     </section>
   );
 }

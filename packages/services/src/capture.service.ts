@@ -28,15 +28,20 @@ export class CaptureService {
     CaptureService.userCooldown.set(userId, Date.now());
 
     const resolved = await this.spawnService.resolveSpawn(userId, channelId, cardName);
-    await this.collectionService.grantCollectionRewards(userId);
+    if (resolved.caught) {
+      await this.collectionService.grantCollectionRewards(userId);
+    }
 
     return {
-      caught: true as const,
+      caught: resolved.caught,
       card: resolved.card,
       gainedXp: resolved.gainedXp,
       level: resolved.level,
       xp: resolved.xp,
-      boostersGained: resolved.boostersGained
+      boostersGained: resolved.boostersGained,
+      variant: resolved.variant,
+      catchRate: resolved.catchRate,
+      captureRoll: resolved.captureRoll
     };
   }
 
