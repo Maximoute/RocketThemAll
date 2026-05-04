@@ -3,8 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "services/*",
+    "web/*",
+    "libs/*"
   ],
   "scripts": {
     "build": "npm run -ws build",

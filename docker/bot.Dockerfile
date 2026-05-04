@@ -5,11 +5,11 @@ WORKDIR /workspace
 
 # Copy package files
 COPY package.json package-lock.json ./
-COPY packages/database ./packages/database
-COPY packages/services ./packages/services
-COPY packages/shared ./packages/shared
-COPY packages/importers ./packages/importers
-COPY apps/bot ./apps/bot
+COPY libs/database ./libs/database
+COPY libs/services ./libs/services
+COPY libs/shared ./libs/shared
+COPY libs/importers ./libs/importers
+COPY services/bot ./services/bot
 
 # Install dependencies
 RUN npm ci
@@ -52,14 +52,14 @@ COPY package.json package-lock.json ./
 RUN npm ci --only=production
 
 # Copy built artifacts from builder
-COPY --from=builder /workspace/apps/bot/dist ./apps/bot/dist
-COPY --from=builder /workspace/packages/database/dist ./packages/database/dist
-COPY --from=builder /workspace/packages/services/dist ./packages/services/dist
-COPY --from=builder /workspace/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /workspace/packages/importers/dist ./packages/importers/dist
-COPY --from=builder /workspace/packages/database/node_modules/.prisma ./packages/database/node_modules/.prisma
+COPY --from=builder /workspace/services/bot/dist ./services/bot/dist
+COPY --from=builder /workspace/libs/database/dist ./libs/database/dist
+COPY --from=builder /workspace/libs/services/dist ./libs/services/dist
+COPY --from=builder /workspace/libs/shared/dist ./libs/shared/dist
+COPY --from=builder /workspace/libs/importers/dist ./libs/importers/dist
+COPY --from=builder /workspace/libs/database/node_modules/.prisma ./libs/database/node_modules/.prisma
 
 # Set production environment
 ENV NODE_ENV=production
 
-CMD ["node", "apps/bot/dist/index.js"]
+CMD ["node", "services/bot/dist/index.js"]

@@ -5,9 +5,9 @@ WORKDIR /workspace
 
 # Copy package files
 COPY package.json package-lock.json ./
-COPY packages/database ./packages/database
-COPY packages/shared ./packages/shared
-COPY apps/web ./apps/web
+COPY libs/database ./libs/database
+COPY libs/shared ./libs/shared
+COPY web/app ./web/app
 
 # Install dependencies
 RUN npm ci
@@ -51,11 +51,11 @@ COPY package.json package-lock.json ./
 RUN npm ci --only=production
 
 # Copy built artifacts from builder
-COPY --from=builder /workspace/apps/web/.next ./apps/web/.next
-COPY --from=builder /workspace/apps/web/public ./apps/web/public
-COPY --from=builder /workspace/apps/web/package.json ./apps/web/
-COPY --from=builder /workspace/packages/database/dist ./packages/database/dist
-COPY --from=builder /workspace/packages/database/node_modules/.prisma ./packages/database/node_modules/.prisma
+COPY --from=builder /workspace/web/app/.next ./web/app/.next
+COPY --from=builder /workspace/web/app/public ./web/app/public
+COPY --from=builder /workspace/web/app/package.json ./web/app/
+COPY --from=builder /workspace/libs/database/dist ./libs/database/dist
+COPY --from=builder /workspace/libs/database/node_modules/.prisma ./libs/database/node_modules/.prisma
 
 # Set production environment
 ENV NODE_ENV=production
