@@ -30,28 +30,25 @@ services:
       - minio-data:/data
 
   minio-init:
-    image: minio/mc:latest
+    build:
+      context: .
+      dockerfile: docker/minio-init.Dockerfile
     depends_on:
       - minio
-    entrypoint: >
-      /bin/sh -c "
-      sleep 3;
-      mc alias set local http://minio:9000 minioadmin minioadmin;
-      mc mb --ignore-existing local/card-images;
-      mc anonymous set download local/card-images;
-      exit 0;
-      "
 
   api:
-    image: node:20
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: development
     container_name: rta-api
-    working_dir: /workspace
-    command: sh -c "npm install && npm run prisma:generate && npm run -w @rta/api dev"
+    restart: unless-stopped
     env_file:
       - .env.example
       - .env
     environment:
       DATABASE_URL: postgresql://collector:collector@postgres:5432/collector
+      NODE_ENV: development
     ports:
       - "4000:4000"
     volumes:
@@ -61,10 +58,12 @@ services:
       - minio
 
   bot:
-    image: node:20
+    build:
+      context: .
+      dockerfile: docker/bot.Dockerfile
+      target: development
     container_name: rta-bot
-    working_dir: /workspace
-    command: sh -c "npm install && npm run -w @rta/bot dev"
+    restart: unless-stopped
     env_file:
       - .env.example
       - .env
@@ -75,16 +74,19 @@ services:
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
       DISCORD_SPAWN_CHANNEL_ID: ${DISCORD_SPAWN_CHANNEL_ID}
       ADMIN_ROLE_ID: ${ADMIN_ROLE_ID}
+      NODE_ENV: development
     volumes:
       - ./:/workspace
     depends_on:
       - api
 
   web:
-    image: node:20
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      target: development
     container_name: rta-web
-    working_dir: /workspace
-    command: sh -c "npm install && npm run -w @rta/web prisma:generate && npm run -w @rta/web dev"
+    restart: unless-stopped
     env_file:
       - .env.example
       - .env
@@ -97,6 +99,7 @@ services:
       PRISMA_QUERY_ENGINE_LIBRARY: /workspace/packages/database/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
       API_BASE_URL: ${API_BASE_URL}
       INTERNAL_API_URL: http://api:4000
+      NODE_ENV: development
     ports:
       - "3000:3000"
     volumes:
