@@ -1,282 +1,307 @@
-# RocketThemAll - Discord Card Collector Monorepo
+# 🎮 RocketThemAll - Discord Card Collector Bot
 
-Projet full-stack TypeScript pour un bot Discord de collection de cartes avec application web utilisateur/admin, API backend, PostgreSQL, Prisma et stockage S3 compatible (MinIO local).
+A full-stack TypeScript monorepo for a Discord card collection bot with web application, REST API, and automated data import system.
 
-## Stack
+## ✨ What is RocketThemAll?
 
-- TypeScript
-- Node.js
-- Discord.js
-- Next.js
-- NextAuth (Discord OAuth2)
-- PostgreSQL
-- Prisma ORM
-- Docker + Docker Compose
-- MinIO (S3 compatible)
-- Vitest
+RocketThemAll is a complete card collection game running on Discord and the web. Users can:
+- **Capture** cards from multiple sources (Pokémon, Pop Culture, etc.)
+- **Trade** cards with other players (with secure double-confirmation)
+- **Collect** and manage inventory
+- **Compete** on leaderboards with XP/leveling system
+- **Boost** card drops with boosters
+- **Trade** in the marketplace
 
-## Architecture
+Perfect for Discord communities that want an engaging, gamified experience.
 
-```txt
-apps/
-	bot/
-	web/
-	api/
+## 🏗️ Tech Stack
 
-packages/
-	database/
-	services/
-	shared/
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | Next.js 14, React 18, TypeScript, NextAuth (Discord OAuth2) |
+| **Backend** | Node.js 20, Express, TypeScript |
+| **Discord Bot** | Discord.js, TypeScript |
+| **Database** | PostgreSQL, Prisma ORM |
+| **File Storage** | MinIO (S3-compatible) |
+| **DevOps** | Docker, Docker Compose |
+| **Testing** | Vitest |
+| **Monorepo** | npm workspaces |
 
-docker/
-	postgres/
-	minio/
+## 📦 Project Structure
 
-.env.example
-docker-compose.yml
-README.md
+```
+RocketThemAll/
+├── services/                # Backend services
+│   ├── api/                # Express REST API (port 4000)
+│   └── bot/                # Discord bot
+├── web/
+│   └── app/                # Next.js web application (port 3000)
+├── libs/                   # Shared libraries
+│   ├── database/           # Prisma + database layer
+│   ├── services/           # Business logic layer
+│   ├── shared/             # Shared types & utilities
+│   └── importers/          # Data import system
+├── docker/                 # Docker configuration
+│   ├── api.Dockerfile
+│   ├── bot.Dockerfile
+│   ├── web.Dockerfile
+│   └── minio-init.Dockerfile
+├── scripts/                # CLI utilities & data imports
+├── docker-compose.yml      # Local development setup
+└── package.json           # Workspace configuration
 ```
 
-## Fonctionnalites cle
+## 🚀 Quick Start
 
-- Bot Discord:
-	- /capture <nom>
-	- /inventory
-	- /profile
-	- /cardinfo <nom>
-	- /leaderboard
-	- /booster open
-	- /trade start @user
-	- /trade add <trade_id> <carte>
-	- /trade remove <trade_id> <carte>
-	- /trade confirm <trade_id>
-	- /trade cancel <trade_id>
-- Spawn automatique dans un salon Discord
-- XP/level avec formule: xpRequired = floor(100 * level^1.5)
-- Boosters (3 Common, 1 Uncommon, 1 Rare+)
-- Trade securise avec double confirmation + expiration + logs
-- Web app utilisateur:
-	- /login
-	- /profile
-	- /inventory
-	- /collection
-	- /trades
-- Web app admin:
-	- /admin
-	- /admin/cards
-	- /admin/users
-	- /admin/inventories
-	- /admin/logs
-	- /admin/imports
-	- /admin/config
-- Import image semi-auto depuis URL vers MinIO + workflow ImportJob
+### Prerequisites
+- Docker & Docker Compose
+- Node.js 20+
+- npm or pnpm
+- Discord Bot Token & OAuth2 credentials
 
-## Variables d'environnement
+### 1. Clone & Setup
 
-Copier .env.example vers .env et remplir:
+```bash
+git clone <repo>
+cd RocketThemAll
+cp .env.example .env
+# Fill in Discord credentials and secrets
+```
+
+### 2. Start Local Development
+
+```bash
+# Start database and storage
+docker-compose up -d
+
+# Install dependencies
+npm install
+
+# Generate Prisma client
+npm run prisma:generate
+
+# Run migrations
+npm run prisma:migrate
+
+# Start all services
+npm run dev
+```
+
+Services will be available at:
+- **API**: http://localhost:4000
+- **Web**: http://localhost:3000
+- **Bot**: Responds to Discord commands
+- **MinIO Console**: http://localhost:9001
+
+## 📚 Documentation
+
+- **[Getting Started](./docs/GETTING_STARTED.md)** - Detailed setup guide
+- **[Architecture](./docs/ARCHITECTURE.md)** - Project structure & design
+- **[API Reference](./docs/API.md)** - REST API endpoints
+- **[Discord Bot](./docs/BOT.md)** - Bot commands & features
+- **[Development](./docs/DEVELOPMENT.md)** - Development workflow
+- **[Importing Data](./docs/IMPORT_SYSTEM.md)** - Card import system
+- **[Deployment](./docs/DEPLOYMENT.md)** - Production deployment
+
+## 🎮 Key Features
+
+### For Users
+- ⭐ **Capture** cards through Discord commands or web interface
+- 🎯 **Trade** securely with other players
+- 📊 **Inventory** management with filtering
+- 🏆 **Leaderboard** rankings by XP
+- 💰 **Economy** system with credits & fragments
+- 🎁 **Boosters** to increase card drop rates
+- 🔐 **OAuth2** Discord login for web app
+
+### For Admins
+- 📥 **Mass imports** from multiple data sources
+- 🎨 **Card management** (create, edit, delete)
+- 👥 **User administration** panel
+- 📊 **Analytics** and logs
+- ⚙️ **Configuration** management
+
+### For Developers
+- 🏗️ **Monorepo structure** with shared libraries
+- 🔄 **Type-safe** end-to-end with TypeScript
+- 🧪 **Well-tested** business logic layer
+- 🐳 **Docker-first** development
+- 📦 **Extensible** architecture
+
+## 🔧 Common Commands
+
+```bash
+# Development
+npm run dev              # Start all services in watch mode
+npm run build            # Build all packages
+npm run test             # Run test suite
+
+# Database
+npm run prisma:generate  # Generate Prisma client
+npm run prisma:migrate   # Run database migrations
+npm run prisma:seed      # Seed database
+
+# Data Import
+npm run init:pokemon     # Import 1000+ Pokémon
+npm run import:pop:all   # Import all Pop Culture data
+```
+
+## 🌐 Environment Variables
+
+Required environment variables are documented in `.env.example`. Key variables:
 
 ```env
-DISCORD_TOKEN=
-DISCORD_CLIENT_ID=
-DISCORD_CLIENT_SECRET=
-DISCORD_GUILD_ID=
-DISCORD_SPAWN_CHANNEL_ID=
-ADMIN_ROLE_ID=
+# Discord
+DISCORD_TOKEN=your_bot_token
+DISCORD_CLIENT_ID=your_client_id
+DISCORD_CLIENT_SECRET=your_client_secret
+DISCORD_GUILD_ID=your_guild_id
+DISCORD_SPAWN_CHANNEL_ID=spawn_channel_id
 
+# Database
 DATABASE_URL=postgresql://collector:collector@postgres:5432/collector
 
+# Storage (MinIO)
 S3_ENDPOINT=http://minio:9000
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
-S3_BUCKET=card-images
-S3_PUBLIC_URL=http://localhost:9000/card-images
 
-NEXTAUTH_SECRET=
+# Auth
+NEXTAUTH_SECRET=generate_with_openssl_rand_base64_32
 NEXTAUTH_URL=http://localhost:3000
-API_BASE_URL=http://api:4000
 ```
 
-## Setup Discord Bot
+## 📖 API Highlights
 
-1. Creer une application Discord Developer Portal.
-2. Activer bot + OAuth2.
-3. Recuperer:
-	 - DISCORD_TOKEN
-	 - DISCORD_CLIENT_ID
-	 - DISCORD_CLIENT_SECRET
-	 - DISCORD_GUILD_ID
-	 - DISCORD_SPAWN_CHANNEL_ID
-4. Inviter le bot avec scope bot + applications.commands.
+### Core Endpoints
+- `POST /admin/init-pokemon` - Import 1000+ Pokémon
+- `GET /cards` - List all cards
+- `GET /users/:id/inventory` - User inventory
+- `POST /trades` - Create trade
+- `POST /images/upload` - Upload card image
 
-## Setup OAuth Discord (NextAuth)
+[Full API documentation](./docs/API.md)
 
-1. Dans OAuth2 redirect URI Discord, ajouter:
-	 - http://localhost:3000/api/auth/callback/discord
-2. Renseigner DISCORD_CLIENT_ID et DISCORD_CLIENT_SECRET.
-3. Definir NEXTAUTH_SECRET et NEXTAUTH_URL.
+## 🤖 Bot Commands
 
-## Lancement Docker
+### User Commands
+- `/capture <card_name>` - Capture a card
+- `/inventory` - View your cards
+- `/profile` - View profile
+- `/trades` - Manage trades
+- `/leaderboard` - View rankings
+
+### Admin Commands
+- `/admin import source:pokemon limit:151` - Import cards
+- `/admin config` - Configure system
+
+[Full bot documentation](./docs/BOT.md)
+
+## 🧪 Testing
 
 ```bash
-docker compose up -d postgres minio minio-init
-```
-
-Ou lancer toute la stack:
-
-```bash
-docker compose up
-```
-
-## Installation & Prisma
-
-```bash
-npm install
-npm run prisma:generate
-npm run prisma:migrate
-npm run prisma:seed
-```
-
-## Lancement projet
-
-Terminal 1 (API):
-
-```bash
-npm run -w @rta/api dev
-```
-
-Terminal 2 (BOT):
-
-```bash
-npm run -w @rta/bot dev
-```
-
-Terminal 3 (WEB):
-
-```bash
-npm run -w @rta/web dev
-```
-
-## 🎮 Import Pokémon (1000+ cartes)
-
-### Option 1 : Auto-Import au Démarrage (Recommandé)
-
-L'API vérifie automatiquement si les Pokémon sont importés. Si la BD est vide, l'import se lance tout seul :
-
-```bash
-docker-compose up -d
-# L'API détecte que la BD est vide
-# ✅ Lance automatiquement l'import de 1000+ Pokémon + variantes Shiny
-# ⏳ ~5-15 minutes
-# ✅ API ready après import
-```
-
-### Option 2 : Import Manuel via API
-
-```bash
-# Importer TOUS les Pokémon (1000+) + Shiny variants
-curl -X POST http://localhost:4000/admin/init-pokemon
-
-# Response:
-# {
-#   "success": true,
-#   "count": 1234,
-#   "message": "Pokémon initialization complete! 1234 cards imported."
-# }
-```
-
-### Option 3 : Import via CLI
-
-```bash
-npm run init:pokemon
-# ou
-pnpm ts-node scripts/init-pokemon.ts
-```
-
-### Ce qui est Importé
-
-✅ **Tous les Pokémon** (1000+ depuis PokéAPI)
-✅ **Noms Français** (Salamèche, Dracaufeu, etc. avec accents)
-✅ **Variantes Shiny** (✨ Shiny - beaucoup plus rares)
-✅ **Images Officielles** (depuis GitHub et PokéAPI)
-✅ **Rareté Intelligente** :
-  - Légendaires → Black Market
-  - Starters → Rare
-  - Pikachu → Very Rare
-  - Shiny → Exotic/Black Market
-✅ **Déduplication** (pas de doublons si redémarrage)
-
-### Timeline Déploiement
-
-```
-docker-compose up -d
-    ↓ (30s)
-PostgreSQL ready
-    ↓
-API startup
-    ↓
-✅ Check: Pokémon in DB? → NON
-    ↓
-🚀 AUTO-IMPORT LANCÉ
-    ├─ Fetch 1000+ Pokémon
-    ├─ + Variantes Shiny
-    ├─ Noms français
-    └─ Insert en BD
-    ↓ (5-15 min selon Internet)
-✅ 1000-1500 cartes importées
-✅ API listening on 4000
-```
-
-### Variables d'Environnement (Optionnelles)
-
-```env
-# Pour importer aussi les films depuis TMDB
-TMDB_API_KEY=your_key_here
-
-# Pour importer les jeux depuis IGDB
-IGDB_API_KEY=your_key_here
-```
-
-## API Backend
-
-Routes principales:
-
-- GET /cards
-- POST /cards
-- PATCH /cards/:id
-- DELETE /cards/:id
-- GET /users
-- GET /users/:id/inventory
-- PATCH /users/:id/inventory
-- POST /trades
-- PATCH /trades/:id
-- POST /images/upload
-- POST /images/import-url
-- GET /logs
-- GET /config
-- PATCH /config
-- **POST /admin/init-pokemon** ← Import 1000+ Pokémon
-
-Toute la logique metier reside dans packages/services.
-
-## Tests
-
-```bash
+# Run all tests
 npm run test
+
+# Run tests for specific package
+npm run test -w @rta/services
+
+# Watch mode
+npm run test -- --watch
 ```
 
-Couverture incluse:
+## 🐳 Docker
 
-- XP
-- Level
-- Booster
-- Trade
-- Capture
-- Inventaire
+Each service has its own multi-stage Dockerfile:
+- Development stage with hot-reload (tsx, nodemon)
+- Production stage optimized for size
 
-## Notes de scalabilite
+```bash
+# Build all images
+docker-compose build
 
-- Monorepo decouple apps et logique metier
-- Services metier centralises dans packages/services
-- Prisma pour coherence transactionnelle
-- Structure prete pour workers/files de jobs
-- Logs centralises (CaptureLog/AdminLog)
+# Start development stack
+docker-compose up
+
+# Run specific service
+docker-compose up api
+```
+
+## 🚀 Deployment
+
+See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for production setup including:
+- Environment configuration
+- Database migrations
+- Docker image building
+- Scaling considerations
+
+## 📊 System Architecture
+
+```
+┌─────────────────────────────────────────┐
+│         Discord                         │
+│    (Bot Commands & Interactions)        │
+└──────────────────┬──────────────────────┘
+                   │
+┌──────────────────▼──────────────────────┐
+│    REST API (@rta/api)                  │
+│  (Express, TypeScript)                  │
+│  ├─ Card Management                     │
+│  ├─ Trade System                        │
+│  ├─ User Management                     │
+│  └─ File Upload/Import                  │
+└──────────────────┬──────────────────────┘
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+┌───────▼────────┐   ┌───────▼────────┐
+│  PostgreSQL    │   │  MinIO (S3)    │
+│  (Cards, Users,│   │  (Card Images) │
+│   Trades, Logs)│   └────────────────┘
+└────────────────┘
+
+┌──────────────────────────────────────────┐
+│     Web Application (@rta/web)           │
+│     (Next.js, React, TypeScript)         │
+│  ├─ User Dashboard                       │
+│  ├─ Inventory Management                 │
+│  ├─ Trading Interface                    │
+│  ├─ Admin Panel                          │
+│  └─ NextAuth (Discord OAuth2)            │
+└──────────────────────────────────────────┘
+
+┌──────────────────────────────────────────┐
+│     Shared Libraries                     │
+│  ├─ @rta/database (Prisma)               │
+│  ├─ @rta/services (Business Logic)       │
+│  ├─ @rta/shared (Types)                  │
+│  └─ @rta/importers (Data Import)         │
+└──────────────────────────────────────────┘
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](./docs/CONTRIBUTING.md) for guidelines.
+
+## 📝 License
+
+[Add your license here]
+
+## 🆘 Support
+
+- 📖 Check [GETTING_STARTED.md](./docs/GETTING_STARTED.md) for setup issues
+- 🐛 Report bugs on GitHub Issues
+- 💬 Ask questions in Discussions
+
+## 🎯 Roadmap
+
+- [ ] WebSocket real-time updates
+- [ ] Advanced analytics dashboard
+- [ ] Mobile app (React Native)
+- [ ] Seasonal events & challenges
+- [ ] Guild-based competitions
+- [ ] Custom card deck creation
+
+---
+
+**Happy collecting! 🎮✨**
