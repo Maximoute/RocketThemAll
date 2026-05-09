@@ -1,6 +1,8 @@
+import { loadEnv } from "./loadEnv";
 import { importRocketLeagueItems } from "../packages/importers/src/rocketLeagueItemsImporter";
 
 async function main() {
+  await loadEnv();
   const limitArg = Number(process.argv[2] ?? "");
   const limit = Number.isFinite(limitArg) && limitArg > 0 ? Math.floor(limitArg) : undefined;
   console.log("Starting Rocket League items import...\n");

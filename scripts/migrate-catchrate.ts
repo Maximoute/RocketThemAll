@@ -1,7 +1,10 @@
+import { loadEnv } from "./loadEnv";
 import { prisma } from "../packages/database/src/index";
 
 async function main() {
-const catchRates: Record<string, number> = {
+  await loadEnv();
+
+  const catchRates: Record<string, number> = {
   Common: 1.0,
   Uncommon: 0.85,
   Rare: 0.65,

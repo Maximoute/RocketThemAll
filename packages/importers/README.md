@@ -43,9 +43,8 @@ apps/api/routes/import/       # Routes API pour les imports
   - > 20 → Uncommon
   - < 20 → Common
 
-### Jeux (IGDB)
-- **Stub** : À implémenter
-- **Clé API** : `IGDB_API_KEY`
+### Jeux (RAWG)
+- **Clé API** : `RAWG_API_KEY`
 
 ## Utilisation
 
@@ -125,11 +124,11 @@ Avant insertion, le système vérifie si la carte existe déjà.
 ## Variables d'Environnement
 
 ```env
-# TMDB (requis pour les films)
+# TMDB (requis pour les films et séries)
 TMDB_API_KEY=your_api_key
 
-# IGDB (optionnel)
-IGDB_API_KEY=your_api_key
+# RAWG (requis pour les jeux vidéo Pop Culture)
+RAWG_API_KEY=your_api_key
 ```
 
 ## Logs

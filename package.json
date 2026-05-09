@@ -22,7 +22,9 @@
     "import:rocket-league:items": "tsx scripts/import-rocket-league-items.ts",
     "import:cinema:films": "tsx scripts/import-cinema-films.ts",
     "import:pop:manual": "tsx scripts/import-pop-manual.ts",
-    "import:pop:all": "tsx scripts/import-pop-all.ts"
+    "import:pop:all": "tsx scripts/import-pop-all.ts",
+    "import:no-rocket-league": "tsx scripts/import-db-no-rocket-league.ts",
+    "make-admin": "tsx scripts/make-admin.ts"
   },
   "devDependencies": {
     "prisma": "^7.8.0",

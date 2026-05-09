@@ -1,3 +1,4 @@
+import { loadEnv } from "./loadEnv";
 import axios from "axios";
 import { prisma } from "../packages/database/src/index";
 
@@ -21,6 +22,7 @@ function determinePokemonRarity(baseExp: number, isShiny: boolean): string {
 }
 
 async function main() {
+  await loadEnv();
   console.log("🔄 Migrating Pokémon rarity tiers based on base_experience...\n");
 
   // Fetch all rarity IDs once

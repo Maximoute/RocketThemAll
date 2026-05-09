@@ -74,7 +74,7 @@ pnpm ts-node scripts/import-pokemon.ts
 **Variables d'environnement requises** (optionnelles) :
 ```env
 TMDB_API_KEY=your_key_here   # Pour importer films
-IGDB_API_KEY=your_key_here   # Pour importer jeux (stub)
+RAWG_API_KEY=your_key_here   # Pour importer jeux vidéo Pop Culture
 ```
 
 ## 🏗️ Architecture

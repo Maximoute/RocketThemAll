@@ -84,9 +84,9 @@ API listening on 4000 ✅
 ## Variables d'Environnement
 
 ```env
-# Optionnels (pour TMDB et IGDB)
+# Optionnels (pour TMDB et RAWG)
 TMDB_API_KEY=your_key
-IGDB_API_KEY=your_key
+RAWG_API_KEY=your_key
 
 # Pokémon: toujours importé automatiquement
 ```

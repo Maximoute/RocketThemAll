@@ -1,3 +1,4 @@
+import { loadEnv } from "./loadEnv";
 import { importPopCulture as importPopCultureFromTmdb } from "@rta/importers";
 
 async function importPopCulture(limit: number) {
@@ -5,6 +6,8 @@ async function importPopCulture(limit: number) {
 }
 
 async function main() {
+  await loadEnv();
+
   const argLimit = Number(process.argv[2] ?? "150");
   const limit = Number.isFinite(argLimit) && argLimit > 0 ? Math.floor(argLimit) : 150;
 

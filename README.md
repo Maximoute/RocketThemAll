@@ -232,8 +232,8 @@ API startup
 # Pour importer aussi les films depuis TMDB
 TMDB_API_KEY=your_key_here
 
-# Pour importer les jeux depuis IGDB
-IGDB_API_KEY=your_key_here
+# Pour importer aussi les jeux vidéo depuis RAWG
+RAWG_API_KEY=your_key_here
 ```
 
 ## API Backend

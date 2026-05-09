@@ -1,6 +1,9 @@
+import { loadEnv } from "./loadEnv";
 import { importPokemon } from "@rta/importers";
 
 async function initializeDatabase() {
+  await loadEnv();
+
   try {
     console.log("🚀 Initializing Pokémon database...");
     const imported = await importPokemon(10000);

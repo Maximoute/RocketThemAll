@@ -1,6 +1,9 @@
+import { loadEnv } from "./loadEnv";
 import { importGames } from "@rta/importers";
 
 async function main() {
+  await loadEnv();
+
   console.log("Starting Games import...\n");
   try {
     const count = await importGames();
