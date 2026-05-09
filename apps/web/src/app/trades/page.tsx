@@ -60,7 +60,7 @@ export default async function TradesPage() {
                           <span className="text-rta-ink font-medium">
                             {item.userId === trade.user1Id ? trade.user1.username : trade.user2.username}
                           </span>{" "}
-                          propose <span className="text-rta-success">{item.quantity}×</span> {item.card.name}
+                          propose <span className="text-rta-success">{item.quantity}×</span> {item.card?.name ?? "Carte supprimée"}
                         </li>
                       ))}
                     </ul>
