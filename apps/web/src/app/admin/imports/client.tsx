@@ -149,43 +149,43 @@ export default function AdminImportsClient() {
   }
 
   return (
-    <section className="card">
-      <h1>Import de cartes</h1>
-      <p style={{ color: "var(--muted)", marginBottom: "1.5rem" }}>
-        Chaque import est idempotent — les cartes déjà présentes sont ignorées (déduplication par sourceId).
+    <div>
+      <h1 className="text-2xl font-black tracking-tight mb-1">Import de cartes</h1>
+      <p className="text-rta-muted text-sm mb-6">
+        Chaque import est idempotent: les cartes déjà présentes sont ignorées par sourceId.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1rem" }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
         {IMPORT_ACTIONS.map((action) => {
           const result = results[action.id];
           const isLoading = loading === action.id;
           const anyLoading = loading !== null;
 
           return (
-            <article key={action.id} style={{
-              background: "var(--card)",
-              borderRadius: "10px",
-              padding: "1.2rem",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.6rem",
-              border: result?.success ? "1px solid #4caf5044" : result && !result.success ? "1px solid #f4433644" : "1px solid transparent"
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <span style={{ fontSize: "1.4rem" }}>{action.emoji}</span>
-                <strong style={{ fontSize: "1rem" }}>{action.label}</strong>
+            <article
+              key={action.id}
+              className={[
+                "bg-rta-surface rounded-xl p-4 flex flex-col gap-3 border",
+                result?.success ? "border-rta-success/50" : "",
+                result && !result.success ? "border-red-500/50" : "",
+                !result ? "border-rta-border" : "",
+              ].join(" ")}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{action.emoji}</span>
+                <strong className="text-rta-ink">{action.label}</strong>
               </div>
-              <p style={{ fontSize: "0.85rem", color: "var(--muted)", margin: 0 }}>{action.description}</p>
+              <p className="text-sm text-rta-muted m-0">{action.description}</p>
 
               {result && (
-                <div style={{
-                  fontSize: "0.85rem",
-                  padding: "0.4rem 0.6rem",
-                  borderRadius: "6px",
-                  background: result.success ? "rgba(76,175,80,0.1)" : result.message === "En cours..." ? "rgba(33,150,243,0.1)" : "rgba(244,67,54,0.1)",
-                  color: result.success ? "#2e7d32" : result.message === "En cours..." ? "#1565c0" : "#c62828"
-                }}>
+                <div
+                  className={[
+                    "text-sm px-3 py-2 rounded-lg border",
+                    result.success ? "bg-rta-success/10 text-rta-success border-rta-success/30" : "",
+                    result.message === "En cours..." ? "bg-rta-accent/10 text-purple-300 border-rta-accent/30" : "",
+                    !result.success && result.message !== "En cours..." ? "bg-red-500/10 text-red-300 border-red-500/30" : "",
+                  ].join(" ")}
+                >
                   {formatResult(result)}
                 </div>
               )}
@@ -193,18 +193,12 @@ export default function AdminImportsClient() {
               <button
                 onClick={() => runImport(action)}
                 disabled={anyLoading}
-                style={{
-                  marginTop: "auto",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "6px",
-                  background: isLoading ? "#bdbdbd" : "var(--accent)",
-                  color: "#fff",
-                  border: "none",
-                  cursor: anyLoading ? "not-allowed" : "pointer",
-                  fontSize: "0.9rem",
-                  fontWeight: 600,
-                  opacity: anyLoading && !isLoading ? 0.6 : 1
-                }}
+                className={[
+                  "mt-auto px-4 py-2 rounded-lg text-sm font-bold transition-colors",
+                  isLoading ? "bg-rta-surface2 text-rta-muted" : "bg-rta-cta text-rta-bg hover:bg-rta-cta/90",
+                  anyLoading ? "cursor-not-allowed" : "",
+                  anyLoading && !isLoading ? "opacity-60" : "",
+                ].join(" ")}
               >
                 {isLoading ? "⏳ Import en cours..." : `Lancer l'import`}
               </button>
@@ -212,6 +206,6 @@ export default function AdminImportsClient() {
           );
         })}
       </div>
-    </section>
+    </div>
   );
 }

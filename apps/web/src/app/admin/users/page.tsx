@@ -167,7 +167,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
     if (!userId || !cardName) return;
 
     const card = await prisma.card.findFirst({
-      where: { name: { contains: cardName, mode: "insensitive" } }
+      where: { name: { contains: cardName, mode: "insensitive" as const } }
     });
     if (!card) return;
 
@@ -191,7 +191,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
 
   const users = await prisma.user.findMany({
     where: {
-      ...(q ? { OR: [{ username: { contains: q, mode: "insensitive" } }, { discordId: { contains: q } }] } : {}),
+      ...(q ? { OR: [{ username: { contains: q, mode: "insensitive" as const } }, { discordId: { contains: q } }] } : {}),
       ...(roleFilter === "admin" ? { isAdmin: true } : {}),
       ...(roleFilter === "user" ? { isAdmin: false } : {}),
     },
@@ -222,36 +222,36 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
   });
 
   return (
-    <section>
-      <h1 style={{ marginTop: 0, marginBottom: "4px" }}>👤 Gestion Utilisateurs</h1>
-      <p style={{ color: "#6b5f4f", marginBottom: "16px" }}>Profils, rôles admin, boosters, économie, spawns. Voir inventaire via le lien dédié.</p>
+    <div>
+      <h1 className="text-2xl font-black tracking-tight mb-1">Gestion Utilisateurs</h1>
+      <p className="text-rta-muted text-sm mb-6">Profils, rôles admin, boosters, économie, spawns. Voir inventaire via le lien dédié.</p>
 
-      <div className="card" style={{ marginBottom: "16px" }}>
+      <div className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
         <form method="GET" style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
           <input
             type="text"
             name="q"
             defaultValue={q}
             placeholder="Rechercher par nom ou Discord ID..."
-            style={{ flex: 1, minWidth: "220px", padding: "8px 12px", border: "1px solid #e4d8c6", borderRadius: "8px" }}
+            className="bg-rta-bg border border-rta-border rounded-lg px-3 py-2 text-sm text-rta-ink placeholder:text-rta-muted flex-1 min-w-[220px] focus:outline-none focus:border-rta-accentHi"
           />
-          <select name="role" defaultValue={roleFilter} style={{ padding: "8px 10px", border: "1px solid #e4d8c6", borderRadius: "8px" }}>
+          <select name="role" defaultValue={roleFilter} className="bg-rta-bg border border-rta-border rounded-lg px-3 py-2 text-sm text-rta-ink focus:outline-none focus:border-rta-accentHi">
             <option value="all">Tous les rôles</option>
             <option value="admin">Admins seulement</option>
             <option value="user">Non-admins</option>
           </select>
-          <button type="submit" style={{ padding: "8px 16px", background: "#d97706", color: "white", border: "none", borderRadius: "8px", cursor: "pointer" }}>🔍 Filtrer</button>
+          <button type="submit" className="px-4 py-2 rounded-lg bg-rta-cta text-rta-bg text-sm font-bold hover:bg-rta-cta/90 transition-colors">Filtrer</button>
           {(q || roleFilter !== "all") && (
-            <a href="/admin/users" style={{ padding: "8px 12px", color: "#6b5f4f", textDecoration: "none" }}>✕ Réinitialiser</a>
+            <a href="/admin/users" className="px-3 py-2 text-sm text-rta-muted hover:text-rta-ink transition-colors">Réinitialiser</a>
           )}
         </form>
-        <p style={{ margin: "8px 0 0", fontSize: "13px", color: "#6b5f4f" }}>{users.length} utilisateur(s) trouvé(s)</p>
+        <p className="mt-2 text-xs text-rta-muted">{users.length} utilisateur(s) trouvé(s)</p>
       </div>
       {await Promise.all(users.map(async (user) => {
         const energy = await getSpawnEnergySnapshot(user.id);
         const boosterMap = new Map(user.userBoosters.map((b) => [b.boosterType, b.quantity]));
         return (
-          <article key={user.id} className="card">
+          <article key={user.id} className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
             <p><strong>{user.username}</strong> ({user.discordId})</p>
             <p>Lv.{user.level} | XP {user.xp}</p>
             <p>Admin: {user.isAdmin ? "oui" : "non"}</p>
@@ -324,7 +324,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
           </article>
         );
       }))}
-    </section>
+    </div>
   );
 }
 

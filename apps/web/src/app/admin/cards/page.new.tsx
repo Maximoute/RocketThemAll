@@ -313,7 +313,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     if (!cardId || !username) return;
 
     const user = await prisma.user.findFirst({
-      where: { username: { equals: username, mode: "insensitive" } }
+      where: { username: { equals: username, mode: "insensitive" as const } }
     });
     if (!user) return;
 
@@ -344,7 +344,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
 
   const cardsRaw = await prisma.card.findMany({
     where: {
-      name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
+      name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" as const } : undefined,
       deck: searchParams.deck ? { name: searchParams.deck } : undefined,
       rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
       category: searchParams.category ? searchParams.category : undefined

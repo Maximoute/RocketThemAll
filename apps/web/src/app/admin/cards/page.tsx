@@ -16,6 +16,17 @@ const rarityColor: Record<string, string> = {
   Limited: "#ffd700"
 };
 
+const rarityDot: Record<string, string> = {
+  "Common":       "bg-rta-muted",
+  "Uncommon":     "bg-rta-success shadow-[0_0_4px_rgba(90,191,134,0.6)]",
+  "Rare":         "bg-rta-accentHi shadow-[0_0_4px_rgba(107,63,212,0.6)]",
+  "Very Rare":    "bg-purple-500 shadow-[0_0_4px_rgba(139,92,246,0.6)]",
+  "Import":       "bg-rta-cta shadow-[0_0_4px_rgba(242,130,65,0.6)]",
+  "Exotic":       "bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.6)]",
+  "Black Market": "bg-rta-gold shadow-[0_0_4px_rgba(245,200,66,0.6)]",
+  "Limited":      "bg-rta-gold shadow-[0_0_4px_rgba(245,200,66,0.6)]",
+};
+
 const EXAMPLE_CARDS = [
   {
     name: "Octane Legacy",
@@ -454,7 +465,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     if (!cardId || !username) return;
 
     const user = await prisma.user.findFirst({
-      where: { username: { equals: username, mode: "insensitive" } }
+      where: { username: { equals: username, mode: "insensitive" as const } }
     });
     if (!user) return;
 
@@ -487,7 +498,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
 
   const where = {
     where: {
-      name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
+      name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" as const } : undefined,
       deck: searchParams.deck ? { name: searchParams.deck } : undefined,
       rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
       category: searchParams.category ? searchParams.category : undefined
@@ -536,9 +547,9 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
   const users = await prisma.user.findMany({ select: { username: true }, orderBy: { username: "asc" }, take: 250 });
 
   return (
-    <section className="card">
-      <h1>Admin Cards & Bibliotheques</h1>
-      <p>Connecte en admin: {currentAdmin.username}</p>
+    <div>
+      <h1 className="text-2xl font-black tracking-tight mb-1">Admin Cards & Bibliothèques</h1>
+      <p className="text-rta-muted text-sm mb-4">Connecté en admin: {currentAdmin.username}</p>
       {flash === "card_updated" && (
         <p style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#166534", padding: "8px 10px", borderRadius: "8px" }}>
           ✅ Carte mise à jour.
@@ -555,7 +566,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         </p>
       )}
 
-      <article className="card">
+      <article className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
         <h2>Actions rapides</h2>
         <form action={forceRandomSpawn} style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
           <select name="guildId" defaultValue="" style={{ minWidth: "220px" }}>
@@ -571,7 +582,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         </p>
       </article>
 
-      <article className="card">
+      <article className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
         <h2>Filtres & tri</h2>
         <AdminCardsFiltersClient
           decks={decks.map((d) => ({ value: d.name, label: d.name }))}
@@ -588,7 +599,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         />
       </article>
 
-      <article className="card">
+      <article className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
         <h2>Bibliotheques (Decks)</h2>
         <form action={createDeck} style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
           <input name="name" type="text" placeholder="Nouveau deck" required />
@@ -603,7 +614,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         ))}
       </article>
 
-      <article className="card">
+      <article className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
         <h2>Raretes</h2>
         {rarities.map((rarity) => (
           <form key={rarity.id} action={updateRarity} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center", flexWrap: "wrap" }}>
@@ -622,7 +633,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         ))}
       </article>
 
-      <article className="card">
+      <article className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
         <h2>Ajouter une carte</h2>
         <form action={createCard} style={{ display: "grid", gap: "8px", maxWidth: "760px" }}>
           <input name="name" type="text" placeholder="Nom" required />
@@ -658,7 +669,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
 
       <p style={{ marginTop: "8px" }}>Gestion complete: decks, raretes, cartes, spawn force et dons utilisateurs.</p>
 
-      <article className="card" style={{ marginTop: "1rem" }}>
+      <article className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4" style={{ marginTop: "1rem" }}>
         <h2>Pagination</h2>
         <p style={{ color: "var(--muted)" }}>
           {totalCards} cartes au total. Page {safePage} / {totalPages}.
@@ -689,14 +700,15 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "1rem", marginTop: "1.5rem" }}>
         {cards.map((card) => (
-          <article key={card.id} style={{ background: "var(--card)", borderRadius: "10px", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column" }}>
+          <article key={card.id} className="bg-rta-surface border border-rta-border rounded-xl overflow-hidden flex flex-col">
             {/* Visual preview */}
             {card.imageUrl && (
               <img src={card.imageUrl} alt={card.name} style={{ width: "100%", height: "140px", objectFit: "cover" }} />
             )}
             <div style={{ padding: "0.8rem", display: "flex", flexDirection: "column", gap: "0.3rem", flex: 1 }}>
               <strong style={{ fontSize: "0.95rem" }}>{card.name}</strong>
-              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: rarityColor[card.rarity.name] ?? "#333" }}>
+              <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: rarityColor[card.rarity.name] ?? "#9B8FC0" }}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${rarityDot[card.rarity.name] ?? "bg-rta-muted"}`} />
                 {card.rarity.name}
               </span>
               <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{card.deck.name}</span>
@@ -770,7 +782,7 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
           </article>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
