@@ -305,7 +305,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
     where: {
       userId: user.id,
       card: {
-        name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" } : undefined,
+        name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" as const } : undefined,
         deck: searchParams.deck ? { name: searchParams.deck } : undefined,
         rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
         category: searchParams.category ? searchParams.category : undefined
@@ -368,113 +368,159 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
     return `/inventory?${params.toString()}`;
   }
 
-  return (
-    <section className="card">
-      <h1>Mon Inventaire ({totalItems} cartes)</h1>
-      <p>Crédits: {user.credits} | Fragments: {user.fragments}</p>
-      <p>Valeur dynamique totale inventaire: {totalInventoryValue} crédits</p>
-      <h2>Fragments par tier</h2>
-      <p style={{ color: "var(--muted)", marginTop: "-0.4rem" }}>
-        Craft: {FRAGMENT_CRAFT_COST} fragments du tier inférieur pour créer 1 carte du tier supérieur.
-      </p>
-      <ul>
-        {fragmentBalances.map((row) => (
-          <li key={row.rarityName}>{row.rarityName}: {row.quantity}</li>
-        ))}
-      </ul>
-      <form action={craftCardFromFragments} style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
-        <label htmlFor="targetRarity">Créer une carte:</label>
-        <select id="targetRarity" name="targetRarity" defaultValue="Uncommon">
-          {FRAGMENT_CHAIN.filter((rarity) => rarity !== "Common").map((rarity) => (
-            <option key={rarity} value={rarity}>{rarity}</option>
-          ))}
-        </select>
-        <button type="submit">Craft via fragments</button>
-      </form>
+  const rarityGlow: Record<string, string> = {
+    "Common":       "border-rta-border",
+    "Uncommon":     "glow-uncommon",
+    "Rare":         "glow-rare",
+    "Very Rare":    "glow-very-rare",
+    "Import":       "glow-import",
+    "Exotic":       "glow-exotic",
+    "Black Market": "glow-black-market",
+    "Limited":      "glow-limited",
+  };
+  const rarityBadgeClass: Record<string, string> = {
+    "Common":       "bg-rta-surface2 text-rta-muted",
+    "Uncommon":     "bg-rta-success/15 text-rta-success border border-rta-success",
+    "Rare":         "bg-rta-accentHi/20 text-purple-300 border border-rta-accentHi",
+    "Very Rare":    "bg-purple-500/15 text-purple-300 border border-purple-500",
+    "Import":       "bg-rta-cta/15 text-rta-cta border border-rta-cta",
+    "Exotic":       "bg-red-500/15 text-red-400 border border-red-500",
+    "Black Market": "bg-gradient-to-r from-rta-gold to-rta-cta text-rta-bg font-black",
+    "Limited":      "bg-rta-gold/15 text-rta-gold border border-rta-gold",
+  };
 
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">Mon Inventaire</h1>
+          <p className="text-rta-muted text-sm mt-1">Toutes tes cartes collectées via Discord</p>
+        </div>
+        <div className="flex gap-6">
+          {[
+            { value: totalItems, label: "total",      color: "text-rta-success" },
+            { value: user.credits, label: "crédits",  color: "text-rta-gold"   },
+            { value: user.fragments, label: "frags",  color: "text-purple-300" },
+          ].map(({ value, label, color }) => (
+            <div key={label} className="text-right">
+              <div className={`text-2xl font-black ${color}`}>{value.toLocaleString("fr-FR")}</div>
+              <div className="text-[0.65rem] uppercase tracking-widest text-rta-muted">{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Fragment craft */}
+      <div className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-5">
+        <h2 className="text-sm font-bold mb-1">🔮 Craft de fragments</h2>
+        <p className="text-xs text-rta-muted mb-3">
+          {FRAGMENT_CRAFT_COST} fragments du tier inférieur = 1 carte du tier supérieur · Valeur inventaire: <strong className="text-rta-success">{totalInventoryValue}</strong> crédits
+        </p>
+        <div className="flex gap-3 flex-wrap items-center">
+          {fragmentBalances.map((row) => (
+            <span key={row.rarityName} className="text-xs px-2 py-1 rounded bg-rta-bg/50 border border-rta-border">
+              {row.rarityName}: <strong className="text-rta-success">{row.quantity}</strong>
+            </span>
+          ))}
+          <form action={craftCardFromFragments} className="flex gap-2 items-center ml-auto">
+            <select name="targetRarity" defaultValue="Uncommon" className="bg-rta-bg border border-rta-border rounded-lg px-3 py-1.5 text-sm text-rta-ink">
+              {FRAGMENT_CHAIN.filter((r) => r !== "Common").map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+            <button type="submit" className="px-3 py-1.5 rounded-lg bg-rta-accent text-rta-ink text-sm font-bold hover:bg-rta-accentHi transition-colors">
+              Craft
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Filters */}
       <InventoryFiltersClient
         decks={deckRows.map((d) => ({ value: d.name, label: d.name }))}
         rarities={RARITIES.map((r) => ({ value: r, label: r }))}
         categories={POP_CATEGORIES}
-        initial={{
-          q: searchParams.q,
-          deck: searchParams.deck,
-          rarity: searchParams.rarity,
-          category: searchParams.category,
-          sort,
-          order
-        }}
+        initial={{ q: searchParams.q, deck: searchParams.deck, rarity: searchParams.rarity, category: searchParams.category, sort, order }}
       />
 
-      <article className="card" style={{ marginTop: "0.75rem", marginBottom: "1rem" }}>
-        <h2>Pagination</h2>
-        <p style={{ color: "var(--muted)" }}>
-          Page {safePage} / {totalPages} - {items.length} cartes affichées.
-        </p>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+      {/* Pagination */}
+      <div className="flex items-center justify-between mb-4 text-sm">
+        <span className="text-rta-muted">Page {safePage} / {totalPages} · {items.length} cartes</span>
+        <div className="flex gap-2">
           {safePage > 1 ? (
-            <a href={buildPageHref(safePage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
-              ← Page précédente
+            <a href={buildPageHref(safePage - 1)} className="px-3 py-1.5 rounded-lg border border-rta-border text-rta-muted hover:text-rta-ink hover:border-rta-accentHi transition-colors">
+              ← Précédente
             </a>
-          ) : (
-            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page précédente</span>
-          )}
+          ) : null}
           {safePage < totalPages ? (
-            <a href={buildPageHref(safePage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
-              Page suivante →
+            <a href={buildPageHref(safePage + 1)} className="px-3 py-1.5 rounded-lg border border-rta-border text-rta-muted hover:text-rta-ink hover:border-rta-accentHi transition-colors">
+              Suivante →
             </a>
-          ) : (
-            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
-          )}
+          ) : null}
         </div>
-      </article>
+      </div>
 
+      {/* Card grid */}
       {items.length === 0 ? (
-        <p style={{ color: "var(--muted)" }}>Aucune carte trouvée.</p>
+        <p className="text-rta-muted text-sm">Aucune carte trouvée.</p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "1rem" }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))" }}>
           {items.map((item) => {
             const dynamic = dynamicValues.get(`${item.cardId}:${item.variant}`);
+            const rarity = item.card.rarity.name;
             return (
-            <article key={item.id} style={{ background: "var(--card)", borderRadius: "10px", padding: "0.8rem", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-              {item.card.imageUrl && (
-                <img src={item.card.imageUrl} alt={item.card.name} style={{ width: "100%", height: "140px", objectFit: "cover", borderRadius: "6px" }} />
-              )}
-              <strong style={{ fontSize: "0.95rem" }}>{item.card.name}</strong>
-              <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>Variante: {item.variant}</span>
-              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: rarityColor[item.card.rarity.name] ?? "#333" }}>
-                {item.card.rarity.name}
-              </span>
-              <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{item.card.deck.name}</span>
-              {item.card.category && (
-                <span style={{ fontSize: "0.75rem", background: "rgba(0,0,0,0.07)", borderRadius: "4px", padding: "0.15rem 0.4rem", alignSelf: "flex-start" }}>
-                  {categoryLabel(item.card.category)}
-                </span>
-              )}
-              <span style={{ fontSize: "0.85rem", marginTop: "auto" }}>×{item.quantity}</span>
-              <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Valeur /u: {dynamic?.unitPrice ?? 0} crédits</span>
-              <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Circulation: {dynamic?.circulationCount ?? 0}</span>
-              <a
-                href={`/inventory/card/${item.id}`}
-                style={{ fontSize: "0.85rem", color: "var(--accent)", textDecoration: "none" }}
-              >
-                Ouvrir la fiche
-              </a>
-              <form action={recycleFromInventory} style={{ display: "grid", gap: "0.4rem", marginTop: "0.4rem" }}>
-                <input type="hidden" name="itemId" value={item.id} />
-                <input type="number" name="quantity" min={1} max={item.quantity} defaultValue={1} />
-                <button type="submit">Fragmenter</button>
-              </form>
-              <form action={sellFromInventory} style={{ display: "grid", gap: "0.4rem", marginTop: "0.2rem" }}>
-                <input type="hidden" name="itemId" value={item.id} />
-                <input type="number" name="quantity" min={1} max={item.quantity} defaultValue={1} />
-                <button type="submit">Vendre (80%)</button>
-              </form>
-            </article>
-          );})}
+              <article key={item.id} className={`bg-rta-surface border rounded-xl overflow-hidden transition-transform duration-200 hover:-translate-y-1 relative ${rarityGlow[rarity] ?? "border-rta-border"}`}>
+                <div className="aspect-[3/4] w-full bg-gradient-to-b from-rta-surface2 to-rta-bg flex items-center justify-center relative">
+                  {item.card.imageUrl ? (
+                    <img src={item.card.imageUrl} alt={item.card.name} className="w-full h-full object-cover absolute inset-0" />
+                  ) : (
+                    <span className="text-4xl opacity-30">🃏</span>
+                  )}
+                  <span className={`absolute top-2 right-2 text-[0.58rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${rarityBadgeClass[rarity] ?? "bg-rta-surface2 text-rta-muted"}`}>
+                    {rarity}
+                  </span>
+                  <span className="absolute bottom-2 left-2 text-[0.58rem] px-1.5 py-0.5 rounded-full bg-rta-bg/80 text-rta-muted border border-rta-ink/15">
+                    {item.card.deck.name}
+                  </span>
+                  <span className="absolute bottom-2 right-2 text-[0.6rem] font-bold px-1.5 py-0.5 rounded-full bg-rta-bg/85 text-rta-cta border border-rta-cta/30">
+                    ×{item.quantity}
+                  </span>
+                </div>
+                <div className="p-3">
+                  <p className="text-sm font-bold text-rta-ink truncate">{item.card.name}</p>
+                  {item.card.category && (
+                    <p className="text-[0.65rem] text-rta-muted mt-0.5">{categoryLabel(item.card.category)}</p>
+                  )}
+                  <p className="text-[0.65rem] text-rta-muted mt-1">
+                    {dynamic?.unitPrice ?? 0} crédits / unité
+                  </p>
+                  <a href={`/inventory/card/${item.id}`} className="text-xs text-rta-success hover:underline mt-1 block">
+                    Voir la fiche →
+                  </a>
+                  <div className="flex gap-1.5 mt-2">
+                    <form action={recycleFromInventory} className="flex-1">
+                      <input type="hidden" name="itemId" value={item.id} />
+                      <input type="hidden" name="quantity" value={1} />
+                      <button type="submit" className="w-full text-[0.68rem] py-1 rounded bg-rta-bg border border-rta-border text-rta-muted hover:text-rta-ink hover:border-rta-accent transition-colors">
+                        Fragmenter
+                      </button>
+                    </form>
+                    <form action={sellFromInventory} className="flex-1">
+                      <input type="hidden" name="itemId" value={item.id} />
+                      <input type="hidden" name="quantity" value={1} />
+                      <button type="submit" className="w-full text-[0.68rem] py-1 rounded bg-rta-bg border border-rta-border text-rta-muted hover:text-rta-ink hover:border-rta-cta transition-colors">
+                        Vendre 80%
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
