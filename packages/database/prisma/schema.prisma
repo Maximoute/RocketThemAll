@@ -309,6 +309,27 @@ model EconomyLog {
   @@index([userId, createdAt])
 }
 
+model GuildActivityLog {
+  id            String   @id @default(uuid())
+  guildId       String
+  guildName     String?
+  channelId     String?
+  userId        String?
+  discordUserId String?
+  username      String?
+  category      String
+  action        String
+  status        String?
+  summary       String
+  details       Json?
+  createdAt     DateTime @default(now())
+
+  @@index([guildId, createdAt])
+  @@index([category, createdAt])
+  @@index([action, createdAt])
+  @@index([discordUserId, createdAt])
+}
+
 model CollectionRewardClaim {
   id        String   @id @default(uuid())
   userId    String

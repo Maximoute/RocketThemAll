@@ -7,7 +7,7 @@ export function errorHandler(error: unknown, req: Request, res: Response, _next:
   if (error instanceof ZodError) {
     return res.status(400).json({
       error: "Validation failed",
-      details: error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message }))
+      details: error.issues.slice(0, 20).map((issue) => ({ path: issue.path.join("."), message: issue.message }))
     });
   }
 
@@ -28,7 +28,8 @@ export function errorHandler(error: unknown, req: Request, res: Response, _next:
     message: error instanceof Error ? error.message : String(error)
   });
 
-  if (process.env.NODE_ENV === "production") {
+  const exposeStack = process.env.API_EXPOSE_ERROR_STACK === "true";
+  if (process.env.NODE_ENV === "production" || !exposeStack) {
     return res.status(500).json({ error: "Internal server error" });
   }
 

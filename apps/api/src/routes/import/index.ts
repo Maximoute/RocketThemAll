@@ -22,6 +22,19 @@ const router = Router();
 const MAX_IMPORT_LIMIT = 100;
 const IMPORT_TIMEOUT_MS = 120_000;
 
+type CinemaImportResult = {
+  imported: number;
+  updated: number;
+  skipped: number;
+};
+
+type RocketLeagueImportResult = {
+  created: number;
+  updated: number;
+  blacklisted: number;
+  skipped: number;
+};
+
 const limitSchema = z.object({
   limit: z.number().int().min(1).max(MAX_IMPORT_LIMIT).default(MAX_IMPORT_LIMIT),
   pages: z.number().int().min(1).max(10).optional()
@@ -66,6 +79,14 @@ async function runImportWithRetry<T>(task: () => Promise<T>, label: string): Pro
   throw lastError instanceof Error ? lastError : new Error("Import failed");
 }
 
+function sendImportFailure(res: import("express").Response, label: string, error: unknown) {
+  logError("Import request failed", {
+    label,
+    message: error instanceof Error ? error.message : String(error)
+  });
+  return res.status(500).json({ success: false, error: "Import failed" });
+}
+
 router.use(requireAuth, requireAdmin, importRateLimit);
 
 // POST /import/pokemon
@@ -77,8 +98,7 @@ router.post("/pokemon", async (req, res) => {
     const count = await runImportWithRetry(() => importPokemon(limit), "pokemon");
     res.json({ success: true, count, message: `Imported ${count} Pokémon` });
   } catch (error) {
-    console.error("[API] Pokémon import error:", error);
-    res.status(500).json({ success: false, error: "Import failed" });
+    return sendImportFailure(res, "pokemon", error);
   }
 });
 
@@ -90,8 +110,7 @@ router.post("/movies", async (req, res) => {
     const count = await runImportWithRetry(() => importPopMovies(limit), "pop/movies");
     res.json({ success: true, count, message: `Imported ${count} movies/series` });
   } catch (error) {
-    console.error("[API] Movies import error:", error);
-    res.status(500).json({ success: false, error: "Import failed" });
+    return sendImportFailure(res, "movies", error);
   }
 });
 
@@ -103,8 +122,7 @@ router.post("/pop", async (req, res) => {
     const count = await runImportWithRetry(() => importPopMovies(limit), "pop");
     res.json({ success: true, count, message: `Imported ${count} pop culture cards` });
   } catch (error) {
-    console.error("[API] Pop import error:", error);
-    res.status(500).json({ success: false, error: "Import failed" });
+    return sendImportFailure(res, "pop", error);
   }
 });
 
@@ -116,8 +134,7 @@ router.post("/pop/movies", async (req, res) => {
     const count = await runImportWithRetry(() => importPopMovies(limit), "pop/movies");
     res.json({ success: true, count, message: `Imported ${count} movie/tv cards` });
   } catch (error) {
-    console.error("[API] TMDb movies import error:", error);
-    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+    return sendImportFailure(res, "pop/movies", error);
   }
 });
 
@@ -127,11 +144,10 @@ router.post("/pop/cinema-films", async (req, res) => {
     const payload = validateBody(limitSchema.partial(), req);
     const limit = payload.limit ?? MAX_IMPORT_LIMIT;
     const pages = payload.pages ?? 8;
-    const result = await runImportWithRetry(() => importCinemaFilmsDeck(limit, pages), "pop/cinema-films");
+    const result = await runImportWithRetry<CinemaImportResult>(() => importCinemaFilmsDeck(limit, pages), "pop/cinema-films");
     res.json({ success: true, ...result, message: `Imported ${result.imported} cinema films cards` });
   } catch (error) {
-    console.error("[API] cinema_films import error:", error);
-    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+    return sendImportFailure(res, "pop/cinema-films", error);
   }
 });
 
@@ -143,8 +159,7 @@ router.post("/pop/anime", async (req, res) => {
     const count = await runImportWithRetry(() => importPopAnime(limit), "pop/anime");
     res.json({ success: true, count, message: `Imported ${count} anime/manga cards` });
   } catch (error) {
-    console.error("[API] Jikan import error:", error);
-    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+    return sendImportFailure(res, "pop/anime", error);
   }
 });
 
@@ -156,8 +171,7 @@ router.post("/pop/games", async (req, res) => {
     const count = await runImportWithRetry(() => importPopGames(limit), "pop/games");
     res.json({ success: true, count, message: `Imported ${count} video game cards` });
   } catch (error) {
-    console.error("[API] RAWG import error:", error);
-    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+    return sendImportFailure(res, "pop/games", error);
   }
 });
 
@@ -167,8 +181,7 @@ router.post("/pop/manual", async (req, res) => {
     const count = await runImportWithRetry(() => importManualPopCulture(), "pop/manual");
     res.json({ success: true, count, message: `Imported ${count} manual pop culture cards` });
   } catch (error) {
-    console.error("[API] Manual pop import error:", error);
-    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+    return sendImportFailure(res, "pop/manual", error);
   }
 });
 
@@ -180,8 +193,7 @@ router.post("/pop/nekos", async (req, res) => {
     const count = await runImportWithRetry(() => importNekos(limit), "pop/nekos");
     res.json({ success: true, count, message: `Imported ${count} neko cards` });
   } catch (error) {
-    console.error("[API] Nekos import error:", error);
-    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+    return sendImportFailure(res, "pop/nekos", error);
   }
 });
 
@@ -198,15 +210,14 @@ router.post("/pop/all", async (req, res) => {
     );
     res.json({ success: true, ...result, message: `Imported ${result.total} pop culture cards total` });
   } catch (error) {
-    console.error("[API] Full pop import error:", error);
-    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+    return sendImportFailure(res, "pop/all", error);
   }
 });
 
 // POST /import/rocket-league/items — source principale @rocketleagueapi/items + fusion images externe
 router.post("/rocket-league/items", async (_req, res) => {
   try {
-    const result = await runImportWithRetry(() => importRocketLeagueItems(), "rocket-league/items");
+    const result = await runImportWithRetry<RocketLeagueImportResult>(() => importRocketLeagueItems(), "rocket-league/items");
     res.json({
       success: true,
       imported: result.created + result.updated,
@@ -215,8 +226,7 @@ router.post("/rocket-league/items", async (_req, res) => {
       message: `Rocket League import done: created=${result.created}, updated=${result.updated}`
     });
   } catch (error) {
-    console.error("[API] Rocket League import error:", error);
-    res.status(500).json({ success: false, error: String(error instanceof Error ? error.message : error) });
+    return sendImportFailure(res, "rocket-league/items", error);
   }
 });
 

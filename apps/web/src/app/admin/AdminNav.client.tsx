@@ -6,10 +6,8 @@ const NAV_ITEMS = [
   { href: "/admin", label: "🏠 Dashboard", exact: true },
   { href: "/admin/users", label: "👤 Utilisateurs" },
   { href: "/admin/cards", label: "🃏 Cartes" },
-  { href: "/admin/inventories", label: "🎒 Inventaires" },
   { href: "/admin/servers", label: "🖥️ Serveurs" },
   { href: "/admin/economy", label: "💰 Économie" },
-  { href: "/admin/config", label: "⚙️ Config" },
   { href: "/admin/imports", label: "📥 Imports" },
   { href: "/admin/logs", label: "📋 Logs" },
 ];

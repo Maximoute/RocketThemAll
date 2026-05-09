@@ -100,8 +100,9 @@ export async function POST(req: NextRequest, { params }: { params: { path: strin
 
     return NextResponse.json({ success: false, error: "Endpoint non géré" }, { status: 400 });
   } catch (err) {
+    console.error("[web:admin-import] route failure", err);
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : "Erreur interne" },
+      { success: false, error: "Erreur interne" },
       { status: 500 }
     );
   }

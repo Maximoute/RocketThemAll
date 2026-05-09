@@ -1,11 +1,13 @@
 import { prisma } from "@rta/database";
 import { CollectionService } from "./collection.service.js";
 import { AppError } from "./errors.js";
+import { LogsService, type GuildActivityLogInput } from "./logs.service.js";
 
 const TRADE_EXPIRATION_MS = 10 * 60 * 1000;
 
 export class TradeService {
   private readonly collectionService = new CollectionService();
+  private readonly logsService = new LogsService();
 
   private requirePositiveQuantity(quantity: number, fieldName: string) {
     const safeValue = Number.isFinite(quantity) ? Math.floor(quantity) : 0;
@@ -19,7 +21,11 @@ export class TradeService {
     return this.startTrade(user1Id, user2Id);
   }
 
-  async startTrade(user1Id: string, user2Id: string) {
+  async startTrade(
+    user1Id: string,
+    user2Id: string,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     if (user1Id === user2Id) {
       throw new AppError("Cannot trade with yourself");
     }
@@ -41,10 +47,27 @@ export class TradeService {
       }
     });
 
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId: user1Id,
+      category: "trade",
+      action: "trade_started",
+      status: "pending",
+      summary: `${context?.username ?? user1Id} a lancé un trade avec ${user2Id}`,
+      details: { tradeId: trade.id, user1Id, user2Id, expiresAt: trade.expiresAt.toISOString() }
+    });
+
     return trade;
   }
 
-  async addItem(tradeId: string, userId: string, cardId: string, quantity: number, variant: "normal" | "shiny" | "holo" = "normal") {
+  async addItem(
+    tradeId: string,
+    userId: string,
+    cardId: string,
+    quantity: number,
+    variant: "normal" | "shiny" | "holo" = "normal",
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     if (!cardId) {
       throw new AppError("cardId is required", 400);
     }
@@ -78,6 +101,7 @@ export class TradeService {
     });
 
     await this.resetConfirmations(tradeId);
+    const card = await prisma.card.findUnique({ where: { id: cardId } });
     await prisma.adminLog.create({
       data: {
         action: "TRADE_ITEM_ADDED",
@@ -85,9 +109,24 @@ export class TradeService {
         metadata: { userId, cardId, quantity: safeQuantity, variant }
       }
     });
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "trade",
+      action: "trade_item_added",
+      status: "pending",
+      summary: `${context?.username ?? userId} ajoute ${safeQuantity}x ${card?.name ?? cardId} au trade`,
+      details: { tradeId, cardId, cardName: card?.name ?? null, quantity: safeQuantity, variant }
+    });
   }
 
-  async addBooster(tradeId: string, userId: string, boosterType: "basic" | "rare" | "epic" | "legendary", quantity: number) {
+  async addBooster(
+    tradeId: string,
+    userId: string,
+    boosterType: "basic" | "rare" | "epic" | "legendary",
+    quantity: number,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     const trade = await this.getPendingTrade(tradeId);
     this.assertTradeUser(trade, userId);
 
@@ -110,9 +149,23 @@ export class TradeService {
     });
 
     await this.resetConfirmations(tradeId);
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "trade",
+      action: "trade_booster_added",
+      status: "pending",
+      summary: `${context?.username ?? userId} ajoute ${safeQuantity} booster(s) ${boosterType} au trade`,
+      details: { tradeId, boosterType, quantity: safeQuantity }
+    });
   }
 
-  async addCredits(tradeId: string, userId: string, amount: number) {
+  async addCredits(
+    tradeId: string,
+    userId: string,
+    amount: number,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     const trade = await this.getPendingTrade(tradeId);
     this.assertTradeUser(trade, userId);
     const safeAmount = Math.max(0, Math.floor(amount));
@@ -126,9 +179,25 @@ export class TradeService {
       data: userId === trade.user1Id ? { user1Credits: safeAmount } : { user2Credits: safeAmount }
     });
     await this.resetConfirmations(tradeId);
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "trade",
+      action: "trade_credits_set",
+      status: "pending",
+      summary: `${context?.username ?? userId} met ${safeAmount} crédits dans le trade`,
+      details: { tradeId, amount: safeAmount }
+    });
   }
 
-  async removeItem(tradeId: string, userId: string, cardId: string, quantity: number, variant: "normal" | "shiny" | "holo" = "normal") {
+  async removeItem(
+    tradeId: string,
+    userId: string,
+    cardId: string,
+    quantity: number,
+    variant: "normal" | "shiny" | "holo" = "normal",
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     if (!cardId) {
       throw new AppError("cardId is required", 400);
     }
@@ -155,6 +224,7 @@ export class TradeService {
     }
 
     await this.resetConfirmations(tradeId);
+    const card = await prisma.card.findUnique({ where: { id: cardId } });
     await prisma.adminLog.create({
       data: {
         action: "TRADE_ITEM_REMOVED",
@@ -162,9 +232,24 @@ export class TradeService {
         metadata: { userId, cardId, quantity: safeQuantity, variant }
       }
     });
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "trade",
+      action: "trade_item_removed",
+      status: "pending",
+      summary: `${context?.username ?? userId} retire ${safeQuantity}x ${card?.name ?? cardId} du trade`,
+      details: { tradeId, cardId, cardName: card?.name ?? null, quantity: safeQuantity, variant }
+    });
   }
 
-  async removeBooster(tradeId: string, userId: string, boosterType: "basic" | "rare" | "epic" | "legendary", quantity: number) {
+  async removeBooster(
+    tradeId: string,
+    userId: string,
+    boosterType: "basic" | "rare" | "epic" | "legendary",
+    quantity: number,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     const trade = await this.getPendingTrade(tradeId);
     this.assertTradeUser(trade, userId);
 
@@ -181,9 +266,22 @@ export class TradeService {
     }
 
     await this.resetConfirmations(tradeId);
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "trade",
+      action: "trade_booster_removed",
+      status: "pending",
+      summary: `${context?.username ?? userId} retire ${safeQuantity} booster(s) ${boosterType} du trade`,
+      details: { tradeId, boosterType, quantity: safeQuantity }
+    });
   }
 
-  async removeCredits(tradeId: string, userId: string) {
+  async removeCredits(
+    tradeId: string,
+    userId: string,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     const trade = await this.getPendingTrade(tradeId);
     this.assertTradeUser(trade, userId);
     await prisma.trade.update({
@@ -191,9 +289,22 @@ export class TradeService {
       data: userId === trade.user1Id ? { user1Credits: 0 } : { user2Credits: 0 }
     });
     await this.resetConfirmations(tradeId);
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "trade",
+      action: "trade_credits_removed",
+      status: "pending",
+      summary: `${context?.username ?? userId} retire ses crédits du trade`,
+      details: { tradeId }
+    });
   }
 
-  async confirmTrade(tradeId: string, userId: string) {
+  async confirmTrade(
+    tradeId: string,
+    userId: string,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     const trade = await this.getPendingTrade(tradeId);
     this.assertTradeUser(trade, userId);
 
@@ -201,7 +312,7 @@ export class TradeService {
     const updated = await prisma.trade.update({ where: { id: tradeId }, data });
 
     if (updated.user1Confirm && updated.user2Confirm) {
-      return this.executeTrade(tradeId);
+      return this.executeTrade(tradeId, context);
     }
 
     await prisma.adminLog.create({
@@ -211,11 +322,24 @@ export class TradeService {
         metadata: { userId }
       }
     });
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "trade",
+      action: "trade_confirmed",
+      status: "pending",
+      summary: `${context?.username ?? userId} confirme le trade`,
+      details: { tradeId }
+    });
 
     return updated;
   }
 
-  async cancelTrade(tradeId: string, userId: string) {
+  async cancelTrade(
+    tradeId: string,
+    userId: string,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     const trade = await this.getPendingTrade(tradeId);
     this.assertTradeUser(trade, userId);
 
@@ -231,6 +355,15 @@ export class TradeService {
         metadata: { userId }
       }
     });
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "trade",
+      action: "trade_cancelled",
+      status: "cancelled",
+      summary: `${context?.username ?? userId} annule le trade`,
+      details: { tradeId }
+    });
 
     return updatedTrade;
   }
@@ -242,8 +375,14 @@ export class TradeService {
     });
   }
 
-  private async executeTrade(tradeId: string) {
-    const items = await prisma.tradeItem.findMany({ where: { tradeId } });
+  private async executeTrade(
+    tradeId: string,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
+    const [items, tradePreview] = await Promise.all([
+      prisma.tradeItem.findMany({ where: { tradeId }, include: { card: true } }),
+      prisma.trade.findUnique({ where: { id: tradeId }, include: { user1: true, user2: true } })
+    ]);
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -316,6 +455,32 @@ export class TradeService {
         await tx.transactionLog.create({ data: { userId: trade.user2Id, type: "trade", amount: trade.user1Credits - trade.user2Credits, metadata: { tradeId } } });
         await tx.economyLog.create({ data: { userId: trade.user1Id, type: "trade", amount: trade.user2Credits - trade.user1Credits, metadata: { tradeId } } });
         await tx.economyLog.create({ data: { userId: trade.user2Id, type: "trade", amount: trade.user1Credits - trade.user2Credits, metadata: { tradeId } } });
+      });
+
+      await this.logsService.logGuildEvent({
+        ...context,
+        userId: tradePreview?.user1Id,
+        category: "trade",
+        action: "trade_completed",
+        status: "completed",
+        summary: `${tradePreview?.user1.username ?? tradePreview?.user1Id ?? "?"} et ${tradePreview?.user2.username ?? tradePreview?.user2Id ?? "?"} ont complété un trade`,
+        details: {
+          tradeId,
+          user1Id: tradePreview?.user1Id,
+          user1Name: tradePreview?.user1.username,
+          user2Id: tradePreview?.user2Id,
+          user2Name: tradePreview?.user2.username,
+          user1Credits: tradePreview?.user1Credits,
+          user2Credits: tradePreview?.user2Credits,
+          items: items.map((item) => ({
+            userId: item.userId,
+            cardId: item.cardId,
+            cardName: item.card?.name ?? null,
+            boosterType: item.boosterType,
+            quantity: item.quantity,
+            variant: item.variant
+          }))
+        }
       });
     } catch (error) {
       console.error("[trade] executeTrade failed", {

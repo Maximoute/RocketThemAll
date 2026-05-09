@@ -2,6 +2,7 @@ import { prisma } from "@rta/database";
 import { AppError } from "./errors.js";
 import { applyXpGain, xpForRarity } from "./xp.service.js";
 import { SpawnEnergyService } from "./spawn-energy.service.js";
+import { LogsService, type GuildActivityLogInput } from "./logs.service.js";
 
 type SpawnKind = "auto" | "manual" | "admin";
 
@@ -10,6 +11,35 @@ const MANUAL_SPAWN_PRIVATE_WINDOW_MINUTES = 2;
 
 export class SpawnService {
   private readonly spawnEnergyService = new SpawnEnergyService();
+  private readonly logsService = new LogsService();
+
+  private async logSpawnBatch(
+    cards: Array<{ id: string; name: string; rarity: { name: string }; deck?: { name: string } | null }>,
+    spawnType: SpawnKind,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "userId" | "discordUserId" | "username">
+  ) {
+    if (!context?.guildId || cards.length === 0) {
+      return;
+    }
+
+    const label = spawnType === "auto" ? "Spawn auto" : spawnType === "manual" ? "Spawn manuel" : "Spawn admin";
+    await this.logsService.logGuildEvent({
+      ...context,
+      category: "spawn",
+      action: `${spawnType}_spawn_created`,
+      status: "success",
+      summary: `${label}: ${cards.map((card) => card.name).join(", ")}`,
+      details: {
+        spawnType,
+        cards: cards.map((card) => ({
+          id: card.id,
+          name: card.name,
+          rarity: card.rarity?.name ?? null,
+          deck: card.deck?.name ?? null
+        }))
+      }
+    });
+  }
 
   private normalizeName(value: string) {
     return value
@@ -173,19 +203,21 @@ export class SpawnService {
     return { cards, createdAt };
   }
 
-  async createAutoSpawn(channelId: string, guildId?: string) {
+  async createAutoSpawn(channelId: string, guildId?: string, guildName?: string) {
     let allowedDecks: string[] | undefined;
     if (guildId) {
       const guildConfig = await prisma.botGuildConfig.findUnique({ where: { guildId } });
       if (guildConfig?.allowedDecks?.length) allowedDecks = guildConfig.allowedDecks;
     }
     const batch = await this.createSpawnBatch(channelId, 1, "auto", undefined, undefined, undefined, allowedDecks);
+    await this.logSpawnBatch(batch.cards, "auto", { guildId, guildName, channelId });
     return batch.cards;
   }
 
-  async createAdminSpawn(channelId: string, adminUserId?: string, cardId?: string) {
+  async createAdminSpawn(channelId: string, adminUserId?: string, cardId?: string, guildId?: string, guildName?: string) {
     if (!cardId) {
       const batch = await this.createSpawnBatch(channelId, 1, "admin", adminUserId);
+      await this.logSpawnBatch(batch.cards, "admin", { guildId, guildName, channelId, userId: adminUserId });
       return batch.cards;
     }
 
@@ -195,10 +227,15 @@ export class SpawnService {
     }
 
     const batch = await this.createSpawnBatch(channelId, 1, "admin", adminUserId, [{ id: cardId }]);
+    await this.logSpawnBatch(batch.cards, "admin", { guildId, guildName, channelId, userId: adminUserId });
     return batch.cards;
   }
 
-  async createManualSpawn(userId: string, channelId: string, options?: { consumeCharge?: boolean; spawnType?: SpawnKind }) {
+  async createManualSpawn(
+    userId: string,
+    channelId: string,
+    options?: { consumeCharge?: boolean; spawnType?: SpawnKind; guildId?: string; guildName?: string; discordUserId?: string; username?: string }
+  ) {
     const config = await prisma.appConfig.upsert({
       where: { id: "default" },
       update: {},
@@ -220,11 +257,35 @@ export class SpawnService {
     }
 
     const spawnType = options?.spawnType ?? "manual";
+    let allowedDecks: string[] | undefined;
+    if (options?.guildId) {
+      const guildConfig = await prisma.botGuildConfig.findUnique({ where: { guildId: options.guildId } });
+      if (guildConfig?.allowedDecks?.length) {
+        allowedDecks = guildConfig.allowedDecks;
+      }
+    }
+
     await this.expireOldSpawns();
     const energy = options?.consumeCharge === false
       ? await this.spawnEnergyService.getUserSpawnCharges(userId)
       : await this.spawnEnergyService.consumeSpawnCharge(userId);
-    const batch = await this.createSpawnBatch(channelId, 3, spawnType, userId, undefined, { skipActiveCheck: true });
+    const batch = await this.createSpawnBatch(
+      channelId,
+      3,
+      spawnType,
+      userId,
+      undefined,
+      { skipActiveCheck: true },
+      allowedDecks
+    );
+    await this.logSpawnBatch(batch.cards, spawnType, {
+      guildId: options?.guildId,
+      guildName: options?.guildName,
+      channelId,
+      userId,
+      discordUserId: options?.discordUserId,
+      username: options?.username
+    });
 
     return {
       cards: batch.cards,

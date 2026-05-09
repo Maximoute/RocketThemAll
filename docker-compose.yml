@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: collector
       POSTGRES_DB: collector
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -24,8 +24,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio-data:/data
 
@@ -74,6 +74,7 @@ services:
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
       DISCORD_SPAWN_CHANNEL_ID: ${DISCORD_SPAWN_CHANNEL_ID}
+      DISCORD_ADMIN_ROLE_ID: ${DISCORD_ADMIN_ROLE_ID}
       ADMIN_ROLE_ID: ${ADMIN_ROLE_ID}
     volumes:
       - ./:/workspace

@@ -40,7 +40,7 @@ export default async function CardInfoPage({ params }: { params: { id: string } 
   return (
     <section className="card" style={{ maxWidth: "600px", margin: "0 auto" }}>
       <a href="/collection" style={{ fontSize: "0.9rem", color: "var(--accent)", textDecoration: "none", marginBottom: "1rem", display: "inline-block" }}>
-        ← Retour à la collection
+        ← Retour aux decks
       </a>
 
       <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginTop: "1rem" }}>

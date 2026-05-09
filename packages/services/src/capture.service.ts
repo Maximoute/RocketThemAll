@@ -1,12 +1,14 @@
 import { prisma } from "@rta/database";
 import { AppError } from "./errors.js";
 import { CollectionService } from "./collection.service.js";
+import { LogsService, type GuildActivityLogInput } from "./logs.service.js";
 import { SpawnService } from "./spawn.service.js";
 
 export class CaptureService {
   private static userCooldown = new Map<string, number>();
   private readonly spawnService = new SpawnService();
   private readonly collectionService = new CollectionService();
+  private readonly logsService = new LogsService();
 
   async spawnRandomCard(channelId: string) {
     const cards = await this.spawnService.createAutoSpawn(channelId);
@@ -18,7 +20,12 @@ export class CaptureService {
     return cards[0];
   }
 
-  async capture(userId: string, channelId: string, cardName: string) {
+  async capture(
+    userId: string,
+    channelId: string,
+    cardName: string,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "discordUserId" | "username">
+  ) {
     const config = await prisma.appConfig.findUnique({ where: { id: "default" } });
     const cooldownS = config?.captureCooldownS ?? 5;
     const lastTry = CaptureService.userCooldown.get(userId) ?? 0;
@@ -31,6 +38,30 @@ export class CaptureService {
     if (resolved.caught) {
       await this.collectionService.grantCollectionRewards(userId);
     }
+
+    await this.logsService.logGuildEvent({
+      guildId: context?.guildId,
+      guildName: context?.guildName,
+      channelId,
+      userId,
+      discordUserId: context?.discordUserId,
+      username: context?.username,
+      category: "capture",
+      action: resolved.caught ? "capture_success" : "capture_failed",
+      status: resolved.caught ? "success" : "missed",
+      summary: `${context?.username ?? userId} ${resolved.caught ? "a capturé" : "a raté"} ${resolved.card.name}`,
+      details: {
+        requestedName: cardName,
+        cardId: resolved.card.id,
+        cardName: resolved.card.name,
+        variant: resolved.variant,
+        catchRate: resolved.catchRate,
+        captureRoll: resolved.captureRoll,
+        boostersGained: resolved.boostersGained,
+        gainedXp: resolved.gainedXp,
+        level: resolved.level
+      }
+    });
 
     return {
       caught: resolved.caught,

@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits, Events } from "discord.js";
 import { AppError, ConfigService } from "@rta/services";
-import { handleCommand, registerCommands, registerGuildCommands, handleButtonInteraction } from "./commands/register.js";
+import { handleCommand, registerCommands, registerGuildCommands, handleButtonInteraction, handleAutocompleteInteraction } from "./commands/register.js";
 import { startSpawnLoop } from "./jobs/spawn-loop.js";
 
 const configService = new ConfigService();
@@ -44,7 +44,13 @@ async function main() {
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
-    if (interaction.isChatInputCommand()) {
+    if (interaction.isAutocomplete()) {
+      try {
+        await handleAutocompleteInteraction(interaction);
+      } catch (error) {
+        console.error("Autocomplete interaction error", error);
+      }
+    } else if (interaction.isChatInputCommand()) {
       try {
         await interaction.deferReply();
         await handleCommand(interaction);

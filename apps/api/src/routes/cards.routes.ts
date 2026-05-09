@@ -2,20 +2,22 @@ import { Router } from "express";
 import { z } from "zod";
 import { CardsService } from "@rta/services";
 import { requireAdmin, requireAuth } from "../middleware/auth.js";
-import { validateBody } from "../utils/validate.js";
+import { validateBody, validateParams } from "../utils/validate.js";
 
 const router = Router();
 const cardsService = new CardsService();
 
 const createCardSchema = z.object({
   name: z.string().min(1),
-  deckId: z.string(),
-  rarityId: z.string(),
+  deckId: z.string().uuid(),
+  rarityId: z.string().uuid(),
   imageUrl: z.string().url().optional(),
   description: z.string().optional(),
   xpReward: z.number().int().nonnegative(),
   dropRate: z.number().positive()
 }).strict();
+
+const idParamSchema = z.object({ id: z.string().uuid() }).strict();
 
 const updateCardSchema = z.object({
   name: z.string().min(1).optional(),
@@ -60,12 +62,14 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.patch("/:id", requireAuth, requireAdmin, async (req, res) => {
+  const params = validateParams(idParamSchema, req);
   const payload = validateBody(updateCardSchema, req);
-  res.json(await cardsService.updateCard(req.params.id, payload));
+  res.json(await cardsService.updateCard(params.id, payload));
 });
 
 router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
-  await cardsService.deleteCard(req.params.id);
+  const params = validateParams(idParamSchema, req);
+  await cardsService.deleteCard(params.id);
   res.status(204).send();
 });
 
@@ -79,7 +83,8 @@ router.post("/admin/decks", requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.delete("/admin/decks/:id", requireAuth, requireAdmin, async (req, res) => {
-  await cardsService.deleteDeck(req.params.id);
+  const params = validateParams(idParamSchema, req);
+  await cardsService.deleteDeck(params.id);
   res.status(204).send();
 });
 
@@ -88,8 +93,9 @@ router.get("/admin/rarities", requireAuth, requireAdmin, async (_req, res) => {
 });
 
 router.patch("/admin/rarities/:id", requireAuth, requireAdmin, async (req, res) => {
+  const params = validateParams(idParamSchema, req);
   const payload = validateBody(patchRaritySchema, req);
-  res.json(await cardsService.patchRarity(req.params.id, payload));
+  res.json(await cardsService.patchRarity(params.id, payload));
 });
 
 router.get("/export", requireAuth, requireAdmin, async (_req, res) => {

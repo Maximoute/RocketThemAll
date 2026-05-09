@@ -7,7 +7,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   type ChatInputCommandInteraction,
-  type ButtonInteraction
+  type ButtonInteraction,
+  type AutocompleteInteraction
 } from "discord.js";
 import axios from "axios";
 import {
@@ -25,6 +26,7 @@ import {
   RecycleService,
   FusionService,
   DailyService,
+  LogsService,
   AppError
 } from "@rta/services";
 import { prisma } from "@rta/database";
@@ -43,10 +45,50 @@ const sellService = new SellService();
 const recycleService = new RecycleService();
 const fusionService = new FusionService();
 const dailyService = new DailyService();
+const logsService = new LogsService();
 
 // Cache pour la pagination de l'inventaire (userId -> items triés)
 const inventoryCache = new Map<string, Array<{ card: any; quantity: number }>>();
-const ADMIN_ROLE_ID = process.env.DISCORD_ADMIN_ROLE_ID;
+type DeckOwnedFilter = "all" | "owned" | "missing";
+type DeckBrowseRow = {
+  card: any;
+  totalQty: number;
+  normalQty: number;
+  shinyQty: number;
+  holoQty: number;
+};
+type DeckBrowseFilters = {
+  cardName: string;
+  rarity: string;
+  owned: DeckOwnedFilter;
+  category: string;
+};
+type DeckBrowseCacheEntry = {
+  deckName: string;
+  filters: DeckBrowseFilters;
+  ownedUnique: number;
+  totalCards: number;
+  rows: DeckBrowseRow[];
+};
+const deckBrowseCache = new Map<string, DeckBrowseCacheEntry>();
+
+const DECK_OWNED_FILTER_LABEL: Record<DeckOwnedFilter, string> = {
+  all: "Toutes",
+  owned: "Possédées",
+  missing: "Manquantes"
+};
+const ADMIN_ROLE_ID = process.env.DISCORD_ADMIN_ROLE_ID ?? process.env.ADMIN_ROLE_ID;
+const COMMAND_COOLDOWN_MS = Number(process.env.BOT_COMMAND_COOLDOWN_MS ?? 1500);
+const commandCooldowns = new Map<string, number>();
+const ADMIN_IMPORT_SOURCES = new Set([
+  "pokemon",
+  "pop/movies",
+  "pop/anime",
+  "pop/games",
+  "pop/nekos",
+  "pop/manual",
+  "pop/all"
+]);
 
 function hasDiscordAdminRole(interaction: ChatInputCommandInteraction): boolean {
   if (!ADMIN_ROLE_ID) {
@@ -79,6 +121,101 @@ function formatDuration(ms: number | null) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}h ${minutes}m`;
+}
+
+function serializeCommandOptions(options: Array<{ name: string; value?: unknown; options?: Array<{ name: string; value?: unknown; options?: unknown[] }> }>) {
+  return options.map((option) => ({
+    name: option.name,
+    value: option.value ?? null,
+    options: Array.isArray(option.options) ? serializeCommandOptions(option.options as Array<{ name: string; value?: unknown; options?: unknown[] }>) : []
+  }));
+}
+
+function inferCommandStatusFromResponse(content: string) {
+  const normalized = content.toLowerCase();
+  const errorMarkers = [
+    "introuvable",
+    "aucun",
+    "erreur",
+    "insuffisant",
+    "désactiv",
+    "refus",
+    "impossible",
+    "cooldown",
+    "trop rapide",
+    "échappée",
+    "échappé"
+  ];
+  return errorMarkers.some((marker) => normalized.includes(marker)) ? "error" : "success";
+}
+
+function buildDeckEmbed(
+  userId: string,
+  cacheKey: string,
+  currentPage: number,
+  entry: DeckBrowseCacheEntry
+) {
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(entry.rows.length / pageSize));
+  const safePage = Math.max(0, Math.min(currentPage, totalPages - 1));
+  const start = safePage * pageSize;
+  const end = start + pageSize;
+  const pageRows = entry.rows.slice(start, end);
+
+  const rarityEmojiMap: Record<string, string> = {
+    Common: "⚪",
+    Uncommon: "💚",
+    Rare: "💙",
+    "Very Rare": "💜",
+    Import: "🧡",
+    Exotic: "❤️",
+    "Black Market": "⬛",
+    Limited: "💛"
+  };
+
+  const filtersSummary = [
+    `nom: ${entry.filters.cardName || "-"}`,
+    `rareté: ${entry.filters.rarity === "all" ? "Toutes" : entry.filters.rarity}`,
+    `possédé: ${DECK_OWNED_FILTER_LABEL[entry.filters.owned]}`,
+    `catégorie: ${entry.filters.category || "-"}`
+  ].join(" · ");
+
+  const embed = new EmbedBuilder()
+    .setTitle(`📚 Deck ${entry.deckName}`)
+    .setColor(0x5865f2)
+    .setDescription(
+      `Progression : **${entry.ownedUnique}/${entry.totalCards}**\n` +
+      `Filtres : **${filtersSummary}**`
+    )
+    .setFooter({ text: `Page ${safePage + 1}/${totalPages} (${entry.rows.length} cartes affichées)` });
+
+  if (pageRows.length === 0) {
+    embed.addFields({ name: "Résultat", value: "Aucune carte avec ce filtre." });
+  } else {
+    embed.addFields({
+      name: "Cartes",
+      value: pageRows.map((row) => {
+        const rarityName = (row.card as any).rarity?.name ?? "?";
+        const emoji = rarityEmojiMap[rarityName] ?? "❓";
+        return `${emoji} **${row.card.name}** · ${row.totalQty} (N:${row.normalQty} S:${row.shinyQty} H:${row.holoQty})`;
+      }).join("\n")
+    });
+  }
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`deck_prev_${userId}_${safePage}_${cacheKey}`)
+      .setLabel("◀ Précédent")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(safePage === 0),
+    new ButtonBuilder()
+      .setCustomId(`deck_next_${userId}_${safePage}_${cacheKey}`)
+      .setLabel("Suivant ▶")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(safePage >= totalPages - 1)
+  );
+
+  return { embed, components: totalPages > 1 ? [row] : [] as ActionRowBuilder<ButtonBuilder>[] };
 }
 
 function scheduleManualSpawnPublicNotice(params: {
@@ -165,10 +302,22 @@ export const commandBuilders = [
     )),
   new SlashCommandBuilder().setName("recycle").setDescription("Recycler une carte contre crédits + fragments")
     .addStringOption((o) => o.setName("nom").setDescription("Nom de la carte").setRequired(true))
-    .addIntegerOption((o) => o.setName("quantite").setDescription("Quantité").setRequired(true).setMinValue(1)),
+    .addIntegerOption((o) => o.setName("quantite").setDescription("Quantité").setRequired(true).setMinValue(1))
+    .addStringOption((o) => o.setName("variant").setDescription("Variante à recycler").addChoices(
+      { name: "normal", value: "normal" },
+      { name: "shiny", value: "shiny" },
+      { name: "holo", value: "holo" },
+      { name: "toutes (mix)", value: "any" }
+    )),
   new SlashCommandBuilder().setName("fragment").setDescription("Fragmenter une carte contre crédits + fragments")
     .addStringOption((o) => o.setName("nom").setDescription("Nom de la carte").setRequired(true))
-    .addIntegerOption((o) => o.setName("quantite").setDescription("Quantité").setRequired(true).setMinValue(1)),
+    .addIntegerOption((o) => o.setName("quantite").setDescription("Quantité").setRequired(true).setMinValue(1))
+    .addStringOption((o) => o.setName("variant").setDescription("Variante à recycler").addChoices(
+      { name: "normal", value: "normal" },
+      { name: "shiny", value: "shiny" },
+      { name: "holo", value: "holo" },
+      { name: "toutes (mix)", value: "any" }
+    )),
   new SlashCommandBuilder().setName("value").setDescription("Voir la valeur dynamique d'une carte")
     .addStringOption((o) => o.setName("nom").setDescription("Nom de la carte").setRequired(true))
     .addStringOption((o) => o.setName("variant").setDescription("Variante").addChoices(
@@ -190,9 +339,49 @@ export const commandBuilders = [
   new SlashCommandBuilder().setName("boosters").setDescription("Voir les boosters possédés"),
   new SlashCommandBuilder().setName("craft").setDescription("Craft avec des fragments")
     .addSubcommand((s) => s.setName("booster").setDescription("Craft un basic booster avec des fragments")),
-  new SlashCommandBuilder().setName("inventory").setDescription("Voir inventaire"),
+  new SlashCommandBuilder().setName("inventory").setDescription("Voir inventaire")
+    .addStringOption((o) => o.setName("deck").setDescription("Deck actif du serveur ou 'tous'").setRequired(true).setAutocomplete(true))
+    .addStringOption((o) => o.setName("carte").setDescription("Filtre par nom de carte").setAutocomplete(true))
+    .addStringOption((o) => o.setName("rarete").setDescription("Filtre par rareté").addChoices(
+      { name: "Common", value: "Common" },
+      { name: "Uncommon", value: "Uncommon" },
+      { name: "Rare", value: "Rare" },
+      { name: "Very Rare", value: "Very Rare" },
+      { name: "Import", value: "Import" },
+      { name: "Exotic", value: "Exotic" },
+      { name: "Black Market", value: "Black Market" },
+      { name: "Limited", value: "Limited" }
+    ))
+    .addStringOption((o) => o.setName("categorie").setDescription("Filtre par catégorie").setAutocomplete(true)),
+  new SlashCommandBuilder().setName("deck").setDescription("Parcourir un deck et ta progression")
+    .addStringOption((o) => o.setName("nom").setDescription("Nom du deck").setRequired(true).setAutocomplete(true))
+    .addStringOption((o) => o.setName("carte").setDescription("Filtre par nom de carte"))
+    .addStringOption((o) => o.setName("rarete").setDescription("Filtre par rareté").addChoices(
+      { name: "toutes", value: "all" },
+      { name: "Common", value: "Common" },
+      { name: "Uncommon", value: "Uncommon" },
+      { name: "Rare", value: "Rare" },
+      { name: "Very Rare", value: "Very Rare" },
+      { name: "Import", value: "Import" },
+      { name: "Exotic", value: "Exotic" },
+      { name: "Black Market", value: "Black Market" },
+      { name: "Limited", value: "Limited" }
+    ))
+    .addStringOption((o) => o.setName("possede").setDescription("Filtre possession").addChoices(
+      { name: "toutes", value: "all" },
+      { name: "possédées", value: "owned" },
+      { name: "manquantes", value: "missing" }
+    ))
+    .addStringOption((o) => o.setName("categorie").setDescription("Filtre par catégorie (ex: movie, anime, body...)")),
   new SlashCommandBuilder().setName("profile").setDescription("Voir profil"),
-  new SlashCommandBuilder().setName("cardinfo").setDescription("Voir info carte").addStringOption((o) => o.setName("nom").setDescription("Nom de la carte").setRequired(true)),
+  new SlashCommandBuilder().setName("cardinfo").setDescription("Voir info carte")
+    .addStringOption((o) => o.setName("nom").setDescription("Nom de la carte").setRequired(true))
+    .addStringOption((o) => o.setName("variant").setDescription("Variante à afficher").addChoices(
+      { name: "toutes", value: "all" },
+      { name: "normal", value: "normal" },
+      { name: "shiny", value: "shiny" },
+      { name: "holo", value: "holo" }
+    )),
   new SlashCommandBuilder().setName("leaderboard").setDescription("Classement"),
   new SlashCommandBuilder().setName("booster").setDescription("Gestion booster")
     .addSubcommand((s) =>
@@ -431,7 +620,14 @@ async function isTradeAccepted(tradeId: string) {
 }
 
 export async function handleCommand(interaction: ChatInputCommandInteraction) {
+  const commandOptions = serializeCommandOptions(interaction.options.data as Array<{ name: string; value?: unknown; options?: Array<{ name: string; value?: unknown; options?: unknown[] }> }>);
+  let commandStatus = "success";
+  let commandResponse: string | undefined;
+  let commandError: string | undefined;
+  let user: Awaited<ReturnType<typeof usersService.getOrCreateDiscordUser>> | null = null;
   const send = async (content: string) => {
+    commandResponse = content;
+    commandStatus = inferCommandStatusFromResponse(content);
     if (interaction.deferred || interaction.replied) {
       return interaction.editReply(content);
     }
@@ -439,13 +635,29 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
   };
 
   const discordId = interaction.user.id;
-  const user = await usersService.getOrCreateDiscordUser(discordId, interaction.user.username, interaction.user.displayAvatarURL());
 
-  if (interaction.commandName === "spawn") {
+  try {
+    // Lightweight anti-spam guard across all slash commands.
+    const cooldownKey = `${discordId}:${interaction.commandName}`;
+    const now = Date.now();
+    const nextAllowedAt = commandCooldowns.get(cooldownKey) ?? 0;
+    if (now < nextAllowedAt) {
+      const waitSeconds = Math.ceil((nextAllowedAt - now) / 1000);
+      return send(`⏳ Trop rapide. Réessaie dans ${waitSeconds}s.`);
+    }
+    commandCooldowns.set(cooldownKey, now + Math.max(500, COMMAND_COOLDOWN_MS));
+
+    user = await usersService.getOrCreateDiscordUser(discordId, interaction.user.username, interaction.user.displayAvatarURL());
+
+    if (interaction.commandName === "spawn") {
     try {
       const spawnChannelId = await resolveGuildSpawnChannelId(interaction.guildId);
       const result = await spawnService.createManualSpawn(user.id, spawnChannelId, {
-        spawnType: "manual"
+        spawnType: "manual",
+        guildId: interaction.guildId ?? undefined,
+        guildName: interaction.guild?.name ?? undefined,
+        discordUserId: interaction.user.id,
+        username: interaction.user.username
       });
 
       await sendSpawnCards(
@@ -494,10 +706,17 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
   if (interaction.commandName === "recycle" || interaction.commandName === "fragment") {
     const cardName = interaction.options.getString("nom", true);
     const quantity = interaction.options.getInteger("quantite", true);
+    const variant = (interaction.options.getString("variant") ?? "any") as "normal" | "shiny" | "holo" | "any";
     const card = await findCardByName(cardName);
     if (!card) return send("Carte introuvable");
-    const result = await recycleService.recycleCard(user.id, card.id, quantity);
-    return send(`♻️ Fragmentation effectuée: ${result.quantity}x ${result.card.name} → ${result.credits} crédits et ${result.fragments} fragments.`);
+    const result = await recycleService.recycleCard(user.id, card.id, quantity, variant, {
+      guildId: interaction.guildId,
+      guildName: interaction.guild?.name ?? undefined,
+      channelId: interaction.channelId,
+      discordUserId: interaction.user.id,
+      username: interaction.user.username
+    });
+    return send(`♻️ Fragmentation effectuée: ${result.quantity}x ${result.card.name} [${result.variant}] → ${result.credits} crédits et ${result.fragments} fragments.`);
   }
 
   if (interaction.commandName === "fusion") {
@@ -545,13 +764,24 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
   }
 
   if (interaction.commandName === "craft" && interaction.options.getSubcommand() === "booster") {
-    const result = await boosterService.craftBooster(user.id);
+    const result = await boosterService.craftBooster(user.id, {
+      guildId: interaction.guildId,
+      guildName: interaction.guild?.name ?? undefined,
+      channelId: interaction.channelId,
+      discordUserId: interaction.user.id,
+      username: interaction.user.username
+    });
     return send(`🧪 Craft réussi: ${result.cost} fragments → 1 ${result.boosterType} booster.`);
   }
 
   if (interaction.commandName === "capture") {
     const cardName = interaction.options.getString("nom", true);
-    const result = await captureService.capture(user.id, interaction.channelId, cardName);
+    const result = await captureService.capture(user.id, interaction.channelId, cardName, {
+      guildId: interaction.guildId,
+      guildName: interaction.guild?.name ?? undefined,
+      discordUserId: interaction.user.id,
+      username: interaction.user.username
+    });
 
     // Animation de suspense 3-2-1
     const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -578,11 +808,45 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
   }
 
   if (interaction.commandName === "inventory") {
-    const inventory = await inventoryService.getInventory(user.id);
+    const deckFilterInput = interaction.options.getString("deck", true).trim().toLowerCase();
+    const cardNameFilter = (interaction.options.getString("carte") ?? "").trim().toLowerCase();
+    const rarityFilter = (interaction.options.getString("rarete") ?? "").trim();
+    const categoryFilter = (interaction.options.getString("categorie") ?? "").trim().toLowerCase();
+
+    const decks = await cardsService.listDecks();
+    const guildConfig = interaction.guildId ? await configService.getGuildConfig(interaction.guildId) : null;
+    const allowedDecks = new Set((guildConfig?.allowedDecks ?? []).map((name) => name.toLowerCase()));
+    const availableDecks = allowedDecks.size > 0
+      ? decks.filter((deck) => allowedDecks.has(deck.name.toLowerCase()))
+      : decks;
+
+    let selectedDeckName: string | undefined;
+    if (deckFilterInput !== "tous" && deckFilterInput !== "all") {
+      const exactDeck = availableDecks.find((deck) => deck.name.toLowerCase() === deckFilterInput);
+      const partialDeck = availableDecks.find((deck) => deck.name.toLowerCase().includes(deckFilterInput));
+      const selectedDeck = exactDeck ?? partialDeck;
+      if (!selectedDeck) {
+        const suggestions = ["tous", ...availableDecks.slice(0, 9).map((d) => d.name)].join(", ");
+        return send(`Deck introuvable sur ce serveur. Exemples: ${suggestions}`);
+      }
+      selectedDeckName = selectedDeck.name;
+    }
+
+    const inventory = await inventoryService.getInventory(user.id, {
+      deck: selectedDeckName,
+      rarity: rarityFilter || undefined
+    });
     const discordUserId = interaction.user.id;
+
+    const filteredInventory = inventory.filter((item) => {
+      if (cardNameFilter && !item.card.name.toLowerCase().includes(cardNameFilter)) return false;
+      const category = String((item.card as any).category ?? "").toLowerCase();
+      if (categoryFilter && !category.includes(categoryFilter)) return false;
+      return true;
+    });
     
     // Trier alphabétiquement par nom de carte
-    const sorted = inventory.sort((a, b) => a.card.name.localeCompare(b.card.name));
+    const sorted = filteredInventory.sort((a, b) => a.card.name.localeCompare(b.card.name));
     
     // Cacher pour la pagination
     inventoryCache.set(discordUserId, sorted);
@@ -592,7 +856,7 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
     const start = page * pageSize;
     const end = start + pageSize;
     const pageItems = sorted.slice(start, end);
-    const totalPages = Math.ceil(sorted.length / pageSize);
+    const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
     
     const rarityEmojiMap: Record<string, string> = {
       Common: "⚪",
@@ -620,6 +884,14 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
       .setTitle("📦 Inventaire")
       .setColor(0x5865f2)
       .setFooter({ text: `Page ${page + 1}/${totalPages} (${sorted.length} cartes total)` });
+
+    const inventoryFiltersSummary = [
+      `deck: ${selectedDeckName ?? "tous"}`,
+      `carte: ${cardNameFilter || "-"}`,
+      `rareté: ${rarityFilter || "Toutes"}`,
+      `categorie: ${categoryFilter || "-"}`
+    ].join(" | ");
+    embed.addFields({ name: "Filtres", value: inventoryFiltersSummary });
     
     if (pageItems.length === 0) {
       embed.setDescription("Inventaire vide");
@@ -655,8 +927,10 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
     }
     
     if (buttons.components.length > 0) {
+      commandResponse = `Inventaire affiché (${sorted.length} cartes)`;
       return interaction.editReply({ embeds: [embed], components: [buttons] });
     } else {
+      commandResponse = `Inventaire affiché (${sorted.length} cartes)`;
       return interaction.editReply({ embeds: [embed] });
     }
   }
@@ -679,15 +953,31 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
 
   if (interaction.commandName === "cardinfo") {
     const name = interaction.options.getString("nom", true).toLowerCase();
+    const variantFilter = (interaction.options.getString("variant") ?? "all") as "all" | "normal" | "shiny" | "holo";
 
     // Only allow cards the user owns
     const inventory = await inventoryService.getInventory(user.id);
-    const item = inventory.find((i) => i.card.name.toLowerCase() === name);
-    if (!item) {
+    const matches = inventory.filter((i) => i.card.name.toLowerCase() === name);
+    if (matches.length === 0) {
       return send("Tu ne possèdes pas cette carte (ou elle n'existe pas).");
     }
 
-    const card = item.card as any;
+    const selectedItem = variantFilter === "all"
+      ? matches[0]
+      : matches.find((i) => i.variant === variantFilter);
+
+    if (!selectedItem) {
+      return send(`Tu ne possèdes pas cette carte en variante ${variantFilter}.`);
+    }
+
+    const variantTotals = {
+      normal: matches.filter((m) => m.variant === "normal").reduce((sum, m) => sum + m.quantity, 0),
+      shiny: matches.filter((m) => m.variant === "shiny").reduce((sum, m) => sum + m.quantity, 0),
+      holo: matches.filter((m) => m.variant === "holo").reduce((sum, m) => sum + m.quantity, 0)
+    };
+    const totalOwned = variantTotals.normal + variantTotals.shiny + variantTotals.holo;
+
+    const card = selectedItem.card as any;
     const rarityName: string = card.rarity?.name ?? "?";
     const rarityColor: Record<string, number> = {
       Common: 0x9e9e9e,
@@ -703,17 +993,131 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
 
     const embed = new EmbedBuilder()
       .setTitle(card.name)
-      .setDescription(`**Rareté :** ${rarityName}\n**Deck :** ${card.deck?.name ?? "?"}\n**Quantité possédée :** ${item.quantity}`)
+      .setDescription(
+        `**Rareté :** ${rarityName}\n` +
+        `**Deck :** ${card.deck?.name ?? "?"}\n` +
+        `**Possession :** total ${totalOwned} (N:${variantTotals.normal} S:${variantTotals.shiny} H:${variantTotals.holo})`
+      )
       .setColor(color);
 
-    const dynamic = await economyService.getDynamicSellPrice(card.id, "normal");
-    embed.addFields({ name: "Valeur dynamique (normal)", value: `${dynamic.unitPrice} crédits` });
+    if (variantFilter === "all") {
+      const [normalValue, shinyValue, holoValue] = await Promise.all([
+        economyService.getDynamicSellPrice(card.id, "normal"),
+        economyService.getDynamicSellPrice(card.id, "shiny"),
+        economyService.getDynamicSellPrice(card.id, "holo")
+      ]);
+      embed.addFields({
+        name: "Valeur dynamique",
+        value:
+          `normal: ${normalValue.unitPrice} crédits\n` +
+          `shiny: ${shinyValue.unitPrice} crédits\n` +
+          `holo: ${holoValue.unitPrice} crédits`
+      });
+    } else {
+      const dynamic = await economyService.getDynamicSellPrice(card.id, variantFilter);
+      embed.addFields({ name: `Valeur dynamique (${variantFilter})`, value: `${dynamic.unitPrice} crédits` });
+    }
 
     if (card.description) embed.addFields({ name: "Description", value: card.description });
     if (card.imageUrl) embed.setImage(card.imageUrl);
 
     await interaction.editReply({ embeds: [embed] });
     return;
+  }
+
+  if (interaction.commandName === "deck") {
+    const deckQuery = interaction.options.getString("nom", true).trim().toLowerCase();
+    const cardNameFilter = (interaction.options.getString("carte") ?? "").trim().toLowerCase();
+    const rarityFilter = (interaction.options.getString("rarete") ?? "all").trim();
+    const ownedFilter = (interaction.options.getString("possede") ?? "all") as DeckOwnedFilter;
+    const categoryFilter = (interaction.options.getString("categorie") ?? "").trim().toLowerCase();
+
+    const decks = await cardsService.listDecks();
+    const guildConfig = interaction.guildId ? await configService.getGuildConfig(interaction.guildId) : null;
+    const allowedDecks = new Set((guildConfig?.allowedDecks ?? []).map((name) => name.toLowerCase()));
+    const availableDecks = allowedDecks.size > 0
+      ? decks.filter((deck) => allowedDecks.has(deck.name.toLowerCase()))
+      : decks;
+    const exact = availableDecks.find((deck) => deck.name.toLowerCase() === deckQuery);
+    const partial = availableDecks.find((deck) => deck.name.toLowerCase().includes(deckQuery));
+    const selectedDeck = exact ?? partial;
+
+    if (!selectedDeck) {
+      const suggestions = availableDecks.slice(0, 10).map((d) => d.name).join(", ");
+      return send(`Deck introuvable. Exemples: ${suggestions}`);
+    }
+
+    const deckCards = await prisma.card.findMany({
+      where: { deckId: selectedDeck.id, deletedAt: null },
+      include: { rarity: true, deck: true },
+      orderBy: { name: "asc" }
+    });
+
+    if (deckCards.length === 0) {
+      return send(`Le deck ${selectedDeck.name} ne contient aucune carte.`);
+    }
+
+    const inventoryRows = await prisma.inventoryItem.findMany({
+      where: {
+        userId: user.id,
+        cardId: { in: deckCards.map((card) => card.id) }
+      }
+    });
+
+    const byCard = new Map<string, { normal: number; shiny: number; holo: number }>();
+    for (const row of inventoryRows) {
+      const current = byCard.get(row.cardId) ?? { normal: 0, shiny: 0, holo: 0 };
+      if (row.variant === "normal") current.normal += row.quantity;
+      if (row.variant === "shiny") current.shiny += row.quantity;
+      if (row.variant === "holo") current.holo += row.quantity;
+      byCard.set(row.cardId, current);
+    }
+
+    const allRows: DeckBrowseRow[] = deckCards.map((card) => {
+      const quantities = byCard.get(card.id) ?? { normal: 0, shiny: 0, holo: 0 };
+      return {
+        card,
+        normalQty: quantities.normal,
+        shinyQty: quantities.shiny,
+        holoQty: quantities.holo,
+        totalQty: quantities.normal + quantities.shiny + quantities.holo
+      };
+    });
+
+    const ownedUnique = allRows.filter((row) => row.totalQty > 0).length;
+    const totalCards = allRows.length;
+
+    const filteredRows = allRows.filter((row) => {
+      if (cardNameFilter && !row.card.name.toLowerCase().includes(cardNameFilter)) return false;
+      if (rarityFilter !== "all" && ((row.card as any).rarity?.name ?? "") !== rarityFilter) return false;
+      if (ownedFilter === "owned" && row.totalQty <= 0) return false;
+      if (ownedFilter === "missing" && row.totalQty > 0) return false;
+      const cardCategory = String((row.card as any).category ?? "").toLowerCase();
+      if (categoryFilter && !cardCategory.includes(categoryFilter)) return false;
+      return true;
+    });
+
+    const cacheKey = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    deckBrowseCache.set(cacheKey, {
+      deckName: selectedDeck.name,
+      filters: {
+        cardName: cardNameFilter,
+        rarity: rarityFilter,
+        owned: ownedFilter,
+        category: categoryFilter
+      },
+      ownedUnique,
+      totalCards,
+      rows: filteredRows
+    });
+
+    const payload = buildDeckEmbed(interaction.user.id, cacheKey, 0, deckBrowseCache.get(cacheKey)!);
+    if (payload.components.length > 0) {
+      commandResponse = `Deck affiché (${filteredRows.length} cartes)`;
+      return interaction.editReply({ embeds: [payload.embed], components: payload.components });
+    }
+    commandResponse = `Deck affiché (${filteredRows.length} cartes)`;
+    return interaction.editReply({ embeds: [payload.embed] });
   }
 
   if (interaction.commandName === "leaderboard") {
@@ -728,14 +1132,26 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
 
   if (interaction.commandName === "booster" && interaction.options.getSubcommand() === "buy") {
     const type = interaction.options.getString("type", true) as "basic" | "rare" | "epic" | "legendary";
-    const result = await boosterService.buyBooster(user.id, type);
+    const result = await boosterService.buyBooster(user.id, type, {
+      guildId: interaction.guildId,
+      guildName: interaction.guild?.name ?? undefined,
+      channelId: interaction.channelId,
+      discordUserId: interaction.user.id,
+      username: interaction.user.username
+    });
     return send(`🛍️ ${type} booster acheté pour ${result.price} crédits.`);
   }
 
   if (interaction.commandName === "booster" && interaction.options.getSubcommand() === "open") {
     const type = interaction.options.getString("type", true) as "basic" | "rare" | "epic" | "legendary";
     const guildId = interaction.guildId ?? undefined;
-    const opened = await boosterService.openBooster(user.id, type, guildId);
+    const opened = await boosterService.openBooster(user.id, type, guildId, {
+      guildId: interaction.guildId,
+      guildName: interaction.guild?.name ?? undefined,
+      channelId: interaction.channelId,
+      discordUserId: interaction.user.id,
+      username: interaction.user.username
+    });
     const cards = opened.cards;
 
     const rarityColor: Record<string, number> = {
@@ -752,6 +1168,7 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
     const jackpotLine = opened.upgradedType !== type
       ? `\n🔥 JACKPOT ! Ton ${type} booster s’est transformé en ${opened.upgradedType} booster !`
       : "";
+    commandResponse = `${opened.upgradedType} booster ouvert (${cards.length} cartes)`;
     await interaction.editReply(`🎁 ${opened.upgradedType} booster ouvert ! **${cards.length} cartes** obtenues :${jackpotLine}`);
 
     for (let i = 0; i < cards.length; i++) {
@@ -797,7 +1214,13 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
         orderBy: { createdAt: "desc" }
       });
 
-      const trade = existing ?? await tradeService.startTrade(user.id, targetUser.id);
+      const trade = existing ?? await tradeService.startTrade(user.id, targetUser.id, {
+        guildId: interaction.guildId,
+        guildName: interaction.guild?.name ?? undefined,
+        channelId: interaction.channelId,
+        discordUserId: interaction.user.id,
+        username: interaction.user.username
+      });
       return send(`🤝 Demande de trade envoyée à <@${target.id}>.\nIl doit faire **/trade accept** pour ouvrir la phase de trade.`);
     }
 
@@ -815,6 +1238,19 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
             target: trade.id,
             metadata: { acceptedBy: user.id }
           }
+        });
+        await logsService.logGuildEvent({
+          guildId: interaction.guildId,
+          guildName: interaction.guild?.name ?? undefined,
+          channelId: interaction.channelId,
+          userId: user.id,
+          discordUserId: interaction.user.id,
+          username: interaction.user.username,
+          category: "trade",
+          action: "trade_accepted",
+          status: "pending",
+          summary: `${interaction.user.username} accepte le trade ${trade.id}`,
+          details: { tradeId: trade.id }
         });
       }
 
@@ -837,7 +1273,13 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
       if (!card) {
         return send("Carte introuvable");
       }
-      await tradeService.addItem(trade.id, user.id, card.id, qty, variant);
+      await tradeService.addItem(trade.id, user.id, card.id, qty, variant, {
+        guildId: interaction.guildId,
+        guildName: interaction.guild?.name ?? undefined,
+        channelId: interaction.channelId,
+        discordUserId: interaction.user.id,
+        username: interaction.user.username
+      });
       return send("Carte ajoutee au trade");
     }
 
@@ -852,7 +1294,13 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
 
       const qty = interaction.options.getInteger("quantity") ?? 1;
       const type = interaction.options.getString("type", true) as "basic" | "rare" | "epic" | "legendary";
-      await tradeService.addBooster(trade.id, user.id, type, qty);
+      await tradeService.addBooster(trade.id, user.id, type, qty, {
+        guildId: interaction.guildId,
+        guildName: interaction.guild?.name ?? undefined,
+        channelId: interaction.channelId,
+        discordUserId: interaction.user.id,
+        username: interaction.user.username
+      });
       return send("Booster ajouté au trade");
     }
 
@@ -872,7 +1320,13 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
       if (!card) {
         return send("Carte introuvable");
       }
-      await tradeService.removeItem(trade.id, user.id, card.id, qty, variant);
+      await tradeService.removeItem(trade.id, user.id, card.id, qty, variant, {
+        guildId: interaction.guildId,
+        guildName: interaction.guild?.name ?? undefined,
+        channelId: interaction.channelId,
+        discordUserId: interaction.user.id,
+        username: interaction.user.username
+      });
       return send("Carte retiree du trade");
     }
 
@@ -887,7 +1341,13 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
 
       const qty = interaction.options.getInteger("quantity") ?? 1;
       const type = interaction.options.getString("type", true) as "basic" | "rare" | "epic" | "legendary";
-      await tradeService.removeBooster(trade.id, user.id, type, qty);
+      await tradeService.removeBooster(trade.id, user.id, type, qty, {
+        guildId: interaction.guildId,
+        guildName: interaction.guild?.name ?? undefined,
+        channelId: interaction.channelId,
+        discordUserId: interaction.user.id,
+        username: interaction.user.username
+      });
       return send("Booster retiré du trade");
     }
 
@@ -900,7 +1360,13 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
         return send("Le trade n'est pas encore accepté. Le joueur invité doit faire /trade accept.");
       }
 
-      const trade = await tradeService.confirmTrade(activeTrade.id, user.id);
+      const trade = await tradeService.confirmTrade(activeTrade.id, user.id, {
+        guildId: interaction.guildId,
+        guildName: interaction.guild?.name ?? undefined,
+        channelId: interaction.channelId,
+        discordUserId: interaction.user.id,
+        username: interaction.user.username
+      });
       if (!trade) {
         return send("Trade introuvable");
       }
@@ -915,7 +1381,13 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
       if (!activeTrade) {
         return send("Aucun trade actif à annuler.");
       }
-      await tradeService.cancelTrade(activeTrade.id, user.id);
+      await tradeService.cancelTrade(activeTrade.id, user.id, {
+        guildId: interaction.guildId,
+        guildName: interaction.guild?.name ?? undefined,
+        channelId: interaction.channelId,
+        discordUserId: interaction.user.id,
+        username: interaction.user.username
+      });
       return send("Trade annule");
     }
   }
@@ -955,7 +1427,7 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
         }
 
         try {
-          const cards = await spawnService.createAdminSpawn(spawnChannelId, user.id, cardId);
+          const cards = await spawnService.createAdminSpawn(spawnChannelId, user.id, cardId, interaction.guildId ?? undefined, interaction.guild?.name ?? undefined);
           await sendSpawnCards(interaction, spawnChannelId, cards, `Spawn admin force par <@${interaction.user.id}>.`);
           return send(`Spawn admin effectue dans <#${spawnChannelId}>.`);
         } catch (error) {
@@ -1009,15 +1481,21 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
       const source = interaction.options.getString("source", true);
       const limit = interaction.options.getInteger("limit") || (source === "pokemon" ? 151 : 100);
 
+      if (!ADMIN_IMPORT_SOURCES.has(source)) {
+        console.warn(`[bot:security] Admin import denied: invalid source '${source}' by user ${user.id}`);
+        return send("Source d'import non autorisée.");
+      }
+
       await interaction.deferReply();
 
       try {
-        const apiUrl = `http://api:4000/import/${source}`;
+        const apiBaseUrl = process.env.INTERNAL_API_URL ?? process.env.API_BASE_URL ?? "http://api:4000";
+        const apiUrl = `${apiBaseUrl.replace(/\/$/, "")}/import/${source}`;
         const defaultLimit = source === "pokemon" ? 151 : 100;
         const body = source === "pop/all"
           ? { tmdbLimit: limit || 150, animeLimit: limit || 100, gameLimit: limit || 100 }
           : { limit: limit || defaultLimit, pages: 3 };
-        const response = await axios.post(apiUrl, body);
+        const response = await axios.post(apiUrl, body, { timeout: 30_000 });
 
         const data = response.data;
         let msg = `✅ Import réussi!\n${data.message ?? ""}`;
@@ -1026,10 +1504,145 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
         }
         return send(msg);
       } catch (error) {
-        return send(`❌ Erreur lors de l'import: ${error instanceof Error ? error.message : "Erreur inconnue"}`);
+        const details = axios.isAxiosError(error)
+          ? `${error.response?.status ?? "network"}`
+          : (error instanceof Error ? error.message : String(error));
+        console.warn(`[bot:security] Admin import failed for source ${source} by user ${user.id}: ${details}`);
+        return send("❌ Erreur lors de l'import.");
       }
     }
   }
+  } catch (error) {
+    commandStatus = "error";
+    commandError = error instanceof Error ? error.message : String(error);
+    throw error;
+  } finally {
+    await logsService.logGuildEvent({
+      guildId: interaction.guildId,
+      guildName: interaction.guild?.name ?? undefined,
+      channelId: interaction.channelId,
+      userId: user?.id,
+      discordUserId: interaction.user.id,
+      username: interaction.user.username,
+      category: "command",
+      action: interaction.commandName,
+      status: commandStatus,
+      summary: `/${interaction.commandName} par ${interaction.user.username}`,
+      details: {
+        options: commandOptions,
+        response: commandResponse ?? null,
+        error: commandError ?? null
+      }
+    });
+  }
+}
+
+export async function handleAutocompleteInteraction(interaction: AutocompleteInteraction) {
+  if (interaction.commandName !== "deck" && interaction.commandName !== "inventory") {
+    return interaction.respond([]);
+  }
+
+  const focused = interaction.options.getFocused(true);
+  if (
+    (interaction.commandName === "deck" && focused.name !== "nom") ||
+    (interaction.commandName === "inventory" && focused.name !== "deck" && focused.name !== "carte" && focused.name !== "categorie")
+  ) {
+    return interaction.respond([]);
+  }
+
+  const decks = await cardsService.listDecks();
+  const guildConfig = interaction.guildId ? await configService.getGuildConfig(interaction.guildId) : null;
+  const allowedDecks = new Set((guildConfig?.allowedDecks ?? []).map((name) => name.toLowerCase()));
+
+  const available = allowedDecks.size > 0
+    ? decks.filter((deck) => allowedDecks.has(deck.name.toLowerCase()))
+    : decks;
+
+  if (interaction.commandName === "inventory" && (focused.name === "carte" || focused.name === "categorie")) {
+    const deckFilterInput = String(interaction.options.getString("deck") ?? "").trim().toLowerCase();
+    const rarityFilter = String(interaction.options.getString("rarete") ?? "").trim();
+    let selectedDeckName: string | undefined;
+
+    if (deckFilterInput && deckFilterInput !== "tous" && deckFilterInput !== "all") {
+      const exactDeck = available.find((deck) => deck.name.toLowerCase() === deckFilterInput);
+      const partialDeck = available.find((deck) => deck.name.toLowerCase().includes(deckFilterInput));
+      selectedDeckName = (exactDeck ?? partialDeck)?.name;
+    }
+
+    const query = String(focused.value ?? "").trim().toLowerCase();
+    const inventory = await inventoryService.getInventory(interaction.user.id, {
+      deck: selectedDeckName,
+      rarity: rarityFilter || undefined
+    });
+
+    const suggestions = new Map<string, string>();
+    for (const item of inventory) {
+      const value = focused.name === "carte"
+        ? item.card.name.trim()
+        : String((item.card as any).category ?? "").trim();
+      if (value) suggestions.set(value.toLowerCase(), value);
+    }
+
+    const rankedFilters = Array.from(suggestions.values())
+      .map((value) => ({
+        value,
+        score: value.toLowerCase() === query
+          ? 0
+          : value.toLowerCase().startsWith(query)
+            ? 1
+            : value.toLowerCase().includes(query)
+              ? 2
+              : 3
+      }))
+      .filter((entry) => query.length === 0 || entry.score < 3)
+      .sort((a, b) => a.score - b.score || a.value.localeCompare(b.value))
+      .slice(0, 25)
+      .map((entry) => ({ name: entry.value, value: entry.value }));
+
+    return interaction.respond(rankedFilters);
+  }
+
+  const query = String(focused.value ?? "").trim().toLowerCase();
+
+  if (interaction.commandName === "inventory" && focused.name === "deck") {
+    const allEntry = { name: "tous", value: "tous" };
+    const rankedDecks = available
+      .map((deck) => ({
+        deck,
+        score: deck.name.toLowerCase() === query
+          ? 0
+          : deck.name.toLowerCase().startsWith(query)
+            ? 1
+            : deck.name.toLowerCase().includes(query)
+              ? 2
+              : 3
+      }))
+      .filter((entry) => query.length === 0 || entry.score < 3)
+      .sort((a, b) => a.score - b.score || a.deck.name.localeCompare(b.deck.name))
+      .slice(0, 24)
+      .map((entry) => ({ name: entry.deck.name, value: entry.deck.name }));
+
+    const includeAll = query.length === 0 || "tous".includes(query) || "all".includes(query);
+    return interaction.respond(includeAll ? [allEntry, ...rankedDecks] : rankedDecks);
+  }
+
+  const ranked = available
+    .map((deck) => ({
+      deck,
+      score: deck.name.toLowerCase() === query
+        ? 0
+        : deck.name.toLowerCase().startsWith(query)
+          ? 1
+          : deck.name.toLowerCase().includes(query)
+            ? 2
+            : 3
+    }))
+    .filter((entry) => query.length === 0 || entry.score < 3)
+    .sort((a, b) => a.score - b.score || a.deck.name.localeCompare(b.deck.name))
+    .slice(0, 25)
+    .map((entry) => ({ name: entry.deck.name, value: entry.deck.name }));
+
+  return interaction.respond(ranked);
 }
 
 export async function handleButtonInteraction(interaction: ButtonInteraction) {
@@ -1136,6 +1749,46 @@ export async function handleButtonInteraction(interaction: ButtonInteraction) {
       return interaction.update({ embeds: [embed], components: [buttons] });
     } catch (error) {
       console.error("[Button] Error:", error);
+      return interaction.reply({ content: "Erreur lors du changement de page", ephemeral: true });
+    }
+  }
+
+  if (customId.startsWith("deck_")) {
+    try {
+      const parts = customId.split("_");
+      if (parts.length < 5) {
+        return interaction.reply({ content: "Erreur: bouton deck invalide", ephemeral: true });
+      }
+
+      const direction = parts[1];
+      const userId = parts[2];
+      const currentPage = parseInt(parts[3], 10);
+      const cacheKey = parts[4];
+
+      if (interaction.user.id !== userId) {
+        return interaction.reply({ content: "Tu ne peux pas utiliser ce bouton", ephemeral: true });
+      }
+
+      const entry = deckBrowseCache.get(cacheKey);
+      if (!entry) {
+        return interaction.reply({ content: "Cache expiré, refais /deck", ephemeral: true });
+      }
+
+      const pageSize = 10;
+      const totalPages = Math.max(1, Math.ceil(entry.rows.length / pageSize));
+      let nextPage = currentPage;
+      if (direction === "next" && currentPage < totalPages - 1) {
+        nextPage = currentPage + 1;
+      } else if (direction === "prev" && currentPage > 0) {
+        nextPage = currentPage - 1;
+      } else {
+        return interaction.reply({ content: "Vous êtes déjà à cette page", ephemeral: true });
+      }
+
+      const payload = buildDeckEmbed(userId, cacheKey, nextPage, entry);
+      return interaction.update({ embeds: [payload.embed], components: payload.components });
+    } catch (error) {
+      console.error("[Button deck] Error:", error);
       return interaction.reply({ content: "Erreur lors du changement de page", ephemeral: true });
     }
   }

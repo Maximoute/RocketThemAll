@@ -13,15 +13,22 @@ type RateEntry = {
 };
 
 function makeKey(req: Request) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
-  }
+  // req.ip honors Express trust proxy settings and avoids trusting spoofed client headers directly.
   return req.ip || "unknown";
 }
 
 export function createRateLimit(options: RateLimitOptions) {
   const cache = new Map<string, RateEntry>();
+
+  // Keep cache bounded for long-running processes.
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of cache.entries()) {
+      if (value.resetAt <= now) {
+        cache.delete(key);
+      }
+    }
+  }, Math.max(10_000, options.windowMs)).unref();
 
   return function rateLimit(req: Request, res: Response, next: NextFunction) {
     const now = Date.now();

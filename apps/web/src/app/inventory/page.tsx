@@ -474,6 +474,29 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
           );})}
         </div>
       )}
+
+      <article className="card" style={{ marginTop: "1rem", marginBottom: "0" }}>
+        <h2>Pagination</h2>
+        <p style={{ color: "var(--muted)" }}>
+          Page {safePage} / {totalPages} - {items.length} cartes affichées.
+        </p>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {safePage > 1 ? (
+            <a href={buildPageHref(safePage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              ← Page précédente
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page précédente</span>
+          )}
+          {safePage < totalPages ? (
+            <a href={buildPageHref(safePage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              Page suivante →
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
+          )}
+        </div>
+      </article>
     </section>
   );
 }

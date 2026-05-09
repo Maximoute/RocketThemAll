@@ -7,10 +7,10 @@ export default async function AdminHomePage() {
     <section className="card">
       <h1>Admin</h1>
       <p>
-        <a href="/admin/cards">Cards</a> | <a href="/admin/users">Users</a> | <a href="/admin/inventories">Inventories</a> | <a href="/admin/logs">Logs</a> | <a href="/admin/imports">Imports</a> | <a href="/admin/config">Config</a>
+        <a href="/admin/cards">Cards</a> | <a href="/admin/users">Users</a> | <a href="/admin/logs">Logs</a> | <a href="/admin/imports">Imports</a>
       </p>
       <p>
-        Depuis Cards: gestion bibliotheques + cartes. Depuis Config: forcer une apparition de carte.
+        Depuis Cards: gestion bibliotheques + cartes.
       </p>
     </section>
   );

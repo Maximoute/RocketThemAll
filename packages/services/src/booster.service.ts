@@ -2,6 +2,7 @@ import { prisma } from "@rta/database";
 import { AppError } from "./errors.js";
 import { CollectionService } from "./collection.service.js";
 import { getEconomyConfig } from "./economy-config.js";
+import { LogsService, type GuildActivityLogInput } from "./logs.service.js";
 
 type BoosterTypeName = "basic" | "rare" | "epic" | "legendary";
 type VariantName = "normal" | "shiny" | "holo";
@@ -33,6 +34,7 @@ const BOOSTER_RULES: Record<BoosterTypeName, Array<{ rarities: string[]; count: 
 
 export class BoosterService {
   private readonly collectionService = new CollectionService();
+  private readonly logsService = new LogsService();
 
   private async migrateLegacyBoosters(userId: string) {
     const legacy = await prisma.booster.findUnique({ where: { userId } });
@@ -91,7 +93,7 @@ export class BoosterService {
     };
   }
 
-  async buyBooster(userId: string, type: BoosterTypeName) {
+  async buyBooster(userId: string, type: BoosterTypeName, context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">) {
     const config = await getEconomyConfig();
     const price = this.getBoosterPrice(config, type);
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -109,10 +111,20 @@ export class BoosterService {
       await tx.economyLog.create({ data: { userId, type: "buy_booster", amount: price, metadata: { boosterType: type } } });
     });
 
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "booster",
+      action: "booster_purchase",
+      status: "success",
+      summary: `${context?.username ?? userId} a acheté 1 booster ${type}`,
+      details: { boosterType: type, price }
+    });
+
     return { type, price };
   }
 
-  async craftBooster(userId: string) {
+  async craftBooster(userId: string, context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">) {
     const config = await getEconomyConfig();
     const cost = config.craftBoosterFragmentCost;
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -126,10 +138,25 @@ export class BoosterService {
       await tx.economyLog.create({ data: { userId, type: "buy_booster", amount: cost, metadata: { action: "craft", reward: "basic" } } });
     });
 
+    await this.logsService.logGuildEvent({
+      ...context,
+      userId,
+      category: "booster",
+      action: "booster_crafted",
+      status: "success",
+      summary: `${context?.username ?? userId} a craft 1 booster basic`,
+      details: { boosterType: "basic", cost }
+    });
+
     return { cost, boosterType: "basic" as const };
   }
 
-  async openBooster(userId: string, type: BoosterTypeName = "basic", guildId?: string) {
+  async openBooster(
+    userId: string,
+    type: BoosterTypeName = "basic",
+    guildId?: string,
+    context?: Pick<GuildActivityLogInput, "guildId" | "guildName" | "channelId" | "discordUserId" | "username">
+  ) {
     await this.migrateLegacyBoosters(userId);
     const booster = await prisma.userBooster.findUnique({ where: { userId_boosterType: { userId, boosterType: type } } });
     if (!booster || booster.quantity <= 0) {
@@ -165,6 +192,31 @@ export class BoosterService {
       await tx.economyLog.create({ data: { userId, type: "open_booster", amount: cards.length, metadata: { boosterType: type, effectiveType: upgradedType } } });
       if (upgradedType !== type) {
         await tx.economyLog.create({ data: { userId, type: "jackpot", metadata: { from: type, to: upgradedType } } });
+      }
+    });
+
+    await this.logsService.logGuildEvent({
+      guildId: context?.guildId ?? guildId,
+      guildName: context?.guildName,
+      channelId: context?.channelId,
+      userId,
+      discordUserId: context?.discordUserId,
+      username: context?.username,
+      category: "booster",
+      action: "booster_opened",
+      status: "success",
+      summary: `${context?.username ?? userId} a ouvert 1 booster ${type}${upgradedType !== type ? ` -> ${upgradedType}` : ""}`,
+      details: {
+        boosterType: type,
+        effectiveType: upgradedType,
+        jackpot: upgradedType !== type,
+        cards: withVariant.map((row) => ({
+          cardId: row.card.id,
+          cardName: row.card.name,
+          rarity: row.card.rarity?.name ?? null,
+          deck: row.card.deck?.name ?? null,
+          variant: row.variant
+        }))
       }
     });
 

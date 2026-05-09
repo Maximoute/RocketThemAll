@@ -1,9 +1,6 @@
 {
-  "/inventory/page": "app/inventory/page.js",
-  "/shop/page": "app/shop/page.js",
-  "/collection/page": "app/collection/page.js",
-  "/admin/logs/page": "app/admin/logs/page.js",
-  "/admin/cards/page": "app/admin/cards/page.js",
-  "/admin/config/page": "app/admin/config/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/page": "app/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/admin/page": "app/admin/page.js",
+  "/admin/cards/page": "app/admin/cards/page.js"
 }

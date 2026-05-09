@@ -18,9 +18,39 @@ import {
 } from "@rta/importers";
 
 const app = express();
-const allowedOrigin = process.env.FRONTEND_ORIGIN ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-app.use(cors({ origin: allowedOrigin, credentials: true }));
-app.use(express.json({ limit: "5mb" }));
+
+// Respect reverse-proxy client IPs only when traffic comes through trusted proxy hops.
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+
+const allowedOrigins = (process.env.FRONTEND_ORIGIN ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow non-browser clients (no Origin header) and trusted frontend origins.
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("CORS origin denied"));
+  },
+  credentials: true
+}));
+
+app.use(express.json({ limit: "1mb", strict: true }));
 app.use(globalRateLimit);
 app.use(["/capture", "/spawn", "/images/upload", "/import"], actionRateLimit);
 

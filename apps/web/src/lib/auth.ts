@@ -8,6 +8,8 @@ type DiscordProfile = {
   avatar?: string;
 };
 
+const isHttpsDeployment = (process.env.NEXTAUTH_URL ?? "").startsWith("https://");
+
 export const authOptions: NextAuthOptions = {
   providers: [
     DiscordProvider({
@@ -16,6 +18,15 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   secret: process.env.NEXTAUTH_SECRET,
+  session: {
+    strategy: "jwt",
+    maxAge: 12 * 60 * 60,
+    updateAge: 60 * 60
+  },
+  jwt: {
+    maxAge: 12 * 60 * 60
+  },
+  useSecureCookies: isHttpsDeployment,
   callbacks: {
     async signIn({ profile }) {
       if (!profile) {

@@ -4,6 +4,7 @@ import { requireAdmin, requireAuth } from "../middleware/auth.js";
 import { importRateLimit } from "../middleware/rate-limit.js";
 import { z } from "zod";
 import { validateBody } from "../utils/validate.js";
+import { logError } from "../utils/logger.js";
 
 const router = express.Router();
 const initPokemonSchema = z.object({
@@ -18,9 +19,13 @@ router.post("/init-pokemon", requireAuth, requireAdmin, importRateLimit, async (
     const imported = await importPokemon(limit);
     res.json({ success: true, count: imported, message: `Pokémon initialization complete! ${imported} cards imported.` });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: error instanceof Error ? error.message : "Unknown error" 
+    logError("Admin init-pokemon failed", {
+      path: req.path,
+      message: error instanceof Error ? error.message : String(error)
+    });
+    res.status(500).json({
+      success: false,
+      message: "Import failed"
     });
   }
 });

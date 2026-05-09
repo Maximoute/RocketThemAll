@@ -80,7 +80,18 @@ type SearchParams = {
   sort?: "name" | "rarity" | "deck" | "category";
   order?: "asc" | "desc";
   page?: string;
-  flash?: "card_updated" | "card_created" | "duplicate_name" | "card_trashed" | "card_restored";
+  blacklistPage?: string;
+  flash?:
+    | "card_updated"
+    | "card_created"
+    | "duplicate_name"
+    | "card_trashed"
+    | "card_restored"
+    | "trash_emptied"
+    | "cards_trashed"
+    | "blacklist_card_updated"
+    | "blacklist_card_reenabled"
+    | "blacklist_card_reenable_failed";
 };
 
 export default async function AdminCardsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -326,6 +337,35 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     redirect("/admin/cards?flash=card_trashed");
   }
 
+  async function deleteSelectedCards(formData: FormData) {
+    "use server";
+    const admin = await requireAdmin();
+    const selectedIds = Array.from(new Set(formData.getAll("cardIds").map((value) => String(value)).filter(Boolean)));
+    if (selectedIds.length === 0) {
+      return;
+    }
+
+    const now = new Date();
+    await prisma.card.updateMany({
+      where: {
+        id: { in: selectedIds },
+        deletedAt: null
+      },
+      data: { deletedAt: now }
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "CARDS_TRASHED_BULK",
+        target: `bulk:${selectedIds.length}`,
+        metadata: { count: selectedIds.length, cardIds: selectedIds }
+      }
+    });
+
+    redirect("/admin/cards?flash=cards_trashed");
+  }
+
   async function restoreCard(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
@@ -348,6 +388,117 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     });
 
     redirect("/admin/cards?flash=card_restored");
+  }
+
+  async function emptyTrash() {
+    "use server";
+    const admin = await requireAdmin();
+
+    const trashed = await prisma.card.findMany({
+      where: { deletedAt: { not: null } },
+      select: { id: true }
+    });
+
+    const trashedIds = trashed.map((c) => c.id);
+    if (trashedIds.length === 0) {
+      redirect("/admin/cards?flash=trash_emptied");
+    }
+
+    await prisma.inventoryItem.deleteMany({ where: { cardId: { in: trashedIds } } });
+    await prisma.tradeItem.deleteMany({ where: { cardId: { in: trashedIds } } });
+    await prisma.captureLog.deleteMany({ where: { cardId: { in: trashedIds } } });
+    await prisma.spawnLog.deleteMany({ where: { cardId: { in: trashedIds } } });
+    const deleteResult = await prisma.card.deleteMany({ where: { id: { in: trashedIds } } });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "TRASH_EMPTIED",
+        target: "admin/cards",
+        metadata: { deletedCards: deleteResult.count }
+      }
+    });
+
+    redirect("/admin/cards?flash=trash_emptied");
+  }
+
+  async function updateBlacklistedCard(formData: FormData) {
+    "use server";
+    const admin = await requireAdmin();
+    const cardId = String(formData.get("cardId") ?? "").trim();
+    const imageUrlRaw = String(formData.get("imageUrl") ?? "").trim();
+    const categoryRaw = String(formData.get("category") ?? "").trim();
+    const reasonRaw = String(formData.get("blacklistReason") ?? "").trim();
+    if (!cardId) {
+      return;
+    }
+
+    const imageUrl = imageUrlRaw || null;
+    const category = categoryRaw || null;
+    const normalizedReason = reasonRaw || null;
+    const categoryBlacklisted = category === "blacklisted" || category === "pending_image";
+    const shouldEnable = Boolean(imageUrl) && !categoryBlacklisted && !normalizedReason;
+
+    await prisma.card.update({
+      where: { id: cardId },
+      data: {
+        imageUrl,
+        category,
+        spawnEnabled: shouldEnable,
+        blacklistReason: shouldEnable ? null : (normalizedReason ?? (!imageUrl ? "missing_image" : "manual_review"))
+      }
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "BLACKLIST_CARD_UPDATED",
+        target: cardId,
+        metadata: {
+          imageUrl,
+          category,
+          spawnEnabled: shouldEnable,
+          blacklistReason: shouldEnable ? null : (normalizedReason ?? (!imageUrl ? "missing_image" : "manual_review"))
+        }
+      }
+    });
+
+    redirect("/admin/cards?flash=blacklist_card_updated");
+  }
+
+  async function reenableBlacklistedCard(formData: FormData) {
+    "use server";
+    const admin = await requireAdmin();
+    const cardId = String(formData.get("cardId") ?? "").trim();
+    if (!cardId) {
+      return;
+    }
+
+    const card = await prisma.card.findUnique({ where: { id: cardId }, select: { imageUrl: true, category: true } });
+    if (!card || !card.imageUrl) {
+      redirect("/admin/cards?flash=blacklist_card_reenable_failed");
+    }
+
+    const normalizedCategory = card.category === "blacklisted" || card.category === "pending_image" ? "unknown" : card.category;
+    await prisma.card.update({
+      where: { id: cardId },
+      data: {
+        spawnEnabled: true,
+        blacklistReason: null,
+        category: normalizedCategory
+      }
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "BLACKLIST_CARD_REENABLED",
+        target: cardId,
+        metadata: { category: normalizedCategory }
+      }
+    });
+
+    redirect("/admin/cards?flash=blacklist_card_reenabled");
   }
 
   async function addExampleCards() {
@@ -506,6 +657,9 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
   const pageRaw = Number(searchParams.page ?? "1");
   const page = Number.isFinite(pageRaw) ? Math.max(1, Math.floor(pageRaw)) : 1;
   const pageSize = 100;
+  const blacklistPageRaw = Number(searchParams.blacklistPage ?? "1");
+  const blacklistPage = Number.isFinite(blacklistPageRaw) ? Math.max(1, Math.floor(blacklistPageRaw)) : 1;
+  const blacklistPageSize = 100;
 
   const where = {
     where: {
@@ -545,6 +699,30 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     take: 50
   });
 
+  const blacklistedWhere = {
+    where: {
+      deletedAt: null,
+      OR: [
+        { spawnEnabled: false },
+        { blacklistReason: { not: null } },
+        { category: "blacklisted" },
+        { category: "pending_image" }
+      ]
+    }
+  };
+
+  const totalBlacklistedCards = await prisma.card.count(blacklistedWhere);
+  const totalBlacklistPages = Math.max(1, Math.ceil(totalBlacklistedCards / blacklistPageSize));
+  const safeBlacklistPage = Math.min(blacklistPage, totalBlacklistPages);
+
+  const blacklistedCards = await prisma.card.findMany({
+    ...blacklistedWhere,
+    include: { deck: true, rarity: true },
+    orderBy: [{ deck: { name: "asc" } }, { name: "asc" }],
+    skip: (safeBlacklistPage - 1) * blacklistPageSize,
+    take: blacklistPageSize
+  });
+
   function buildPageHref(targetPage: number): string {
     const params = new URLSearchParams();
     if (searchParams.q) params.set("q", searchParams.q);
@@ -554,6 +732,20 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
     if (sort) params.set("sort", sort);
     if (order) params.set("order", order);
     params.set("page", String(targetPage));
+    if (searchParams.blacklistPage) params.set("blacklistPage", searchParams.blacklistPage);
+    return `/admin/cards?${params.toString()}`;
+  }
+
+  function buildBlacklistPageHref(targetPage: number): string {
+    const params = new URLSearchParams();
+    if (searchParams.q) params.set("q", searchParams.q);
+    if (searchParams.deck) params.set("deck", searchParams.deck);
+    if (searchParams.rarity) params.set("rarity", searchParams.rarity);
+    if (searchParams.category) params.set("category", searchParams.category);
+    if (sort) params.set("sort", sort);
+    if (order) params.set("order", order);
+    params.set("page", String(safePage));
+    params.set("blacklistPage", String(targetPage));
     return `/admin/cards?${params.toString()}`;
   }
 
@@ -589,9 +781,34 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
           🗑️ Carte déplacée dans la corbeille.
         </p>
       )}
+      {flash === "cards_trashed" && (
+        <p style={{ background: "#fef3c7", border: "1px solid #fcd34d", color: "#92400e", padding: "8px 10px", borderRadius: "8px" }}>
+          🗑️ Cartes sélectionnées déplacées dans la corbeille.
+        </p>
+      )}
+      {flash === "blacklist_card_updated" && (
+        <p style={{ background: "#e0f2fe", border: "1px solid #7dd3fc", color: "#0c4a6e", padding: "8px 10px", borderRadius: "8px" }}>
+          🛠️ Carte blacklistée mise à jour.
+        </p>
+      )}
+      {flash === "blacklist_card_reenabled" && (
+        <p style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#166534", padding: "8px 10px", borderRadius: "8px" }}>
+          ✅ Carte remise dans le système (spawn réactivé).
+        </p>
+      )}
+      {flash === "blacklist_card_reenable_failed" && (
+        <p style={{ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: "8px 10px", borderRadius: "8px" }}>
+          ❌ Impossible de réactiver: ajoute une image valide avant.
+        </p>
+      )}
       {flash === "card_restored" && (
         <p style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#166534", padding: "8px 10px", borderRadius: "8px" }}>
           ♻️ Carte restaurée depuis la corbeille.
+        </p>
+      )}
+      {flash === "trash_emptied" && (
+        <p style={{ background: "#fef3c7", border: "1px solid #fcd34d", color: "#92400e", padding: "8px 10px", borderRadius: "8px" }}>
+          🧹 Corbeille vidée.
         </p>
       )}
 
@@ -723,6 +940,18 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         </div>
       </article>
 
+      <article className="card" style={{ marginTop: "1rem", marginBottom: "1rem" }}>
+        <h2>Suppression multiple</h2>
+        <p style={{ color: "var(--muted)", marginTop: "0" }}>
+          Coche plusieurs cartes dans la galerie puis clique sur le bouton pour les envoyer en corbeille.
+        </p>
+        <form id="bulk-trash-form" action={deleteSelectedCards}>
+          <button type="submit" style={{ background: "#b91c1c", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer" }}>
+            Supprimer la sélection
+          </button>
+        </form>
+      </article>
+
       <datalist id="admin-usernames">
         {users.map((u) => (
           <option key={u.username} value={u.username} />
@@ -737,6 +966,10 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
               <img src={card.imageUrl} alt={card.name} style={{ width: "100%", height: "140px", objectFit: "cover" }} />
             )}
             <div style={{ padding: "0.8rem", display: "flex", flexDirection: "column", gap: "0.3rem", flex: 1 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", color: "var(--muted)" }}>
+                <input type="checkbox" name="cardIds" value={card.id} form="bulk-trash-form" />
+                Sélectionner
+              </label>
               <strong style={{ fontSize: "0.95rem" }}>{card.name}</strong>
               <span style={{ fontSize: "0.8rem", fontWeight: 600, color: rarityColor[card.rarity.name] ?? "#333" }}>
                 {card.rarity.name}
@@ -816,11 +1049,152 @@ export default async function AdminCardsPage({ searchParams }: { searchParams: S
         ))}
       </div>
 
+      <div style={{ marginTop: "1rem", marginBottom: "1rem" }}>
+        <button type="submit" form="bulk-trash-form" style={{ background: "#b91c1c", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer" }}>
+          Supprimer la sélection
+        </button>
+      </div>
+
+      <article className="card" style={{ marginTop: "1rem" }}>
+        <h2>Cartes blacklistées</h2>
+        <p style={{ color: "var(--muted)" }}>
+          Ici tu vois les cartes bloquées du système. Pour chacune: comprendre le problème, corriger les champs, puis la remettre en service.
+        </p>
+        <p style={{ color: "var(--muted)" }}>
+          {totalBlacklistedCards} cartes blacklistées au total. Page {safeBlacklistPage} / {totalBlacklistPages}. (100 max par page)
+        </p>
+
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+          {safeBlacklistPage > 1 ? (
+            <a href={buildBlacklistPageHref(safeBlacklistPage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              ← Page precedente
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page precedente</span>
+          )}
+          {safeBlacklistPage < totalBlacklistPages ? (
+            <a href={buildBlacklistPageHref(safeBlacklistPage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              Page suivante →
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
+          )}
+        </div>
+
+        {blacklistedCards.length === 0 ? (
+          <p style={{ color: "var(--muted)" }}>Aucune carte blacklistée actuellement.</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem" }}>
+            {blacklistedCards.map((card) => {
+              const problems = [
+                !card.imageUrl ? "image manquante" : null,
+                card.spawnEnabled === false ? "spawn désactivé" : null,
+                card.blacklistReason ? `raison: ${card.blacklistReason}` : null,
+                card.category === "blacklisted" ? "catégorie blacklisted" : null,
+                card.category === "pending_image" ? "catégorie pending_image" : null
+              ].filter(Boolean);
+
+              return (
+                <article key={card.id} style={{ background: "#fffaf0", border: "1px solid #f5d9a6", borderRadius: "10px", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column" }}>
+                  {card.imageUrl ? (
+                    <img src={card.imageUrl} alt={card.name} style={{ width: "100%", height: "140px", objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ height: "140px", display: "flex", alignItems: "center", justifyContent: "center", color: "#92400e", background: "#ffedd5", fontSize: "0.85rem", fontWeight: 600 }}>
+                      Image manquante
+                    </div>
+                  )}
+
+                  <div style={{ padding: "0.8rem", display: "grid", gap: "6px" }}>
+                    <strong>{card.name}</strong>
+                    <div style={{ fontSize: "0.82rem", color: "var(--muted)" }}>
+                      {card.deck.name} · {card.rarity.name}
+                    </div>
+                    <div style={{ fontSize: "0.82rem", color: "#92400e" }}>
+                      Problème: {problems.length > 0 ? problems.join(" | ") : "non spécifié"}
+                    </div>
+
+                    <form action={reenableBlacklistedCard} style={{ marginTop: "4px" }}>
+                      <input type="hidden" name="cardId" value={card.id} />
+                      <button type="submit" style={{ width: "100%", background: "#166534", color: "#fff", border: "none", borderRadius: "8px", padding: "7px 10px", cursor: "pointer" }}>
+                        Remettre dans le système
+                      </button>
+                    </form>
+
+                    <form action={updateBlacklistedCard} style={{ display: "grid", gap: "6px", marginTop: "4px" }}>
+                      <input type="hidden" name="cardId" value={card.id} />
+                      <input name="imageUrl" type="url" defaultValue={card.imageUrl ?? ""} placeholder="Image URL" />
+                      <input name="blacklistReason" type="text" defaultValue={card.blacklistReason ?? ""} placeholder="Raison blacklist (laisser vide pour retirer)" />
+                      <select name="category" defaultValue={card.category ?? ""}>
+                        <option value="">Sans catégorie</option>
+                        {POP_CATEGORIES.map((c) => (
+                          <option key={c.value} value={c.value}>{c.label}</option>
+                        ))}
+                        <option value="blacklisted">blacklisted</option>
+                        <option value="pending_image">pending_image</option>
+                      </select>
+                      <button type="submit" style={{ width: "100%" }}>Corriger cette carte</button>
+                    </form>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+          {safeBlacklistPage > 1 ? (
+            <a href={buildBlacklistPageHref(safeBlacklistPage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              ← Page precedente
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page precedente</span>
+          )}
+          {safeBlacklistPage < totalBlacklistPages ? (
+            <a href={buildBlacklistPageHref(safeBlacklistPage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              Page suivante →
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
+          )}
+        </div>
+      </article>
+
+      <article className="card" style={{ marginTop: "1rem" }}>
+        <h2>Pagination</h2>
+        <p style={{ color: "var(--muted)" }}>
+          {totalCards} cartes au total. Page {safePage} / {totalPages}.
+        </p>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {safePage > 1 ? (
+            <a href={buildPageHref(safePage - 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              ← Page precedente
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>← Page precedente</span>
+          )}
+          {safePage < totalPages ? (
+            <a href={buildPageHref(safePage + 1)} style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", textDecoration: "none" }}>
+              Page suivante →
+            </a>
+          ) : (
+            <span style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #e5e7eb", color: "#9ca3af" }}>Page suivante →</span>
+          )}
+        </div>
+      </article>
+
       <article className="card" style={{ marginTop: "1.5rem" }}>
         <h2>Corbeille</h2>
         <p style={{ color: "var(--muted)" }}>
           Les cartes supprimées sont mises en corbeille et peuvent être restaurées.
         </p>
+        <form action={emptyTrash} style={{ marginBottom: "10px" }}>
+          <ConfirmSubmitButton
+            message="Vider la corbeille ? Cette action supprime définitivement toutes les cartes en corbeille."
+            style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer" }}
+          >
+            Vider la corbeille
+          </ConfirmSubmitButton>
+        </form>
         {trashedCards.length === 0 ? (
           <p style={{ color: "var(--muted)" }}>Corbeille vide.</p>
         ) : (

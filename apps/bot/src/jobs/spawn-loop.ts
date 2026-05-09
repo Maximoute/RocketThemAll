@@ -33,11 +33,11 @@ export async function startSpawnLoop(client: Client) {
   let fallbackNextAutoSpawnAt = Date.now();
   const nextAutoSpawnAtByGuild = new Map<string, number>();
 
-  const runSpawn = async (channelId: string, forced: boolean, forcedCardId?: string | null, guildId?: string) => {
+  const runSpawn = async (channelId: string, forced: boolean, forcedCardId?: string | null, guildId?: string, guildName?: string) => {
     try {
       const cards = forced
-        ? await spawnService.createAdminSpawn(channelId, undefined, forcedCardId ?? undefined)
-        : await spawnService.createAutoSpawn(channelId, guildId);
+        ? await spawnService.createAdminSpawn(channelId, undefined, forcedCardId ?? undefined, guildId, guildName)
+        : await spawnService.createAutoSpawn(channelId, guildId, guildName);
 
       if (cards.length > 0) {
         await announceSpawn(client, channelId, cards, forced ? "admin" : "auto");
@@ -92,7 +92,7 @@ export async function startSpawnLoop(client: Client) {
         }
 
         for (const target of forcedTargets) {
-          await runSpawn(target.channelId, true, forcedCardId, target.guildId);
+          await runSpawn(target.channelId, true, forcedCardId, target.guildId, "guildName" in target ? target.guildName : undefined);
         }
 
         await configService.patchConfig({ forceSpawnRequestedAt: null, forceSpawnCardId: null, forceSpawnGuildId: null });
@@ -105,7 +105,7 @@ export async function startSpawnLoop(client: Client) {
           });
 
           for (const guild of dueGuilds) {
-            await runSpawn(guild.channelId, false, null, guild.guildId);
+            await runSpawn(guild.channelId, false, null, guild.guildId, guild.guildName);
             nextAutoSpawnAtByGuild.set(guild.guildId, now + guild.autoSpawnIntervalMinutes * 60_000);
           }
         } else if (process.env.DISCORD_SPAWN_CHANNEL_ID && now >= fallbackNextAutoSpawnAt) {

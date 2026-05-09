@@ -54,16 +54,36 @@ main {
   border-radius: 8px;
   color: var(--ink);
   border: 1px solid transparent;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
 }
 
 .nav-link:hover {
   border-color: #e4d8c6;
   background: #fff5e8;
+  transform: translateY(-1px);
 }
 
 .nav-link-active {
   border-color: #d9b78a;
   background: #ffeccf;
+}
+
+.nav-link-profile {
+  background: linear-gradient(135deg, #fff3d4, #ffe2b8);
+  border-color: #efc27b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+}
+
+.nav-link-profile:hover {
+  background: linear-gradient(135deg, #fff0c6, #ffd7a0);
+  border-color: #e6ac54;
+}
+
+.nav-link-profile.nav-link-active {
+  background: linear-gradient(135deg, #ffd79a, #ffbf66);
+  border-color: #d97706;
+  box-shadow: 0 10px 24px rgba(217, 119, 6, 0.18);
 }
 
 .top-nav-actions button {

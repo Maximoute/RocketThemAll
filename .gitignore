@@ -1,7 +1,10 @@
 node_modules/
 .next/
+.next-dev/
 dist/
 coverage/
 .env
 .env.local
+users-export.json
+users-export.sql
 *.log
