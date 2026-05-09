@@ -1,5 +1,3 @@
-import type { Rarity } from "@prisma/client";
-
 export interface RawCard {
   name: string;
   imageUrl: string;

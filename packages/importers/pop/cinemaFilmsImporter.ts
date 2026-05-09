@@ -370,6 +370,8 @@ export async function importCinemaFilmsDeck(limit = 500, maxPages = 30): Promise
 
     // Missing poster entries are tracked, but never imported into active playable cards.
     if (!movie.poster_path) {
+      const payload = JSON.parse(JSON.stringify(movie));
+
       await prisma.movieImportBlacklist.upsert({
         where: { sourceId },
         update: {
@@ -377,7 +379,7 @@ export async function importCinemaFilmsDeck(limit = 500, maxPages = 30): Promise
           source: MOVIE_SOURCE,
           displayName: title,
           reason: "missing_image",
-          payload: movie
+          payload
         },
         create: {
           deck: MOVIE_DECK_NAME,
@@ -385,7 +387,7 @@ export async function importCinemaFilmsDeck(limit = 500, maxPages = 30): Promise
           sourceId,
           displayName: title,
           reason: "missing_image",
-          payload: movie
+          payload
         }
       });
       blacklisted++;
