@@ -127,6 +127,16 @@ Ou lancer toute la stack:
 docker compose up
 ```
 
+### Reverse proxy Nginx
+
+Après ajout de Nginx, le site principal est exposé sur `http://localhost`.
+
+- Frontend web : http://localhost/
+- WordPress : http://localhost/blog/
+- API interne : http://localhost/api/
+
+Le service `web` tourne toujours sur `web:3000` en interne, mais l’accès externe passe par Nginx.
+
 ## Installation & Prisma
 
 ```bash
