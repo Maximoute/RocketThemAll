@@ -1,30 +1,52 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AuthButton from "./auth-button";
-
-function cls(active: boolean) {
-  return active ? "nav-link nav-link-active" : "nav-link";
-}
 
 export default function Nav() {
   const pathname = usePathname();
   const { status } = useSession();
 
+  const link = (href: string, label: string) => {
+    const active = pathname === href || (href !== "/" && pathname.startsWith(href));
+    return (
+      <Link
+        href={href}
+        className={[
+          "px-3 py-2 text-sm rounded-md border-b-2 transition-colors",
+          active
+            ? "text-rta-cta border-rta-cta"
+            : "text-rta-muted border-transparent hover:text-rta-ink",
+        ].join(" ")}
+      >
+        {label}
+      </Link>
+    );
+  };
+
   return (
-    <header className="top-nav-wrap">
-      <nav className="top-nav">
-        <Link href="/" className={cls(pathname === "/")}>Accueil</Link>
-        <Link href="/profile" className={cls(pathname.startsWith("/profile"))}>Profil</Link>
-        <Link href="/inventory" className={cls(pathname.startsWith("/inventory"))}>Inventaire</Link>
-        <Link href="/shop" className={cls(pathname.startsWith("/shop"))}>Boutique</Link>
-        <Link href="/collection" className={cls(pathname.startsWith("/collection"))}>Collection</Link>
-        <Link href="/trades" className={cls(pathname.startsWith("/trades"))}>Trades</Link>
-        {status === "authenticated" ? <Link href="/admin" className={cls(pathname.startsWith("/admin"))}>Admin</Link> : null}
+    <header className="sticky top-0 z-20 bg-rta-surface border-b border-rta-border px-6 py-2 flex items-center justify-between gap-4">
+      <Link href="/" className="flex items-center gap-2.5 font-extrabold text-rta-ink tracking-tight shrink-0">
+        <div className="w-10 h-10 rounded-full overflow-hidden shadow-[0_0_14px_rgba(72,28,166,0.7)] shrink-0">
+          <Image src="/logo.webp" alt="Rocket Them All" width={40} height={40} className="object-cover object-[center_15%]" />
+        </div>
+        Rocket <span className="text-rta-cta ml-1">Them All</span>
+      </Link>
+
+      <nav className="flex items-center gap-0.5 flex-wrap">
+        {link("/", "Accueil")}
+        {link("/profile", "Profil")}
+        {link("/inventory", "Inventaire")}
+        {link("/shop", "Boutique")}
+        {link("/collection", "Collection")}
+        {link("/trades", "Trades")}
+        {status === "authenticated" && link("/admin", "Admin")}
       </nav>
-      <div className="top-nav-actions">
+
+      <div className="shrink-0">
         <AuthButton connectLabel="Connexion" logoutLabel="Log out" callbackUrl="/profile" />
       </div>
     </header>
