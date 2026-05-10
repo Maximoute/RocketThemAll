@@ -24,8 +24,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "127.0.0.1:9010:9000"
+      - "127.0.0.1:9011:9001"
     volumes:
       - minio-data:/data
 
@@ -43,10 +43,10 @@ services:
       "
 
   api:
-    image: node:20
+    image: node:22
     container_name: rta-api
     working_dir: /workspace
-    command: sh -c "npm install && npm run prisma:generate && npm run -w @rta/api dev"
+    command: sh -c "npm run prisma:generate && npm run -w @rta/api dev"
     env_file:
       - .env.example
       - .env
@@ -61,10 +61,10 @@ services:
       - minio
 
   bot:
-    image: node:20
+    image: node:22
     container_name: rta-bot
     working_dir: /workspace
-    command: sh -c "npm install && npm run -w @rta/bot dev"
+    command: sh -c "npm run -w @rta/bot dev"
     env_file:
       - .env.example
       - .env
@@ -76,16 +76,17 @@ services:
       DISCORD_SPAWN_CHANNEL_ID: ${DISCORD_SPAWN_CHANNEL_ID}
       DISCORD_ADMIN_ROLE_ID: ${DISCORD_ADMIN_ROLE_ID}
       ADMIN_ROLE_ID: ${ADMIN_ROLE_ID}
+      DATABASE_URL: postgresql://collector:collector@postgres:5432/collector
     volumes:
       - ./:/workspace
     depends_on:
       - api
 
   web:
-    image: node:20
+    image: node:22
     container_name: rta-web
     working_dir: /workspace
-    command: sh -c "npm install && npm run -w @rta/web prisma:generate && npm run -w @rta/web dev"
+    command: sh -c "npm run -w @rta/web prisma:generate && npm run -w @rta/web dev"
     env_file:
       - .env.example
       - .env
@@ -95,7 +96,6 @@ services:
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
       NEXTAUTH_URL: ${NEXTAUTH_URL}
       DATABASE_URL: postgresql://collector:collector@postgres:5432/collector
-      PRISMA_QUERY_ENGINE_LIBRARY: /workspace/packages/database/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
       API_BASE_URL: ${API_BASE_URL}
       INTERNAL_API_URL: http://api:4000
     ports:

@@ -59,7 +59,18 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = String(token.sub ?? "");
+        const discordId = String(token.sub ?? "");
+        session.user.id = discordId;
+
+        if (discordId) {
+          const dbUser = await prisma.user.findUnique({
+            where: { discordId },
+            select: { isAdmin: true }
+          });
+          session.user.isAdmin = Boolean(dbUser?.isAdmin);
+        } else {
+          session.user.isAdmin = false;
+        }
       }
       return session;
     }

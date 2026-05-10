@@ -88,21 +88,39 @@ export async function POST(req: NextRequest, { params }: { params: { path: strin
     }
 
     if (endpoint === "/rocket-league/items") {
-      const result = await importRocketLeagueItems();
+      const batchSize = typeof body?.batchSize === "number" ? body.batchSize : 40;
+      const offset = typeof body?.offset === "number" ? body.offset : 0;
+      const result = await importRocketLeagueItems({ limit: batchSize, offset });
       return NextResponse.json({
         success: true,
         imported: result.created + result.updated,
         blacklisted: result.blacklisted,
         skipped: result.skipped,
-        message: `Rocket League items import complete (created: ${result.created}, updated: ${result.updated})`
+        processed: result.processed,
+        offset: result.offset,
+        nextOffset: result.nextOffset,
+        totalProducts: result.totalProducts,
+        done: result.done,
+        message: result.done
+          ? `Rocket League import terminé (${result.totalProducts}/${result.totalProducts} produits parcourus).`
+          : `Rocket League import en cours (${result.nextOffset}/${result.totalProducts} produits parcourus).`
       });
     }
 
     return NextResponse.json({ success: false, error: "Endpoint non géré" }, { status: 400 });
   } catch (err) {
     console.error("[web:admin-import] route failure", err);
+    const message = err instanceof Error ? err.message : "Erreur interne";
+
+    if (message.includes("TMDB_API_KEY is not set")) {
+      return NextResponse.json(
+        { success: false, error: "TMDB_API_KEY manquant dans .env" },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
-      { success: false, error: "Erreur interne" },
+      { success: false, error: message },
       { status: 500 }
     );
   }

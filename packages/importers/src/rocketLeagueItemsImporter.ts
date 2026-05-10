@@ -466,11 +466,16 @@ function resolveSafeName(baseName: string, productId: number, usedNames: Set<str
   return finalName;
 }
 
-export async function importRocketLeagueItems(options?: { limit?: number }): Promise<{
+export async function importRocketLeagueItems(options?: { limit?: number; offset?: number }): Promise<{
   created: number;
   updated: number;
   blacklisted: number;
   skipped: number;
+  processed: number;
+  offset: number;
+  nextOffset: number;
+  totalProducts: number;
+  done: boolean;
 }> {
   console.log("Importing Rocket League items from @rocketleagueapi/items...");
 
@@ -486,7 +491,16 @@ export async function importRocketLeagueItems(options?: { limit?: number }): Pro
   const rarityByName = new Map(rarities.map((r) => [r.name, r.id]));
 
   const existingCards = await prisma.card.findMany({
-    select: { id: true, name: true, source: true, sourceId: true }
+    select: {
+      id: true,
+      name: true,
+      source: true,
+      sourceId: true,
+      imageUrl: true,
+      spawnEnabled: true,
+      blacklistReason: true,
+      category: true
+    }
   });
   const usedNames = new Set(existingCards.map((card) => card.name));
   const existingBySourceId = new Map(
@@ -496,14 +510,20 @@ export async function importRocketLeagueItems(options?: { limit?: number }): Pro
   );
 
   const productEntries = Object.entries(catalog.products);
-  const limit = options?.limit ? Math.max(1, Math.floor(options.limit)) : productEntries.length;
+  const totalProducts = productEntries.length;
+  const limit = options?.limit ? Math.max(1, Math.floor(options.limit)) : totalProducts;
+  const offset = options?.offset ? Math.max(0, Math.floor(options.offset)) : 0;
+  const end = Math.min(offset + limit, totalProducts);
+  const batchEntries = productEntries.slice(offset, end);
 
   let created = 0;
   let updated = 0;
   let blacklisted = 0;
   let skipped = 0;
+  let processed = 0;
 
-  for (const [productIdRaw, product] of productEntries.slice(0, limit)) {
+  for (const [productIdRaw, product] of batchEntries) {
+    processed += 1;
     const productId = Number(productIdRaw);
     const rawName = cleanupItemName(product.name ?? "");
     if (!rawName || !Number.isFinite(productId)) {
@@ -531,14 +551,17 @@ export async function importRocketLeagueItems(options?: { limit?: number }): Pro
       continue;
     }
 
-    const imageUrl = await findExternalImage(rawName, itemType, productId, listingImageIndex);
+    const sourceId = `product-${productId}`;
+    const existing = existingBySourceId.get(sourceId);
+    const acceptedNames = buildAcceptedNames(rawName, itemType);
+
+    // Reuse existing image data when possible to avoid expensive external lookups on retries.
+    const imageUrl = existing?.imageUrl
+      ? existing.imageUrl
+      : await findExternalImage(rawName, itemType, productId, listingImageIndex);
     const spawnEnabled = Boolean(imageUrl);
     const category = spawnEnabled ? itemType : "blacklisted";
     const blacklistReason = spawnEnabled ? null : "missing_image";
-
-    const acceptedNames = buildAcceptedNames(rawName, itemType);
-    const sourceId = `product-${productId}`;
-    const existing = existingBySourceId.get(sourceId);
 
     const specialLabel = catalog.specials[String(product.special ?? "")] ?? null;
 
@@ -618,8 +641,18 @@ export async function importRocketLeagueItems(options?: { limit?: number }): Pro
   }
 
   console.log(
-    `Rocket League items import done. created=${created}, updated=${updated}, blacklisted=${blacklisted}, skipped=${skipped}`
+    `Rocket League items import batch done. offset=${offset}, processed=${processed}, total=${totalProducts}, created=${created}, updated=${updated}, blacklisted=${blacklisted}, skipped=${skipped}`
   );
 
-  return { created, updated, blacklisted, skipped };
+  return {
+    created,
+    updated,
+    blacklisted,
+    skipped,
+    processed,
+    offset,
+    nextOffset: end,
+    totalProducts,
+    done: end >= totalProducts
+  };
 }

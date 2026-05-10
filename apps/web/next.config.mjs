@@ -1,6 +1,7 @@
 const nextConfig = {
   distDir: process.env.NODE_ENV === "development" ? ".next-dev" : ".next",
   poweredByHeader: false,
+  allowedDevOrigins: ["rocketthemall.com", "www.rocketthemall.com"],
   images: {
     // Keep remote sources explicit to limit image optimizer abuse surface.
     remotePatterns: [

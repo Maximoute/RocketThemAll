@@ -25,12 +25,13 @@ export default function Nav() {
     <header className="top-nav-wrap">
       <nav className="top-nav">
         <Link href="/" className={cls(pathname === "/")}>Accueil</Link>
+        <Link href="/about" className={cls(pathname === "/about")}>À Propos</Link>
         <Link href={profileHref} className={cls(pathname.startsWith("/profile") || pathname.startsWith("/profiles"), "profile")}>Mon Profil</Link>
         <Link href="/inventory" className={cls(pathname.startsWith("/inventory"))}>Inventaire</Link>
         <Link href="/shop" className={cls(pathname.startsWith("/shop"))}>Boutique</Link>
         <Link href="/collection" className={cls(pathname.startsWith("/collection"))}>Decks</Link>
         <Link href="/trades" className={cls(pathname.startsWith("/trades"))}>Trades</Link>
-        {status === "authenticated" ? <Link href="/admin" className={cls(pathname.startsWith("/admin"))}>Admin</Link> : null}
+        {status === "authenticated" && session?.user?.isAdmin ? <Link href="/admin" className={cls(pathname.startsWith("/admin"))}>Admin</Link> : null}
       </nav>
       <div className="top-nav-actions">
         <AuthButton connectLabel="Connexion" logoutLabel="Log out" callbackUrl="/profile" />

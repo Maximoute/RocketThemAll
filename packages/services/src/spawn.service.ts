@@ -4,6 +4,8 @@ import { applyXpGain, xpForRarity } from "./xp.service.js";
 import { SpawnEnergyService } from "./spawn-energy.service.js";
 import { LogsService, type GuildActivityLogInput } from "./logs.service.js";
 
+import { ConfigService } from "./config.service.js";
+
 type SpawnKind = "auto" | "manual" | "admin";
 
 const ACTIVE_SPAWN_TTL_MINUTES = 5;
@@ -12,6 +14,7 @@ const MANUAL_SPAWN_PRIVATE_WINDOW_MINUTES = 2;
 export class SpawnService {
   private readonly spawnEnergyService = new SpawnEnergyService();
   private readonly logsService = new LogsService();
+  private readonly configService = new ConfigService();
 
   private async logSpawnBatch(
     cards: Array<{ id: string; name: string; rarity: { name: string }; deck?: { name: string } | null }>,
@@ -109,8 +112,16 @@ export class SpawnService {
     return chosen;
   }
 
-  async expireOldSpawns(ttlMinutes = ACTIVE_SPAWN_TTL_MINUTES) {
-    const cutoff = new Date(Date.now() - Math.max(1, ttlMinutes) * 60_000);
+  async expireOldSpawns(ttlMinutes?: number) {
+    let finalTtl = ttlMinutes;
+    
+    // Si aucun TTL spécifié, utiliser l'intervalle de spawn automatique de la config
+    if (finalTtl === undefined) {
+      const config = await this.configService.getConfig();
+      finalTtl = config.autoSpawnIntervalMinutes ?? ACTIVE_SPAWN_TTL_MINUTES;
+    }
+    
+    const cutoff = new Date(Date.now() - Math.max(1, finalTtl) * 60_000);
     await prisma.spawnLog.updateMany({
       where: {
         status: "active",
@@ -287,12 +298,16 @@ export class SpawnService {
       username: options?.username
     });
 
+    // Utiliser l'intervalle de spawn automatique pour calculer la durée de vie des cartes
+    const autoSpawnIntervalMinutes = config.autoSpawnIntervalMinutes ?? 5;
+    const ttlMs = autoSpawnIntervalMinutes * 60_000;
+
     return {
       cards: batch.cards,
       energy,
       spawnCreatedAt: batch.createdAt,
       privateUntil: new Date(batch.createdAt.getTime() + MANUAL_SPAWN_PRIVATE_WINDOW_MINUTES * 60_000),
-      publicUntil: new Date(batch.createdAt.getTime() + ACTIVE_SPAWN_TTL_MINUTES * 60_000)
+      publicUntil: new Date(batch.createdAt.getTime() + ttlMs)
     };
   }
 
