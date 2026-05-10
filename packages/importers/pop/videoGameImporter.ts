@@ -5,7 +5,7 @@
 import axios from "axios";
 import { prisma } from "@rta/database";
 import { z } from "zod";
-import { getRarityIdByName } from "../src/rarityService";
+import { getRarityIdByName } from "../src/rarityService.js";
 
 const RAWG_BASE = "https://api.rawg.io/api";
 const REQUEST_DELAY_MS = 300;

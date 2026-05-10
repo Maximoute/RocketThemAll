@@ -1,5 +1,5 @@
-import type { RawCard, Card } from "./types";
-import { getRarityIdByName, getXpReward, getDropRate } from "./rarityService";
+import type { RawCard, Card } from "./types.js";
+import { getRarityIdByName, getXpReward, getDropRate } from "./rarityService.js";
 
 export async function transformPokemonToCard(pokemon: any, rawImage: string, isShiny: boolean = false): Promise<Card> {
   const rarityName = determinePokemonRarity(pokemon, isShiny);

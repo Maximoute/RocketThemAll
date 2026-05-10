@@ -569,7 +569,7 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
     await delay(1000);
 
     if (result.caught) {
-      let msg = `✅ **${result.card.name}** [${result.variant ?? "normal"}] a été capturée ! 🎉\n+${result.gainedXp} XP · Niveau ${result.level}`;
+      let msg = `✅ **${result.card.name}** [${result.card.variant ?? "normal"}] a été capturée ! 🎉\n+${result.gainedXp} XP · Niveau ${result.level}`;
       if (result.boostersGained > 0) msg += `\n🎁 +${result.boostersGained} booster(s) !`;
       return send(msg);
     } else {

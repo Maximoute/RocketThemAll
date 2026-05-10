@@ -1,7 +1,7 @@
 import axios from "axios";
 import { prisma } from "@rta/database";
-import { getRarityIdByName } from "./rarityService";
-import type { ImportLog } from "./types";
+import { getRarityIdByName } from "./rarityService.js";
+import type { ImportLog } from "./types.js";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const TMDB_API_KEY = process.env.TMDB_API_KEY || "";

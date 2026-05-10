@@ -7,7 +7,7 @@ import { join } from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import { prisma } from "@rta/database";
-import { getRarityIdByName } from "../src/rarityService";
+import { getRarityIdByName } from "../src/rarityService.js";
 
 // Résolution relative au fichier importer (packages/importers/pop/)
 // → remonter 3 niveaux pour atteindre la racine du monorepo

@@ -1,7 +1,7 @@
 import axios from "axios";
-import { transformPokemonToCard } from "./transformService";
+import { transformPokemonToCard } from "./transformService.js";
 import { prisma } from "@rta/database";
-import type { Card } from "./types";
+import type { Card } from "./types.js";
 
 const POKEAPI_BASE = "https://pokeapi.co/api/v2";
 

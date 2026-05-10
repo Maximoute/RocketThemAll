@@ -1,24 +1,24 @@
-export { importPokemon } from "./pokemonImporter";
-export { importMovies, importPopCulture } from "./tmdbImporter";
-export { importGames } from "./igdbImporter";
-export { importRocketLeagueItems } from "./rocketLeagueItemsImporter";
-export * from "./rarityService";
-export * from "./transformService";
-export * from "./types";
-import { importTmdbMoviesAndSeries as importTmdbMoviesAndSeriesInternal } from "../pop/tmdbImporter";
-import { importAnimeAndManga as importAnimeAndMangaInternal } from "../pop/animeImporter";
-import { importVideoGames as importVideoGamesInternal } from "../pop/videoGameImporter";
-import { importAllPopCulture as importAllPopCultureInternal } from "../pop/index";
+export { importPokemon } from "./pokemonImporter.js";
+export { importMovies, importPopCulture } from "./tmdbImporter.js";
+export { importGames } from "./igdbImporter.js";
+export { importRocketLeagueItems } from "./rocketLeagueItemsImporter.js";
+export * from "./rarityService.js";
+export * from "./transformService.js";
+export * from "./types.js";
+import { importTmdbMoviesAndSeries as importTmdbMoviesAndSeriesInternal } from "../pop/tmdbImporter.js";
+import { importAnimeAndManga as importAnimeAndMangaInternal } from "../pop/animeImporter.js";
+import { importVideoGames as importVideoGamesInternal } from "../pop/videoGameImporter.js";
+import { importAllPopCulture as importAllPopCultureInternal } from "../pop/index.js";
 
 // Pop culture multi-category importers
-export { importTmdbMoviesAndSeries } from "../pop/tmdbImporter";
-export { importAnimeAndManga } from "../pop/animeImporter";
-export { importVideoGames } from "../pop/videoGameImporter";
-export { importManualPopCulture } from "../pop/manualPopImporter";
-export { importAllPopCulture } from "../pop/index";
-export { importNekos } from "../pop/nekosImporter";
-export { importCinemaFilmsDeck, calculateMovieRarity } from "../pop/cinemaFilmsImporter";
-export type { ManualPopCard } from "../pop/manualPopImporter";
+export { importTmdbMoviesAndSeries } from "../pop/tmdbImporter.js";
+export { importAnimeAndManga } from "../pop/animeImporter.js";
+export { importVideoGames } from "../pop/videoGameImporter.js";
+export { importManualPopCulture } from "../pop/manualPopImporter.js";
+export { importAllPopCulture } from "../pop/index.js";
+export { importNekos } from "../pop/nekosImporter.js";
+export { importCinemaFilmsDeck, calculateMovieRarity } from "../pop/cinemaFilmsImporter.js";
+export type { ManualPopCard } from "../pop/manualPopImporter.js";
 
 // Unified API naming for pop importers.
 export async function importPopMovies(limit: number): Promise<number> {

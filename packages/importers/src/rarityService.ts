@@ -1,5 +1,5 @@
 import { prisma } from "@rta/database";
-import type { RarityConfig } from "./types";
+import type { RarityConfig } from "./types.js";
 
 const RARITY_CONFIG: Record<string, RarityConfig> = {
   Common: { name: "Common", xpReward: 10, dropRate: 0.5 },

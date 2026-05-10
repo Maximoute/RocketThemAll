@@ -1,5 +1,5 @@
 import axios from "axios";
-import { prisma } from "../../database/src/index";
+import { prisma } from "@rta/database";
 
 type ProductEntry = {
   name?: string;
@@ -488,12 +488,13 @@ export async function importRocketLeagueItems(options?: { limit?: number }): Pro
   const existingCards = await prisma.card.findMany({
     select: { id: true, name: true, source: true, sourceId: true }
   });
-  const usedNames = new Set(existingCards.map((card) => card.name));
-  const existingBySourceId = new Map(
-    existingCards
-      .filter((card) => card.source === "rocketleagueapi" && typeof card.sourceId === "string")
-      .map((card) => [card.sourceId as string, card])
-  );
+  const usedNames = new Set<string>(existingCards.map((card) => card.name));
+  const existingBySourceId = new Map<string, { id: string; name: string; source: string | null; sourceId: string | null }>();
+  for (const card of existingCards) {
+    if (card.source === "rocketleagueapi" && typeof card.sourceId === "string") {
+      existingBySourceId.set(card.sourceId, card);
+    }
+  }
 
   const productEntries = Object.entries(catalog.products);
   const limit = options?.limit ? Math.max(1, Math.floor(options.limit)) : productEntries.length;
