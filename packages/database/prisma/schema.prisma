@@ -123,6 +123,7 @@ model Card {
   name        String          @unique
   deckId      String
   rarityId    String
+  deletedAt   DateTime?
   imageUrl    String?
   description String?
   acceptedNames Json?
@@ -147,6 +148,7 @@ model Card {
   @@index([source])
   @@index([sourceId])
   @@index([category])
+  @@index([deletedAt])
 }
 
 model MovieImportBlacklist {

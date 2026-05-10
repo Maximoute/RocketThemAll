@@ -262,6 +262,37 @@ export class SpawnService {
       throw new AppError("User not found", 404);
     }
 
+    const catchRateRaw = match.card.rarity.catchRate ?? 1;
+    const catchRate = Number.isFinite(catchRateRaw) ? Math.max(0, Math.min(1, catchRateRaw)) : 1;
+    const captureRoll = Math.random();
+
+    if (captureRoll > catchRate) {
+      await prisma.$transaction(async (tx) => {
+        await tx.spawnLog.update({
+          where: { id: match.id },
+          data: { status: "expired" }
+        });
+        await tx.economyLog.create({
+          data: {
+            userId: capturingUserId,
+            type: "capture_failed",
+            metadata: { action: "capture_failed", cardId: match.card.id, catchRate, captureRoll, channelId }
+          }
+        });
+      });
+      return {
+        caught: false as const,
+        card: match.card,
+        catchRate,
+        captureRoll,
+        gainedXp: 0,
+        level: user.level,
+        xp: user.xp,
+        boostersGained: 0,
+        variant: undefined
+      };
+    }
+
     const gainedXp = match.card.xpReward || xpForRarity(match.card.rarity.name as never);
     const progress = applyXpGain(user.level, user.xp, gainedXp);
     const economyConfig = await prisma.appConfig.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
@@ -308,7 +339,10 @@ export class SpawnService {
     });
 
     return {
+      caught: true as const,
       card: match.card,
+      catchRate,
+      captureRoll,
       gainedXp,
       level: progress.level,
       xp: progress.xp,
