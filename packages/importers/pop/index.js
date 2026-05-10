@@ -1,11 +1,11 @@
 /**
  * Point d'entrée du système pop culture multi-importers
  */
-export { importTmdbMoviesAndSeries } from "./tmdbImporter";
-export { importAnimeAndManga } from "./animeImporter";
-export { importVideoGames } from "./videoGameImporter";
-export { importManualPopCulture } from "./manualPopImporter";
-export { importCinemaFilmsDeck, calculateMovieRarity } from "./cinemaFilmsImporter";
+export { importTmdbMoviesAndSeries } from "./tmdbImporter.js";
+export { importAnimeAndManga } from "./animeImporter.js";
+export { importVideoGames } from "./videoGameImporter.js";
+export { importManualPopCulture } from "./manualPopImporter.js";
+export { importCinemaFilmsDeck, calculateMovieRarity } from "./cinemaFilmsImporter.js";
 /**
  * Import complet : TMDb + Jikan + RAWG + Manuel
  * Chaque source est optionnelle si la clé API manque.
@@ -15,7 +15,7 @@ export async function importAllPopCulture(options) {
     let tmdb = 0, anime = 0, games = 0, manual = 0;
     // Films et séries TMDb
     try {
-        const { importTmdbMoviesAndSeries } = await import("./tmdbImporter");
+        const { importTmdbMoviesAndSeries } = await import("./tmdbImporter.js");
         tmdb = await importTmdbMoviesAndSeries(tmdbLimit, 1, 3);
     }
     catch (err) {
@@ -23,7 +23,7 @@ export async function importAllPopCulture(options) {
     }
     // Anime et manga Jikan
     try {
-        const { importAnimeAndManga } = await import("./animeImporter");
+        const { importAnimeAndManga } = await import("./animeImporter.js");
         anime = await importAnimeAndManga(animeLimit, 4);
     }
     catch (err) {
@@ -31,7 +31,7 @@ export async function importAllPopCulture(options) {
     }
     // Jeux vidéo RAWG
     try {
-        const { importVideoGames } = await import("./videoGameImporter");
+        const { importVideoGames } = await import("./videoGameImporter.js");
         games = await importVideoGames(gameLimit, 4);
     }
     catch (err) {
@@ -40,7 +40,7 @@ export async function importAllPopCulture(options) {
     // Cartes manuelles JSON
     if (!skipManual) {
         try {
-            const { importManualPopCulture } = await import("./manualPopImporter");
+            const { importManualPopCulture } = await import("./manualPopImporter.js");
             manual = await importManualPopCulture();
         }
         catch (err) {

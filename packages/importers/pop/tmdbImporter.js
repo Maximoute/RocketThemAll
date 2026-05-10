@@ -5,7 +5,7 @@
 import axios from "axios";
 import { prisma } from "@rta/database";
 import { z } from "zod";
-import { getRarityIdByName } from "../src/rarityService";
+import { getRarityIdByName } from "../src/rarityService.js";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 const REQUEST_DELAY_MS = 200;

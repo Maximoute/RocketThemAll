@@ -5,7 +5,7 @@
 import axios from "axios";
 import { prisma } from "@rta/database";
 import { z } from "zod";
-import { getRarityIdByName } from "../src/rarityService";
+import { getRarityIdByName } from "../src/rarityService.js";
 const JIKAN_BASE = "https://api.jikan.moe/v4";
 const REQUEST_DELAY_MS = 500; // Jikan recommande max 3 req/sec
 const MAX_RETRIES = 3;

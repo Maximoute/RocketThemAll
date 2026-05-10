@@ -11,11 +11,10 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "paths": {
-      "@rta/shared": ["packages/shared/src"],
-      "@rta/database": ["packages/database/src"],
-      "@rta/services": ["packages/services/src"]
+      "@rta/shared": ["./packages/shared/src"],
+      "@rta/database": ["./packages/database/src"],
+      "@rta/services": ["./packages/services/src"]
     }
   }
 }

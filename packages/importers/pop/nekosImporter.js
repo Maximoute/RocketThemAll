@@ -6,7 +6,7 @@
 import axios from "axios";
 import { prisma } from "@rta/database";
 import { z } from "zod";
-import { getRarityIdByName } from "../src/rarityService";
+import { getRarityIdByName } from "../src/rarityService.js";
 const NEKOS_BASE = "https://nekos.best/api/v2";
 const REQUEST_DELAY_MS = 300;
 const BATCH_SIZE = 20; // max par requête

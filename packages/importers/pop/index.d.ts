@@ -1,12 +1,12 @@
 /**
  * Point d'entrée du système pop culture multi-importers
  */
-export { importTmdbMoviesAndSeries } from "./tmdbImporter";
-export { importAnimeAndManga } from "./animeImporter";
-export { importVideoGames } from "./videoGameImporter";
-export { importManualPopCulture } from "./manualPopImporter";
-export { importCinemaFilmsDeck, calculateMovieRarity } from "./cinemaFilmsImporter";
-export type { ManualPopCard } from "./manualPopImporter";
+export { importTmdbMoviesAndSeries } from "./tmdbImporter.js";
+export { importAnimeAndManga } from "./animeImporter.js";
+export { importVideoGames } from "./videoGameImporter.js";
+export { importManualPopCulture } from "./manualPopImporter.js";
+export { importCinemaFilmsDeck, calculateMovieRarity } from "./cinemaFilmsImporter.js";
+export type { ManualPopCard } from "./manualPopImporter.js";
 /**
  * Import complet : TMDb + Jikan + RAWG + Manuel
  * Chaque source est optionnelle si la clé API manque.

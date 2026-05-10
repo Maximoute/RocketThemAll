@@ -1,7 +1,7 @@
 import axios from "axios";
 import { prisma } from "@rta/database";
 import { z } from "zod";
-import { getRarityIdByName } from "../src/rarityService";
+import { getRarityIdByName } from "../src/rarityService.js";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 const MAX_IMPORT_LIMIT = 1000;
@@ -295,6 +295,7 @@ export async function importCinemaFilmsDeck(limit = 500, maxPages = 30) {
         const sourceId = `tmdb-movie-${movie.id}`;
         // Missing poster entries are tracked, but never imported into active playable cards.
         if (!movie.poster_path) {
+            const payload = JSON.parse(JSON.stringify(movie));
             await prisma.movieImportBlacklist.upsert({
                 where: { sourceId },
                 update: {
@@ -302,7 +303,7 @@ export async function importCinemaFilmsDeck(limit = 500, maxPages = 30) {
                     source: MOVIE_SOURCE,
                     displayName: title,
                     reason: "missing_image",
-                    payload: movie
+                    payload
                 },
                 create: {
                     deck: MOVIE_DECK_NAME,
@@ -310,7 +311,7 @@ export async function importCinemaFilmsDeck(limit = 500, maxPages = 30) {
                     sourceId,
                     displayName: title,
                     reason: "missing_image",
-                    payload: movie
+                    payload
                 }
             });
             blacklisted++;
