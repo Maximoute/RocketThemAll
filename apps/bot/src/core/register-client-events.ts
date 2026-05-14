@@ -1,6 +1,6 @@
 import { Client, Events } from "discord.js";
 import { AppError, ConfigService } from "@rta/services";
-import { handleButtonInteraction, handleCommand } from "../commands/register.js";
+import { handleCommand, handleButton } from "../commands/index.js";
 import { startSpawnLoop } from "../jobs/spawn-loop.js";
 import { syncClientGuilds } from "./sync-client-guilds.js";
 
@@ -44,7 +44,7 @@ export function registerClientEvents(client: Client, configService: ConfigServic
 
     if (interaction.isButton()) {
       try {
-        await handleButtonInteraction(interaction);
+        await handleButton(interaction);
       } catch (error) {
         console.error(error);
         try {

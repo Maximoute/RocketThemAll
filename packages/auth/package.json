@@ -1,0 +1,26 @@
+{
+  "name": "@rta/auth",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./api-auth": "./src/api-auth.ts",
+    "./web-auth": "./src/web-auth.ts",
+    "./bot-auth": "./src/bot-auth.ts"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "next-auth": "^4.24.8",
+    "@rta/database": "1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.7.4"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json"
+  }
+}

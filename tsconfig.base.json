@@ -14,7 +14,9 @@
     "paths": {
       "@rta/shared": ["./packages/shared/src"],
       "@rta/database": ["./packages/database/src"],
-      "@rta/services": ["./packages/services/src"]
+      "@rta/services": ["./packages/services/src"],
+      "@rta/auth": ["./packages/auth/src"],
+      "@rta/auth/*": ["./packages/auth/src/*"]
     }
   }
 }
