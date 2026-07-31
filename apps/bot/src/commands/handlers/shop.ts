@@ -1,22 +1,188 @@
-import { EmbedBuilder, type ChatInputCommandInteraction } from "discord.js";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  StringSelectMenuBuilder,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+  type StringSelectMenuInteraction
+} from "discord.js";
 import {
   configService,
-  boosterService
+  boosterService,
+  itemShopService,
+  AppError,
+  prisma
 } from "../service-instances.js";
+import {
+  configuredDiscordSku,
+  discordMonetizationEnabled,
+  MONETIZATION_PRODUCTS
+} from "@rta/services";
+import { attachCardImage } from "../card-media.js";
+import { createInteractionToken } from "../interaction-token.js";
 
-export async function handleShop(interaction: ChatInputCommandInteraction, user: any) {
+type ShopInteraction =
+  | ChatInputCommandInteraction
+  | ButtonInteraction
+  | StringSelectMenuInteraction;
+
+function shopComponents(
+  discordUserId: string,
+  items: Array<{
+    contentKey: string;
+    name: string;
+    type: string;
+    metadata: unknown;
+  }>
+) {
+  const chunks = [];
+  for (let start = 0; start < items.length; start += 25) {
+    chunks.push(items.slice(start, start + 25));
+  }
+  return chunks.slice(0, 5).map((chunk, index) =>
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(createInteractionToken("k", discordUserId, index))
+        .setPlaceholder(
+          chunks.length === 1
+            ? "Choisir un objet à acheter"
+            : `Choisir un objet à acheter · liste ${index + 1}/${chunks.length}`
+        )
+        .addOptions(chunk.map((item) => {
+          const metadata = item.metadata as Record<string, unknown>;
+          const price = Number(metadata.creditPrice);
+          return {
+            label: item.name.slice(0, 100),
+            value: item.contentKey,
+            description: `${price.toLocaleString("fr-FR")} crédits · ${item.type}`.slice(0, 100)
+          };
+        }))
+    )
+  );
+}
+
+function monetizationComponents() {
+  if (!discordMonetizationEnabled()) return null;
+  const buttons = Object.values(MONETIZATION_PRODUCTS).flatMap((product) => {
+    const skuId = configuredDiscordSku(product.key);
+    return skuId
+      ? [new ButtonBuilder().setStyle(ButtonStyle.Premium).setSKUId(skuId)]
+      : [];
+  });
+  return buttons.length > 0
+    ? new ActionRowBuilder<ButtonBuilder>().addComponents(buttons.slice(0, 5))
+    : null;
+}
+
+export async function handleShop(
+  interaction: ShopInteraction,
+  user: any,
+  selectedItem?: string
+) {
   const cfg = await configService.getConfig();
+  const requestedItem = selectedItem?.trim() || (
+    interaction.isChatInputCommand()
+      ? interaction.options.getString("objet")?.trim()
+      : undefined
+  );
+  let purchaseMessage: string | null = null;
+  if (requestedItem) {
+    const definition = await prisma.itemDefinition.findUnique({
+      where: { contentKey: requestedItem }
+    });
+    if (!definition || definition.status !== "PUBLISHED") {
+      throw new AppError("Objet introuvable dans la boutique", 404);
+    }
+    if (definition.type === "BOOSTER") {
+      const type = definition.contentKey.replace(/^booster\./, "");
+      if (!["basic", "rare", "epic", "legendary"].includes(type)) {
+        throw new AppError("Type de booster invalide", 400);
+      }
+      const purchase = await boosterService.buyBooster(
+        user.id,
+        type as "basic" | "rare" | "epic" | "legendary",
+        interaction.id
+      );
+      purchaseMessage = `✅ **${definition.name}** acheté pour **${purchase.price.toLocaleString("fr-FR")} crédits**.`;
+    } else {
+      const purchase = await itemShopService.buyItem(
+        user.id,
+        definition.contentKey,
+        interaction.id
+      );
+      purchaseMessage = `✅ **${definition.name}** acheté pour **${purchase.price.toLocaleString("fr-FR")} crédits**.`;
+    }
+  }
+  const account = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { credits: true }
+  });
+  if (!account) {
+    throw new AppError("Utilisateur introuvable", 404);
+  }
+  const catalog = await prisma.itemDefinition.findMany({
+    where: {
+      status: "PUBLISHED"
+    },
+    orderBy: [{ type: "asc" }, { name: "asc" }]
+  });
+  const buyable = catalog.filter((item) => {
+    if (!item.metadata || typeof item.metadata !== "object" || Array.isArray(item.metadata)) return false;
+    const price = Number((item.metadata as Record<string, unknown>).creditPrice);
+    return Number.isSafeInteger(price) && price > 0;
+  });
   const embed = new EmbedBuilder()
     .setColor(0xff9800)
-    .setTitle("🛒 Boutique boosters")
-    .addFields(
-      { name: "Basic Booster", value: `${cfg.basicBoosterPrice} crédits`, inline: true },
-      { name: "Rare Booster", value: `${cfg.rareBoosterPrice} crédits`, inline: true },
-      { name: "Epic Booster", value: `${cfg.epicBoosterPrice} crédits`, inline: true },
-      { name: "Legendary Booster", value: `${cfg.legendaryBoosterPrice} crédits`, inline: true },
-      { name: "Craft booster", value: `${cfg.craftBoosterFragmentCost} fragments`, inline: false }
+    .setTitle("🛒 Boutique RTA")
+    .setDescription(
+      `${purchaseMessage ? `${purchaseMessage}\n\n` : ""}` +
+      `💳 Ton solde : **${account.credits.toLocaleString("fr-FR")} crédits**\n\n` +
+      "Pour acheter : `/shop objet:<clé>`."
     );
-  await interaction.editReply({ embeds: [embed] });
+
+  const groups = new Map<string, string[]>();
+  for (const item of buyable) {
+    const metadata = item.metadata as Record<string, unknown>;
+    const price = Number(metadata.creditPrice);
+    const category = typeof metadata.category === "string" ? metadata.category : item.type;
+    const rows = groups.get(category) ?? [];
+    rows.push(`\`${item.contentKey}\` — ${price.toLocaleString("fr-FR")} crédits`);
+    groups.set(category, rows);
+  }
+  for (const [category, rows] of groups) {
+    embed.addFields({ name: category, value: rows.join("\n"), inline: false });
+  }
+  embed.addFields({
+    name: "Craft booster",
+    value: `${cfg.craftBoosterFragmentCost} fragments`,
+    inline: false
+  });
+  const premiumRow = monetizationComponents();
+  if (premiumRow) {
+    embed.addFields({
+      name: "💎 VIP, Fondateur et packs de crédits",
+      value:
+        "Les boutons Premium ci-dessous ouvrent le paiement natif Discord. " +
+        "Les packs ajoutent directement des crédits, sans monnaie premium intermédiaire."
+    });
+  }
+  const website = process.env.PUBLIC_BASE_URL?.replace(/\/+$/, "");
+  if (website) {
+    embed.addFields({
+      name: "Boutique web sécurisée",
+      value: `${website}/shop#support`
+    });
+  }
+  embed.setFooter({ text: `${buyable.length} objets achetables sur 42 objets Vault` });
+  const catalogRows = shopComponents(interaction.user.id, buyable);
+  await interaction.editReply({
+    embeds: [embed],
+    components: premiumRow
+      ? [...catalogRows.slice(0, 4), premiumRow]
+      : catalogRows
+  });
 }
 
 export async function handleBoosters(interaction: ChatInputCommandInteraction, user: any) {
@@ -29,7 +195,7 @@ export async function handleBoosters(interaction: ChatInputCommandInteraction, u
 }
 
 export async function handleCraft(interaction: ChatInputCommandInteraction, user: any) {
-  const result = await boosterService.craftBooster(user.id);
+  const result = await boosterService.craftBooster(user.id, interaction.id);
   const embed = new EmbedBuilder()
     .setColor(0x4caf50)
     .setTitle("🧪 Craft réussi")
@@ -39,7 +205,7 @@ export async function handleCraft(interaction: ChatInputCommandInteraction, user
 
 export async function handleBoosterBuy(interaction: ChatInputCommandInteraction, user: any) {
   const type = interaction.options.getString("type", true) as "basic" | "rare" | "epic" | "legendary";
-  const result = await boosterService.buyBooster(user.id, type);
+  const result = await boosterService.buyBooster(user.id, type, interaction.id);
   const embed = new EmbedBuilder()
     .setColor(0x4caf50)
     .setTitle("🛍️ Achat réussi")
@@ -50,7 +216,7 @@ export async function handleBoosterBuy(interaction: ChatInputCommandInteraction,
 export async function handleBoosterOpen(interaction: ChatInputCommandInteraction, user: any) {
   const type = interaction.options.getString("type", true) as "basic" | "rare" | "epic" | "legendary";
   const guildId = interaction.guildId ?? undefined;
-  const opened = await boosterService.openBooster(user.id, type, guildId);
+  const opened = await boosterService.openBooster(user.id, type, guildId, interaction.id);
   const cards = opened.cards;
 
   const rarityColor: Record<string, number> = {
@@ -64,10 +230,13 @@ export async function handleBoosterOpen(interaction: ChatInputCommandInteraction
     Limited: 0xffd700
   };
 
-  const jackpotLine = opened.upgradedType !== type
-    ? `\n🔥 JACKPOT ! Ton ${type} booster s'est transformé en ${opened.upgradedType} booster !`
-    : "";
-  await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xffd700).setDescription(`🎁 ${opened.upgradedType} booster ouvert ! **${cards.length} cartes** obtenues :${jackpotLine}`)] });
+  await interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xffd700)
+        .setDescription(`🎁 Booster ${type} ouvert : **1 carte** obtenue.`)
+    ]
+  });
 
   for (let i = 0; i < cards.length; i++) {
     const row = cards[i];
@@ -82,8 +251,8 @@ export async function handleBoosterOpen(interaction: ChatInputCommandInteraction
       .setColor(color);
 
     if (card.description) embed.addFields({ name: "Description", value: card.description });
-    if (card.imageUrl) embed.setImage(card.imageUrl);
+    const files = await attachCardImage(embed, card, row.variant);
 
-    await interaction.followUp({ embeds: [embed] });
+    await interaction.followUp({ embeds: [embed], files });
   }
 }

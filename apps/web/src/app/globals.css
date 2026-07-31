@@ -1,5 +1,4 @@
 /* apps/web/src/app/globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,7 +7,7 @@
   body {
     background-color: #0D0D0D;
     color: #F0ECF8;
-    font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+    font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   }
 }
 
@@ -48,5 +47,36 @@
   .glow-limited {
     border-color: #f5c842;
     box-shadow: 0 0 16px rgba(245, 200, 66, 0.5);
+  }
+
+  .legal-content a {
+    color: #F28241;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .legal-content a:hover {
+    color: #F0ECF8;
+  }
+
+  .legal-content ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+
+  .legal-content li + li {
+    margin-top: 0.35rem;
+  }
+
+  .legal-content th,
+  .legal-content td {
+    border: 1px solid #481CA6;
+    padding: 0.65rem 0.75rem;
+    vertical-align: top;
+  }
+
+  .legal-content th {
+    background: #2A1870;
+    color: #F0ECF8;
   }
 }

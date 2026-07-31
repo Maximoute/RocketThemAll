@@ -1,8 +1,9 @@
-import { prisma } from "@rta/database";
+import { Prisma, prisma } from "@rta/database";
 import { RARITIES } from "@rta/shared";
 import CollectionFiltersClient from "./filters.client";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../lib/auth";
+import { resolveSessionUser } from "../../lib/guard";
+
+const DECKS_PER_PAGE = 3;
 
 const POP_CATEGORIES: { value: string; label: string }[] = [
   { value: "movie", label: "🎬 Films" },
@@ -26,7 +27,7 @@ const POP_CATEGORIES: { value: string; label: string }[] = [
   { value: "antenna", label: "📡 Antenna" },
   { value: "player_banner", label: "🏳️ Banner" },
   { value: "player_title", label: "🏷️ Title" },
-  { value: "unknown", label: "❓ Unknown" },
+  { value: "unknown", label: "❓ Unknown" }
 ];
 
 type SearchParams = {
@@ -34,80 +35,132 @@ type SearchParams = {
   rarity?: string;
   category?: string;
   q?: string;
-  sort?: string;
-  order?: "asc" | "desc";
+  ownership?: "owned" | "missing";
   page?: string;
 };
 
-export default async function CollectionPage({ searchParams }: { searchParams: SearchParams }) {
-  const session = await getServerSession(authOptions);
-  const sort = searchParams.sort ?? "name";
-  const order = searchParams.order ?? "asc";
+const rarityGlow: Record<string, string> = {
+  Common: "border-rta-border",
+  Uncommon: "glow-uncommon",
+  Rare: "glow-rare",
+  "Very Rare": "glow-very-rare",
+  Import: "glow-import",
+  Exotic: "glow-exotic",
+  "Black Market": "glow-black-market",
+  Limited: "glow-limited"
+};
+
+const rarityBadgeClass: Record<string, string> = {
+  Common: "bg-rta-surface2 text-rta-muted",
+  Uncommon: "bg-rta-success/15 text-rta-success border border-rta-success",
+  Rare: "bg-rta-accentHi/20 text-purple-300 border border-rta-accentHi",
+  "Very Rare": "bg-purple-500/15 text-purple-300 border border-purple-500",
+  Import: "bg-rta-cta/15 text-rta-cta border border-rta-cta",
+  Exotic: "bg-red-500/15 text-red-400 border border-red-500",
+  "Black Market": "bg-gradient-to-r from-rta-gold to-rta-cta text-rta-bg font-black",
+  Limited: "bg-rta-gold/15 text-rta-gold border border-rta-gold"
+};
+
+export default async function CollectionPage({
+  searchParams: searchParamsPromise
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const searchParams = await searchParamsPromise;
+  const user = await resolveSessionUser();
   const pageRaw = Number(searchParams.page ?? "1");
-  const page = Number.isFinite(pageRaw) ? Math.max(1, Math.floor(pageRaw)) : 1;
-  const pageSize = 100;
+  const requestedPage = Number.isFinite(pageRaw) ? Math.max(1, Math.floor(pageRaw)) : 1;
+  const ownership = searchParams.ownership === "owned" || searchParams.ownership === "missing"
+    ? searchParams.ownership
+    : undefined;
 
-  const where = {
-    name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" as const } : undefined,
-    deck: searchParams.deck ? { name: searchParams.deck } : undefined,
-    rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
-    category: searchParams.category ? searchParams.category : undefined
-  };
-
-  const orderBy =
-    sort === "rarity"
-      ? [{ rarity: { weight: order } }, { name: "asc" as const }]
-      : sort === "deck"
-      ? [{ deck: { name: order } }, { name: "asc" as const }]
-      : sort === "category"
-      ? [{ category: order }, { name: "asc" as const }]
-      : [{ name: order }];
-
-  const [totalCards, deckRows] = await Promise.all([
-    prisma.card.count({ where }),
-    prisma.deck.findMany({ orderBy: { name: "asc" } })
+  const [inventory, rewardClaims, deckRows] = await Promise.all([
+    user
+      ? prisma.inventoryItem.findMany({
+          where: { userId: user.id, quantity: { gt: 0 } },
+          select: { cardId: true }
+        })
+      : Promise.resolve([]),
+    user
+      ? prisma.collectionRewardClaim.findMany({ where: { userId: user.id } })
+      : Promise.resolve([]),
+    prisma.deck.findMany({
+      where: {
+        status: "PUBLISHED",
+        isActive: true,
+        cards: { some: { source: "vault", status: "PUBLISHED", isActive: true } }
+      },
+      include: { world: { select: { name: true, position: true } } }
+    })
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCards / pageSize));
-  const safePage = Math.min(page, totalPages);
-
-  const cards = await prisma.card.findMany({
-    where,
-    include: { deck: true, rarity: true },
-    orderBy,
-    skip: (safePage - 1) * pageSize,
-    take: pageSize
-  });
-
-  const allDecks = deckRows.map((deck) => deck.name);
-  const user = session?.user?.name
-    ? await prisma.user.findFirst({ where: { username: session.user.name } })
-    : null;
-  const inventory = user
-    ? await prisma.inventoryItem.findMany({ where: { userId: user.id, quantity: { gt: 0 } } })
-    : [];
-  const rewardClaims = user
-    ? await prisma.collectionRewardClaim.findMany({ where: { userId: user.id } })
-    : [];
   const ownedIds = new Set(inventory.map((item) => item.cardId));
-  const filteredDeckCards = await prisma.card.findMany({
-    where,
-    select: { id: true, deckId: true, deck: { select: { name: true } } }
-  });
+  const ownershipWhere: Prisma.CardWhereInput | undefined = ownership
+    ? user
+      ? ownership === "owned"
+        ? { inventory: { some: { userId: user.id, quantity: { gt: 0 } } } }
+        : { inventory: { none: { userId: user.id, quantity: { gt: 0 } } } }
+      : { id: "__authentication_required__" }
+    : undefined;
 
-  const deckProgress = allDecks.map((deckName) => {
-    const deckCards = filteredDeckCards.filter((card) => card.deck.name === deckName);
-    const total = deckCards.length;
-    const owned = deckCards.filter((card) => ownedIds.has(card.id)).length;
-    return {
-      deckName,
-      total,
-      owned,
-      completion: total === 0 ? 0 : Math.round((owned / total) * 100),
-      claimed50: rewardClaims.some((claim) => claim.deckId === deckCards[0]?.deckId && claim.milestone === 50),
-      claimed100: rewardClaims.some((claim) => claim.deckId === deckCards[0]?.deckId && claim.milestone === 100)
-    };
-  }).filter((deck) => deck.total > 0);
+  const cardWhere: Prisma.CardWhereInput = {
+    source: "vault",
+    status: "PUBLISHED",
+    isActive: true,
+    name: searchParams.q
+      ? { contains: searchParams.q, mode: "insensitive" }
+      : undefined,
+    deck: searchParams.deck ? { name: searchParams.deck } : undefined,
+    rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
+    category: searchParams.category || undefined,
+    AND: ownershipWhere
+  };
+
+  const sortedDecks = deckRows.sort((left, right) => {
+    const worldOrder = (left.world?.position ?? 999) - (right.world?.position ?? 999);
+    return worldOrder || left.name.localeCompare(right.name, "fr");
+  });
+  const matchingDeckIds = new Set(
+    (
+      await prisma.card.findMany({
+        where: cardWhere,
+        select: { deckId: true },
+        distinct: ["deckId"]
+      })
+    ).map((card) => card.deckId)
+  );
+  const filteredDecks = sortedDecks.filter((deck) => matchingDeckIds.has(deck.id));
+  const totalPages = Math.max(1, Math.ceil(filteredDecks.length / DECKS_PER_PAGE));
+  const safePage = Math.min(requestedPage, totalPages);
+  const pageDecks = filteredDecks.slice(
+    (safePage - 1) * DECKS_PER_PAGE,
+    safePage * DECKS_PER_PAGE
+  );
+  const pageDeckIds = pageDecks.map((deck) => deck.id);
+
+  const [cards, catalogCards] = pageDeckIds.length
+    ? await Promise.all([
+        prisma.card.findMany({
+          where: { AND: [cardWhere, { deckId: { in: pageDeckIds } }] },
+          include: { deck: true, rarity: true },
+          orderBy: [{ rarity: { weight: "desc" } }, { name: "asc" }]
+        }),
+        prisma.card.findMany({
+          where: {
+            source: "vault",
+            status: "PUBLISHED",
+            isActive: true,
+            deckId: { in: pageDeckIds }
+          },
+          select: { id: true, deckId: true }
+        })
+      ])
+    : [[], []];
+
+  const allDecks = sortedDecks.map((deck) => deck.name);
+  const cardsByDeck = new Map<string, typeof cards>();
+  for (const deck of pageDecks) cardsByDeck.set(deck.id, []);
+  for (const card of cards) cardsByDeck.get(card.deckId)?.push(card);
 
   function buildPageHref(targetPage: number): string {
     const params = new URLSearchParams();
@@ -115,113 +168,176 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
     if (searchParams.deck) params.set("deck", searchParams.deck);
     if (searchParams.rarity) params.set("rarity", searchParams.rarity);
     if (searchParams.category) params.set("category", searchParams.category);
-    if (sort) params.set("sort", sort);
-    if (order) params.set("order", order);
+    if (ownership) params.set("ownership", ownership);
     params.set("page", String(targetPage));
     return `/collection?${params.toString()}`;
   }
-
-
-  const categoryLabel = (cat: string | null) =>
-    POP_CATEGORIES.find((c) => c.value === cat)?.label ?? (cat ?? "");
-
-  const rarityGlow: Record<string, string> = {
-    "Common":       "border-rta-border",
-    "Uncommon":     "glow-uncommon",
-    "Rare":         "glow-rare",
-    "Very Rare":    "glow-very-rare",
-    "Import":       "glow-import",
-    "Exotic":       "glow-exotic",
-    "Black Market": "glow-black-market",
-    "Limited":      "glow-limited",
-  };
-  const rarityBadgeClass: Record<string, string> = {
-    "Common":       "bg-rta-surface2 text-rta-muted",
-    "Uncommon":     "bg-rta-success/15 text-rta-success border border-rta-success",
-    "Rare":         "bg-rta-accentHi/20 text-purple-300 border border-rta-accentHi",
-    "Very Rare":    "bg-purple-500/15 text-purple-300 border border-purple-500",
-    "Import":       "bg-rta-cta/15 text-rta-cta border border-rta-cta",
-    "Exotic":       "bg-red-500/15 text-red-400 border border-red-500",
-    "Black Market": "bg-gradient-to-r from-rta-gold to-rta-cta text-rta-bg font-black",
-    "Limited":      "bg-rta-gold/15 text-rta-gold border border-rta-gold",
-  };
 
   return (
     <div>
       <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Collection</h1>
-          <p className="text-rta-muted text-sm mt-1">Toutes les cartes disponibles · les tiennes sont en couleur</p>
+          <p className="text-rta-muted text-sm mt-1">
+            3 decks par page · cartes classées de Common à Black Market
+          </p>
         </div>
       </div>
 
       <CollectionFiltersClient
-        decks={allDecks.map((d) => ({ value: d, label: d }))}
-        rarities={RARITIES.map((r) => ({ value: r, label: r }))}
+        decks={allDecks.map((deck) => ({ value: deck, label: deck }))}
+        rarities={RARITIES.map((rarity) => ({ value: rarity, label: rarity }))}
         categories={POP_CATEGORIES}
         initial={{
           q: searchParams.q,
           deck: searchParams.deck,
           rarity: searchParams.rarity,
           category: searchParams.category,
-          sort,
-          order
+          ownership
         }}
       />
 
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+      {ownership && !user && (
+        <div className="mb-4 rounded-xl border border-rta-cta/50 bg-rta-cta/10 p-3 text-sm text-rta-ink">
+          Connecte-toi avec Discord pour filtrer les cartes possédées ou manquantes.
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
         <p className="text-rta-muted text-sm">
-          Page {safePage} / {totalPages} — {cards.length} cartes affichées
+          Page {safePage} / {totalPages} — {pageDecks.length} deck{pageDecks.length > 1 ? "s" : ""}
         </p>
         <div className="flex gap-2">
-          {safePage > 1
-            ? <a href={buildPageHref(safePage - 1)} className="px-3 py-1.5 rounded-lg bg-rta-surface border border-rta-border text-rta-ink text-sm hover:bg-rta-surface2 transition-colors">← Précédent</a>
-            : <span className="px-3 py-1.5 rounded-lg bg-rta-surface border border-rta-border text-rta-muted text-sm opacity-40 cursor-not-allowed">← Précédent</span>}
-          {safePage < totalPages
-            ? <a href={buildPageHref(safePage + 1)} className="px-3 py-1.5 rounded-lg bg-rta-surface border border-rta-border text-rta-ink text-sm hover:bg-rta-surface2 transition-colors">Suivant →</a>
-            : <span className="px-3 py-1.5 rounded-lg bg-rta-surface border border-rta-border text-rta-muted text-sm opacity-40 cursor-not-allowed">Suivant →</span>}
+          {safePage > 1 ? (
+            <a
+              href={buildPageHref(safePage - 1)}
+              className="px-3 py-1.5 rounded-lg bg-rta-surface border border-rta-border text-rta-ink text-sm hover:bg-rta-surface2 transition-colors"
+            >
+              ← Précédent
+            </a>
+          ) : (
+            <span className="px-3 py-1.5 rounded-lg bg-rta-surface border border-rta-border text-rta-muted text-sm opacity-40 cursor-not-allowed">
+              ← Précédent
+            </span>
+          )}
+          {safePage < totalPages ? (
+            <a
+              href={buildPageHref(safePage + 1)}
+              className="px-3 py-1.5 rounded-lg bg-rta-surface border border-rta-border text-rta-ink text-sm hover:bg-rta-surface2 transition-colors"
+            >
+              Suivant →
+            </a>
+          ) : (
+            <span className="px-3 py-1.5 rounded-lg bg-rta-surface border border-rta-border text-rta-muted text-sm opacity-40 cursor-not-allowed">
+              Suivant →
+            </span>
+          )}
         </div>
       </div>
 
-      {cards.length === 0 ? (
-        <p className="text-rta-muted">Aucune carte trouvée.</p>
+      {pageDecks.length === 0 ? (
+        <p className="text-rta-muted">Aucune carte trouvée avec ces filtres.</p>
       ) : (
-        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))" }}>
-          {cards.map((card) => {
-            const owned = ownedIds.has(card.id);
-            const rarity = card.rarity.name;
+        <div className="space-y-10">
+          {pageDecks.map((deck) => {
+            const deckCards = cardsByDeck.get(deck.id) ?? [];
+            const canonicalDeckCards = catalogCards.filter((card) => card.deckId === deck.id);
+            const ownedCount = canonicalDeckCards.filter((card) => ownedIds.has(card.id)).length;
+            const completion = canonicalDeckCards.length
+              ? Math.round((ownedCount / canonicalDeckCards.length) * 100)
+              : 0;
+            const claimed50 = rewardClaims.some(
+              (claim) => claim.deckId === deck.id && claim.milestone === 50
+            );
+            const claimed100 = rewardClaims.some(
+              (claim) => claim.deckId === deck.id && claim.milestone === 100
+            );
+
             return (
-              <article
-                key={card.id}
-                className={[
-                  "bg-rta-surface border rounded-xl overflow-hidden relative transition-transform duration-200",
-                  owned ? "hover:-translate-y-1" : "opacity-40 grayscale",
-                  rarityGlow[rarity] ?? "border-rta-border",
-                ].join(" ")}
-              >
-                <div className="aspect-[3/4] w-full bg-gradient-to-b from-rta-surface2 to-rta-bg flex items-center justify-center relative">
-                  {card.imageUrl ? (
-                    <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover absolute inset-0" />
-                  ) : (
-                    <span className="text-4xl opacity-30">🃏</span>
-                  )}
-                  <span className={`absolute top-2 right-2 text-[0.58rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${rarityBadgeClass[rarity] ?? "bg-rta-surface2 text-rta-muted"}`}>
-                    {rarity}
-                  </span>
-                  <span className="absolute bottom-2 left-2 text-[0.58rem] px-1.5 py-0.5 rounded-full bg-rta-bg/80 text-rta-muted border border-rta-ink/15">
-                    {card.deck?.name ?? ""}
-                  </span>
-                  {!owned && (
-                    <span className="absolute bottom-2 right-2 text-[0.58rem] px-1.5 py-0.5 rounded-full bg-rta-bg/85 text-rta-muted border border-rta-border">
-                      Non possédée
-                    </span>
-                  )}
+              <section key={deck.id} aria-labelledby={`deck-${deck.id}`}>
+                <div className="mb-4 rounded-xl border border-rta-border bg-rta-surface p-4">
+                  <div className="flex items-end justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-[0.68rem] uppercase tracking-[0.2em] text-rta-cta font-bold">
+                        {deck.world
+                          ? `Monde ${deck.world.position} · ${deck.world.name}`
+                          : "Deck Vault"}
+                      </p>
+                      <h2 id={`deck-${deck.id}`} className="text-2xl font-black mt-1">
+                        {deck.name}
+                      </h2>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-rta-gold">
+                        {ownedCount}/{canonicalDeckCards.length} possédées
+                      </p>
+                      <p className="text-xs text-rta-muted">
+                        {completion}% complété
+                        {claimed50 ? " · palier 50% ✓" : ""}
+                        {claimed100 ? " · palier 100% ✓" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-rta-bg rounded-full overflow-hidden mt-3">
+                    <div
+                      className="h-full bg-gradient-to-r from-rta-accent to-rta-cta rounded-full"
+                      style={{ width: `${completion}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="p-3">
-                  <p className="text-sm font-bold text-rta-ink truncate">{card.name}</p>
-                  <p className="text-[0.68rem] text-rta-muted uppercase tracking-wide mt-0.5">{rarity}</p>
-                </div>
-              </article>
+
+                {deckCards.length === 0 ? (
+                  <p className="text-rta-muted text-sm">Aucune carte de ce deck ne correspond aux filtres.</p>
+                ) : (
+                  <div
+                    className="grid gap-4"
+                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}
+                  >
+                    {deckCards.map((card) => {
+                      const owned = ownedIds.has(card.id);
+                      const rarity = card.rarity.name;
+                      return (
+                        <a
+                          key={card.id}
+                          href={`/cardinfo/${card.id}`}
+                          aria-label={`Voir la fiche de ${card.name}`}
+                          className={[
+                            "block bg-rta-surface border rounded-xl overflow-hidden relative transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-rta-cta",
+                            owned ? "hover:-translate-y-1" : "opacity-40 grayscale",
+                            rarityGlow[rarity] ?? "border-rta-border"
+                          ].join(" ")}
+                        >
+                          <div className="aspect-[3/4] w-full bg-gradient-to-b from-rta-surface2 to-rta-bg flex items-center justify-center relative">
+                            {card.imageUrl ? (
+                              <img
+                                src={card.imageUrl}
+                                alt={card.name}
+                                className="w-full h-full object-cover absolute inset-0"
+                              />
+                            ) : (
+                              <span className="text-4xl opacity-30">🃏</span>
+                            )}
+                            <span className={`absolute top-2 right-2 text-[0.58rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${rarityBadgeClass[rarity] ?? "bg-rta-surface2 text-rta-muted"}`}>
+                              {rarity}
+                            </span>
+                            {!owned && (
+                              <span className="absolute bottom-2 right-2 text-[0.58rem] px-1.5 py-0.5 rounded-full bg-rta-bg/85 text-rta-muted border border-rta-border">
+                                Non possédée
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-3">
+                            <p className="text-sm font-bold text-rta-ink truncate">{card.name}</p>
+                            <p className="text-[0.68rem] text-rta-muted uppercase tracking-wide mt-0.5">
+                              {rarity}
+                            </p>
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
             );
           })}
         </div>
@@ -229,5 +345,3 @@ export default async function CollectionPage({ searchParams }: { searchParams: S
     </div>
   );
 }
-
-

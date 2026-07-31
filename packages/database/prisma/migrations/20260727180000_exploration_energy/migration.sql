@@ -1,0 +1,5 @@
+ALTER TYPE "LedgerAsset" ADD VALUE 'EXPLORATION_CHARGE';
+
+ALTER TABLE "User"
+  ADD COLUMN "explorationCharges" INTEGER NOT NULL DEFAULT 4,
+  ADD COLUMN "explorationRegenAt" TIMESTAMP(3);

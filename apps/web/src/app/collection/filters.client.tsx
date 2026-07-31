@@ -14,8 +14,7 @@ type Props = {
     deck?: string;
     rarity?: string;
     category?: string;
-    sort?: string;
-    order?: string;
+    ownership?: string;
   };
 };
 
@@ -27,6 +26,7 @@ export default function CollectionFiltersClient({ decks, rarities, categories, i
 
   const apply = (updates: Record<string, string>) => {
     const params = new URLSearchParams(searchParams.toString());
+    params.delete("page");
     for (const [key, value] of Object.entries(updates)) {
       if (!value) params.delete(key);
       else params.set(key, value);
@@ -70,15 +70,15 @@ export default function CollectionFiltersClient({ decks, rarities, categories, i
         <option value="">Toutes catégories</option>
         {categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
       </select>
-      <select name="sort" value={searchParams.get("sort") ?? (initial.sort ?? "name")} onChange={(e) => apply({ sort: e.target.value })} className={selectClassName}>
-        <option value="name">Tri : Alphabétique</option>
-        <option value="rarity">Tri : Rareté</option>
-        <option value="deck">Tri : Deck</option>
-        <option value="category">Tri : Catégorie</option>
-      </select>
-      <select name="order" value={searchParams.get("order") ?? (initial.order ?? "asc")} onChange={(e) => apply({ order: e.target.value })} className={selectClassName}>
-        <option value="asc">Ordre : Croissant</option>
-        <option value="desc">Ordre : Décroissant</option>
+      <select
+        name="ownership"
+        value={searchParams.get("ownership") ?? (initial.ownership ?? "")}
+        onChange={(e) => apply({ ownership: e.target.value })}
+        className={selectClassName}
+      >
+        <option value="">Toutes les cartes</option>
+        <option value="owned">Possédées</option>
+        <option value="missing">Non possédées</option>
       </select>
       <button
         type="button"

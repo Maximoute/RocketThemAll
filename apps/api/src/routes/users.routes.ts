@@ -18,7 +18,8 @@ const patchUserSchema = z.object({
   username: z.string().min(1).max(64).optional(),
   credits: z.number().int().min(0).optional(),
   fragments: z.number().int().min(0).optional(),
-  isAdmin: z.boolean().optional()
+  isAdmin: z.boolean().optional(),
+  unlimitedExplorations: z.boolean().optional()
 }).strict().refine((payload) => Object.keys(payload).length > 0, {
   message: "At least one field must be provided"
 });
@@ -41,6 +42,7 @@ router.get("/:id/profile", requireAuth, requireSelfOrAdmin("id"), async (req, re
       credits: true,
       fragments: true,
       isAdmin: true,
+      unlimitedExplorations: true,
       createdAt: true
     }
   });

@@ -3,11 +3,11 @@ import { prisma } from "@rta/database";
 
 export default async function AdminHomePage() {
   await requireAdmin();
-  const [cardCount, userCount, tradeCount, activeSpawnCount, recentLogs] = await Promise.all([
+  const [cardCount, userCount, tradeCount, activeEncounterCount, recentLogs] = await Promise.all([
     prisma.card.count(),
     prisma.user.count(),
     prisma.trade.count(),
-    prisma.spawnLog.count({ where: { status: "active" } }),
+    prisma.encounter.count({ where: { status: "ACTIVE" } }),
     prisma.adminLog.findMany({ include: { admin: true }, orderBy: { createdAt: "desc" }, take: 8 })
   ]);
 
@@ -21,7 +21,7 @@ export default async function AdminHomePage() {
           { value: cardCount, label: "Cartes", color: "text-rta-success" },
           { value: userCount, label: "Utilisateurs", color: "text-rta-cta" },
           { value: tradeCount, label: "Trades", color: "text-purple-300" },
-          { value: activeSpawnCount, label: "Spawns actifs", color: "text-rta-gold" }
+          { value: activeEncounterCount, label: "Rencontres actives", color: "text-rta-gold" }
         ].map((stat) => (
           <div key={stat.label} className="bg-rta-surface border border-rta-border rounded-xl p-4">
             <div className={`text-2xl font-black ${stat.color}`}>{stat.value.toLocaleString("fr-FR")}</div>

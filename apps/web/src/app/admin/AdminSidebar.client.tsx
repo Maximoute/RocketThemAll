@@ -14,7 +14,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: "Contenu",
     items: [
       { href: "/admin/cards",   icon: "🃏", label: "Cartes"  },
-      { href: "/admin/imports", icon: "📥", label: "Imports" },
     ],
   },
   {
@@ -31,6 +30,9 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { href: "/admin/servers", icon: "🖥️", label: "Serveurs" },
       { href: "/admin/config",  icon: "⚙️", label: "Config"   },
       { href: "/admin/economy", icon: "💰", label: "Économie" },
+      { href: "/admin/bosses",  icon: "🐲", label: "Boss" },
+      { href: "/admin/achievement-badges", icon: "🏅", label: "Badges & niveaux" },
+      { href: "/admin/monetization", icon: "💳", label: "Monétisation" },
     ],
   },
 ];

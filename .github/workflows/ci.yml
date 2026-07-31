@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+      - "codex/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16.9-bookworm
+        env:
+          POSTGRES_USER: rta
+          POSTGRES_PASSWORD: rta-ci-password
+          POSTGRES_DB: rta_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rta -d rta_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: "true"
+      DATABASE_URL: postgresql://rta:rta-ci-password@127.0.0.1:5432/rta_ci
+      NEXTAUTH_SECRET: ci-only-secret-not-used-in-production
+      NEXTAUTH_URL: http://localhost:3000
+      RTA_PUBLIC_BASE_URL: http://localhost:3000
+      DISCORD_CLIENT_ID: ci-client
+      DISCORD_CLIENT_SECRET: ci-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.1
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run prisma:validate
+      - run: npm run prisma:migrate:deploy
+      - run: npm run lint
+      - run: npm test
+      - run: npm run validate:context
+      - run: npm run build
+      - run: npm audit --audit-level=high
+      - name: Validate production Compose
+        env:
+          POSTGRES_DB: rta
+          POSTGRES_USER: rta
+          POSTGRES_PASSWORD: ci-compose-password
+          MINIO_ROOT_USER: ci-minio
+          MINIO_ROOT_PASSWORD: ci-minio-secret
+          DISCORD_TOKEN: ci-token
+          DISCORD_CLIENT_ID: ci-client
+          DISCORD_CLIENT_SECRET: ci-secret
+          NEXTAUTH_SECRET: ci-nextauth-secret
+          NEXTAUTH_URL: https://rta.example.invalid
+          PUBLIC_BASE_URL: https://rta.example.invalid
+        run: docker compose -f docker-compose.production.yml config --quiet
+
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [api, bot, worker, web, migrate]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          push: false
+          tags: rta/${{ matrix.target }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

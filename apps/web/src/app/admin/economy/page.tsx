@@ -1,25 +1,39 @@
 import { prisma } from "@rta/database";
+import { AdminEconomyService } from "@rta/services";
+import { randomUUID } from "node:crypto";
 import { requireAdmin } from "../../../lib/guard";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
-export default async function AdminEconomyPage() {
-  async function updateUserCredits(formData: FormData) {
+const adminEconomyService = new AdminEconomyService();
+
+export default async function AdminEconomyPage({
+  searchParams: searchParamsPromise
+}: {
+  searchParams: Promise<{ notice?: string; error?: string }>;
+}) {
+  const searchParams = await searchParamsPromise;
+  async function adjustUserCredits(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
     const userId = String(formData.get("userId") ?? "");
-    const credits = Math.max(0, Number(formData.get("credits") ?? 0));
-
-    await prisma.user.update({ where: { id: userId }, data: { credits } });
-    await prisma.economyLog.create({
-      data: {
+    const creditDelta = Math.trunc(Number(formData.get("creditDelta") ?? 0));
+    const reason = String(formData.get("reason") ?? "");
+    try {
+      await adminEconomyService.adjustBalance({
+        adminId: admin.id,
         userId,
-        type: "admin_update",
-        amount: credits,
-        metadata: { adminId: admin.id, action: "set_credits" }
-      }
-    });
-
+        creditDelta,
+        reason,
+        operationKey: `admin:${admin.id}:balance:${randomUUID()}`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ajustement impossible.";
+      redirect(`/admin/economy?error=${encodeURIComponent(message)}`);
+    }
     revalidatePath("/admin/economy");
+    revalidatePath("/admin/users");
+    redirect("/admin/economy?notice=Solde mis à jour et audité.");
   }
 
   async function updateEconomyConfig(formData: FormData) {
@@ -40,15 +54,15 @@ export default async function AdminEconomyPage() {
       rareBoosterPrice: readInt("rareBoosterPrice", 300),
       epicBoosterPrice: readInt("epicBoosterPrice", 1000),
       legendaryBoosterPrice: readInt("legendaryBoosterPrice", 3000),
-      basicToRareJackpotRate: readFloat("basicToRareJackpotRate", 0.02),
-      basicToEpicJackpotRate: readFloat("basicToEpicJackpotRate", 0.005),
-      basicToLegendaryJackpotRate: readFloat("basicToLegendaryJackpotRate", 0.001),
-      rareToEpicJackpotRate: readFloat("rareToEpicJackpotRate", 0.03),
-      rareToLegendaryJackpotRate: readFloat("rareToLegendaryJackpotRate", 0.005),
-      epicToLegendaryJackpotRate: readFloat("epicToLegendaryJackpotRate", 0.02),
-      normalVariantRate: readFloat("normalVariantRate", 0.94),
-      shinyVariantRate: readFloat("shinyVariantRate", 0.05),
-      holoVariantRate: readFloat("holoVariantRate", 0.01),
+      normalVariantRate: readFloat("normalVariantRate", 0.989),
+      shinyVariantRate: readFloat("shinyVariantRate", 0.01),
+      holoVariantRate: readFloat("holoVariantRate", 0.001),
+      captureConsumableDropRate: Math.min(1, readFloat("captureConsumableDropRate", 0.1)),
+      captureConsumableCommonWeight: readInt("captureConsumableCommonWeight", 50),
+      captureConsumableUncommonWeight: readInt("captureConsumableUncommonWeight", 30),
+      captureConsumableRareWeight: readInt("captureConsumableRareWeight", 15),
+      captureConsumableEpicWeight: readInt("captureConsumableEpicWeight", 4),
+      captureConsumableLegendaryWeight: readInt("captureConsumableLegendaryWeight", 1),
       scarcityFloor: readFloat("scarcityFloor", 0.5),
       scarcityCap: readFloat("scarcityCap", 3),
       fusionEnabled: String(formData.get("fusionEnabled") ?? "") === "on"
@@ -56,19 +70,6 @@ export default async function AdminEconomyPage() {
 
     await prisma.appConfig.upsert({ where: { id: "default" }, update: payload, create: { id: "default", ...payload } });
     await prisma.economyLog.create({ data: { userId: admin.id, type: "admin_update", metadata: { action: "update_config", payload } } });
-
-    revalidatePath("/admin/economy");
-  }
-
-  async function resetEconomy() {
-    "use server";
-    const admin = await requireAdmin();
-
-    await prisma.$transaction(async (tx) => {
-      await tx.user.updateMany({ data: { credits: 0, fragments: 0 } });
-      await tx.userBooster.deleteMany();
-      await tx.economyLog.create({ data: { userId: admin.id, type: "admin_update", metadata: { action: "reset_economy" } } });
-    });
 
     revalidatePath("/admin/economy");
   }
@@ -103,18 +104,29 @@ export default async function AdminEconomyPage() {
   return (
     <section className="card">
       <h1>Admin Economy</h1>
+      {searchParams.notice && (
+        <p className="card" style={{ borderColor: "#22c55e", color: "#166534" }}>
+          {searchParams.notice}
+        </p>
+      )}
+      {searchParams.error && (
+        <p className="card" style={{ borderColor: "#ef4444", color: "#991b1b" }}>
+          {searchParams.error}
+        </p>
+      )}
 
       {/* ── Utilisateurs ── */}
       <details open style={{ marginBottom: "16px" }}>
         <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "1.1rem", marginBottom: "8px" }}>👥 Crédits utilisateurs</summary>
         <div style={{ display: "grid", gap: "6px" }}>
           {users.map((user) => (
-            <form key={user.id} action={updateUserCredits} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <form key={user.id} action={adjustUserCredits} style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
               <input type="hidden" name="userId" value={user.id} />
               <span style={{ minWidth: "180px", fontFamily: "monospace" }}>{user.username}</span>
-              <input type="number" min={0} name="credits" defaultValue={user.credits} style={{ width: "100px" }} />
-              <span style={{ fontSize: "0.85rem", color: "var(--muted)" }}>crédits</span>
-              <button type="submit">Mettre à jour</button>
+              <strong>{user.credits} crédits</strong>
+              <input type="number" name="creditDelta" defaultValue={0} placeholder="+/- crédits" style={{ width: "110px" }} />
+              <input type="text" name="reason" minLength={3} required placeholder="Motif obligatoire" />
+              <button type="submit">Ajouter / retirer</button>
             </form>
           ))}
         </div>
@@ -147,6 +159,34 @@ export default async function AdminEconomyPage() {
           </fieldset>
 
           <fieldset style={{ border: "1px solid #ddd", borderRadius: "8px", padding: "12px", marginBottom: "12px" }}>
+            <legend style={{ fontWeight: 600, padding: "0 6px" }}>🎒 Objets consommables après capture</legend>
+            <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginTop: 0 }}>
+              Le taux global s’applique uniquement aux captures réussies. Les poids déterminent ensuite le tier de l’objet.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "8px" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "0.85rem" }}>
+                Chance globale (0-1)
+                <input name="captureConsumableDropRate" type="number" min={0} max={1} step="0.001" defaultValue={config.captureConsumableDropRate} style={{ padding: "4px 6px" }} />
+              </label>
+              {[
+                ["captureConsumableCommonWeight", "Commun", config.captureConsumableCommonWeight],
+                ["captureConsumableUncommonWeight", "Peu commun", config.captureConsumableUncommonWeight],
+                ["captureConsumableRareWeight", "Rare", config.captureConsumableRareWeight],
+                ["captureConsumableEpicWeight", "Épique", config.captureConsumableEpicWeight],
+                ["captureConsumableLegendaryWeight", "Légendaire", config.captureConsumableLegendaryWeight]
+              ].map(([name, label, value]) => (
+                <label key={String(name)} style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "0.85rem" }}>
+                  Poids {String(label)}
+                  <input name={String(name)} type="number" min={0} step={1} defaultValue={Number(value)} style={{ padding: "4px 6px" }} />
+                </label>
+              ))}
+            </div>
+            <p style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+              Valeurs actuelles : 10 % global, puis 50 / 30 / 15 / 4 / 1.
+            </p>
+          </fieldset>
+
+          <fieldset style={{ border: "1px solid #ddd", borderRadius: "8px", padding: "12px", marginBottom: "12px" }}>
             <legend style={{ fontWeight: 600, padding: "0 6px" }}>✨ Variantes — multiplicateurs de prix</legend>
             <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginTop: 0 }}>
               Normal ×1 · Shiny ×{5} · Holo ×{10} (les multiplicateurs sont codés en dur, seules les chances de drop sont configurables)
@@ -154,15 +194,15 @@ export default async function AdminEconomyPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", maxWidth: "480px" }}>
               <label style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "0.85rem" }}>
                 Normal (chance 0-1)
-                <input name="normalVariantRate" type="number" min={0} max={1} step="0.01" defaultValue={config.normalVariantRate} style={{ padding: "4px 6px" }} />
+                <input name="normalVariantRate" type="number" min={0} max={1} step="0.001" defaultValue={config.normalVariantRate} style={{ padding: "4px 6px" }} />
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "0.85rem" }}>
                 Shiny ✨ (chance 0-1)
-                <input name="shinyVariantRate" type="number" min={0} max={1} step="0.01" defaultValue={config.shinyVariantRate} style={{ padding: "4px 6px" }} />
+                <input name="shinyVariantRate" type="number" min={0} max={1} step="0.001" defaultValue={config.shinyVariantRate} style={{ padding: "4px 6px" }} />
               </label>
               <label style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "0.85rem" }}>
                 Holo 🌈 (chance 0-1)
-                <input name="holoVariantRate" type="number" min={0} max={1} step="0.01" defaultValue={config.holoVariantRate} style={{ padding: "4px 6px" }} />
+                <input name="holoVariantRate" type="number" min={0} max={1} step="0.001" defaultValue={config.holoVariantRate} style={{ padding: "4px 6px" }} />
               </label>
             </div>
             <p style={{ fontSize: "0.75rem", color: "var(--muted)" }}>⚠️ Les 3 valeurs doivent totaliser 1.0</p>
@@ -180,26 +220,6 @@ export default async function AdminEconomyPage() {
                 <label key={String(name)} style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "0.85rem" }}>
                   {String(label)}
                   <input name={String(name)} type="number" min={0} defaultValue={Number(val)} style={{ padding: "4px 6px" }} />
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset style={{ border: "1px solid #ddd", borderRadius: "8px", padding: "12px", marginBottom: "12px" }}>
-            <legend style={{ fontWeight: 600, padding: "0 6px" }}>🎰 Taux jackpot boosters (0-1)</legend>
-            <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginTop: 0 }}>Chance qu'un booster monte de tier à l'ouverture</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px" }}>
-              {[
-                ["basicToRareJackpotRate", "Basic → Rare", config.basicToRareJackpotRate],
-                ["basicToEpicJackpotRate", "Basic → Epic", config.basicToEpicJackpotRate],
-                ["basicToLegendaryJackpotRate", "Basic → Legendary", config.basicToLegendaryJackpotRate],
-                ["rareToEpicJackpotRate", "Rare → Epic", config.rareToEpicJackpotRate],
-                ["rareToLegendaryJackpotRate", "Rare → Legendary", config.rareToLegendaryJackpotRate],
-                ["epicToLegendaryJackpotRate", "Epic → Legendary", config.epicToLegendaryJackpotRate],
-              ].map(([name, label, val]) => (
-                <label key={String(name)} style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "0.85rem" }}>
-                  {String(label)}
-                  <input name={String(name)} type="number" min={0} max={1} step="0.001" defaultValue={Number(val)} style={{ padding: "4px 6px" }} />
                 </label>
               ))}
             </div>
@@ -276,16 +296,6 @@ export default async function AdminEconomyPage() {
         </ul>
       </details>
 
-      {/* ── Reset ── */}
-      <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "1.1rem", color: "#c62828" }}>⚠️ Zone dangereuse</summary>
-        <form action={resetEconomy} style={{ marginTop: "12px" }}>
-          <p style={{ color: "#c62828", fontSize: "0.9rem" }}>Remet à zéro les crédits, fragments et boosters de TOUS les utilisateurs.</p>
-          <button type="submit" style={{ background: "#c62828", color: "white", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer" }}>
-            🗑️ Reset économie complète
-          </button>
-        </form>
-      </details>
     </section>
   );
 }

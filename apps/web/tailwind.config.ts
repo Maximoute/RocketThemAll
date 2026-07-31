@@ -21,7 +21,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['"Space Grotesk"', '"Segoe UI"', "sans-serif"],
+        sans: ['"Segoe UI"', "system-ui", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
       },
       keyframes: {
         legendaryPulse: {

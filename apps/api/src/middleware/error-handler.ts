@@ -16,6 +16,7 @@ export function errorHandler(error: unknown, req: Request, res: Response, _next:
     if (appError.statusCode >= 500) {
       logError("Application error", {
         path: req.path,
+        correlationId: res.locals.correlationId,
         statusCode: appError.statusCode,
         message: appError.message
       });
@@ -25,6 +26,7 @@ export function errorHandler(error: unknown, req: Request, res: Response, _next:
 
   logError("Unhandled error", {
     path: req.path,
+    correlationId: res.locals.correlationId,
     message: error instanceof Error ? error.message : String(error)
   });
 

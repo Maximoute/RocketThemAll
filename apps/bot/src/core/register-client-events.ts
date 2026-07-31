@@ -1,14 +1,45 @@
 import { Client, Events } from "discord.js";
 import { AppError, ConfigService } from "@rta/services";
-import { handleCommand, handleButton } from "../commands/index.js";
-import { startSpawnLoop } from "../jobs/spawn-loop.js";
+import { handleCommand, handleButton, handleSelectMenu } from "../commands/index.js";
+import {
+  resumePendingEncounterPublications,
+  retireLegacyPublicExplorationHubs
+} from "../commands/handlers/explore.js";
 import { syncClientGuilds } from "./sync-client-guilds.js";
+import {
+  registerMonetizationEvents,
+  syncDiscordMonetization
+} from "../monetization-events.js";
+import { registerLevelRoleSynchronization } from "../level-role-sync.js";
+
+const privateCommands = new Set([
+  "explore",
+  "collection",
+  "profile",
+  "quests",
+  "achievements",
+  "skills",
+  "items",
+  "boss",
+  "shop",
+  "recycle",
+  "fragment"
+]);
+
+export function commandIsPrivate(commandName: string) {
+  return privateCommands.has(commandName);
+}
 
 export function registerClientEvents(client: Client, configService: ConfigService) {
-  client.once(Events.ClientReady, async () => {
-    console.log(`Logged in as ${client.user?.tag}`);
-    await syncClientGuilds(client, configService);
-    await startSpawnLoop(client);
+  client.once(Events.ClientReady, async (readyClient) => {
+    console.log(`Logged in as ${readyClient.user.tag}`);
+    await syncClientGuilds(readyClient, configService);
+    await retireLegacyPublicExplorationHubs(readyClient);
+    await resumePendingEncounterPublications(readyClient);
+    await syncDiscordMonetization(readyClient).catch((error) => {
+      console.error("Discord monetization synchronization failed", error);
+    });
+    registerLevelRoleSynchronization();
   });
 
   client.on(Events.GuildCreate, async (guild) => {
@@ -24,7 +55,9 @@ export function registerClientEvents(client: Client, configService: ConfigServic
   client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
       try {
-        await interaction.deferReply();
+        await interaction.deferReply({
+          ephemeral: commandIsPrivate(interaction.commandName)
+        });
         await handleCommand(interaction);
       } catch (error) {
         console.error(error);
@@ -47,14 +80,34 @@ export function registerClientEvents(client: Client, configService: ConfigServic
         await handleButton(interaction);
       } catch (error) {
         console.error(error);
+        const message = error instanceof AppError ? error.message : "Erreur interaction bouton";
         try {
           if (interaction.deferred || interaction.replied) {
-            await interaction.editReply("Erreur interaction bouton");
+            await interaction.editReply({ content: message, embeds: [], components: [] });
           } else {
-            await interaction.reply("Erreur interaction bouton");
+            await interaction.reply({ content: message, ephemeral: true });
           }
         } catch (replyError) {
           console.error("Failed to send button error reply", replyError);
+        }
+      }
+      return;
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      try {
+        await handleSelectMenu(interaction);
+      } catch (error) {
+        console.error(error);
+        const message = error instanceof AppError ? error.message : "Erreur interaction RTA";
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: message, embeds: [], components: [] });
+          } else {
+            await interaction.reply({ content: message, ephemeral: true });
+          }
+        } catch (replyError) {
+          console.error("Failed to send select menu error reply", replyError);
         }
       }
     }
@@ -63,4 +116,6 @@ export function registerClientEvents(client: Client, configService: ConfigServic
   client.on(Events.Error, (error) => {
     console.error("Discord client error", error);
   });
+
+  registerMonetizationEvents(client);
 }

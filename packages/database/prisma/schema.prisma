@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
@@ -25,25 +25,6 @@ enum ImportStatus {
   failed
 }
 
-enum SpawnType {
-  auto
-  manual
-  admin
-}
-
-enum SpawnStatus {
-  active
-  captured
-  expired
-  cancelled
-}
-
-enum BoosterType {
-  basic
-  rare
-  epic
-}
-
 enum BoosterTier {
   basic
   rare
@@ -57,51 +38,255 @@ enum CardVariant {
   holo
 }
 
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum ZoneAccess {
+  FREE
+  PREMIUM
+}
+
+enum DangerProfile {
+  CALM
+  UNSTABLE
+  DANGEROUS
+  CRITICAL
+  EXTREME
+  LIMITED
+}
+
+enum GuildProgressState {
+  LOCKED
+  PROGRESSING
+  BOSS_READY
+  BOSS_ACTIVE
+  BOSS_DEFEATED
+}
+
+enum GuildHubStatus {
+  ACTIVE
+  REPLACED
+  DELETED
+}
+
+enum EncounterStatus {
+  SCHEDULED
+  ACTIVE
+  RESOLVING
+  RESOLVED
+  EXPIRED
+  CANCELLED
+}
+
+enum CaptureAttemptStatus {
+  SUBMITTED
+  SUCCEEDED
+  FAILED
+  REJECTED
+}
+
+enum LedgerAsset {
+  CREDITS
+  FRAGMENTS
+  CARD
+  ITEM
+  BOOSTER
+  XP
+  SKILL_POINT
+  GUILD_MASTERY
+  EXPLORATION_CHARGE
+}
+
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum DeliveryStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+enum ScheduledJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ItemType {
+  ARTIFACT
+  CONSUMABLE
+  OFFERING
+  SOUVENIR
+  BOOSTER
+  CHEST
+}
+
+enum CollectionContractType {
+  SEARCH
+  DONATION
+}
+
+enum CollectionContractStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum SkillBranch {
+  EXPLORER
+  HUNTER
+  COLLECTOR
+}
+
+enum SkillNodeKind {
+  COMMON
+  SPECIALIZATION_GATE
+  SPECIALIZATION_UPGRADE
+}
+
+enum DailyQuestStatus {
+  ACTIVE
+  COMPLETED
+  CLAIMED
+  EXPIRED
+}
+
+enum BossKind {
+  REGULAR
+  GUARDIAN
+}
+
+enum BossMechanic {
+  OFFERING
+  HARMONIZATION
+  HUNT
+  EXPEDITION_MINION
+  COLLECTIVE_COLLECTION
+}
+
+enum BossCategory {
+  WORLD_GUARDIAN
+  TREASURE_GUARDIAN
+  CARD_PREDATOR
+  WORLD_INVADER
+}
+
+enum BossRunStatus {
+  SCHEDULED
+  ACTIVE
+  DEFEATED
+  EXPIRED
+  CANCELLED
+}
+
+enum MonetizationProvider {
+  STRIPE
+  DISCORD
+}
+
+enum PaymentOrderStatus {
+  PENDING
+  CHECKOUT_CREATED
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+  DISPUTED
+}
+
+enum PaymentWebhookStatus {
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
 model User {
-  id           String          @id @default(uuid())
-  discordId    String          @unique
-  username     String
-  avatarUrl    String?
-  isAdmin      Boolean         @default(false)
-  level        Int             @default(1)
-  xp           Int             @default(0)
-  credits      Int             @default(0)
-  fragments    Int             @default(0)
-  lastManualSpawnAt DateTime?
-  spawnCharges Int             @default(4)
-  lastSpawnChargeRegenAt DateTime?
-  lastDailyRewardAt DateTime?
-  createdAt    DateTime        @default(now())
-  inventory    InventoryItem[]
-  fragmentBalances FragmentBalance[]
-  boosters     Booster?
-  userBoosters UserBooster[]
-  captureLogs  CaptureLog[]
-  spawnLogs    SpawnLog[]      @relation("SpawnRequestedBy")
-  capturedSpawnLogs SpawnLog[] @relation("SpawnCapturedBy")
-  spawnChargeLogs SpawnChargeLog[]
-  transactionLogs TransactionLog[]
-  economyLogs  EconomyLog[]
+  id                     String                  @id @default(uuid())
+  discordId              String                  @unique
+  username               String
+  avatarUrl              String?
+  isAdmin                Boolean                 @default(false)
+  level                  Int                     @default(1)
+  xp                     Int                     @default(0)
+  credits                Int                     @default(0)
+  fragments              Int                     @default(0)
+  explorationCharges     Int                     @default(4)
+  explorationRegenAt     DateTime?
+  unlimitedExplorations  Boolean                 @default(false)
+  lastDailyRewardAt      DateTime?
+  createdAt              DateTime                @default(now())
+  inventory              InventoryItem[]
+  fragmentBalances       FragmentBalance[]
+  boosters               Booster?
+  userBoosters           UserBooster[]
+  captureLogs            CaptureLog[]
+  transactionLogs        TransactionLog[]
+  economyLogs            EconomyLog[]
   collectionRewardClaims CollectionRewardClaim[]
-  tradesAsOne  Trade[]         @relation("TradeUser1")
-  tradesAsTwo  Trade[]         @relation("TradeUser2")
-  tradeItems   TradeItem[]
-  adminLogs    AdminLog[]
+  tradesAsOne            Trade[]                 @relation("TradeUser1")
+  tradesAsTwo            Trade[]                 @relation("TradeUser2")
+  tradeItems             TradeItem[]
+  adminLogs              AdminLog[]
+  balanceVersion         Int                     @default(0)
+  guildMemberships       GuildMember[]
+  progress               UserProgress?
+  captureAttempts        CaptureAttempt[]
+  ledgerEntries          EconomicLedgerEntry[]
+  items                  UserItem[]
+  activeItemEffects      UserItemEffect[]
+  equippedArtifacts      EquippedArtifact[]
+  dailyQuests            UserDailyQuest[]
+  achievements           UserAchievement[]
+  achievementBadges      AchievementBadgeSelection[]
+  levelRoleSync          UserLevelRoleSync?
+  skills                 UserSkill[]
+  skillState             UserSkillState?
+  bossContributions      BossContribution[]
+  bossPresentedResources BossPresentedResource[]
+  bossRewardGrants       BossRewardGrant[]
+  launchedEncounters     Encounter[]             @relation("EncounterInitiator")
+  gameplayState          UserGameplayState?
+  archivedCards          ArchivedCard[]
+  explorationEvents      ExplorationEventCompletion[]
+  collectionContracts    CollectionContract[]        @relation("ContractRequester")
+  fulfilledContracts     CollectionContract[]        @relation("ContractFulfiller")
+  paymentCustomers       PaymentCustomer[]
+  paymentOrders          PaymentOrder[]
+  entitlements           UserEntitlement[]
 }
 
 model Deck {
   id                     String                  @id @default(uuid())
   name                   String                  @unique
+  contentKey             String?                 @unique
+  worldId                String?
+  status                 ContentStatus           @default(DRAFT)
+  isActive               Boolean                 @default(true)
+  retiredAt              DateTime?
+  world                  WorldDefinition?        @relation(fields: [worldId], references: [id])
   cards                  Card[]
+  zones                  ZoneDeck[]
   collectionRewardClaims CollectionRewardClaim[]
+
+  @@index([worldId, status])
 }
 
 model Rarity {
-  id        String @id @default(uuid())
-  name      String @unique
-  weight    Int
-  catchRate Float  @default(1.0)
-  cards     Card[]
+  id               String            @id @default(uuid())
+  name             String            @unique
+  weight           Int
+  catchRate        Float             @default(1.0)
+  cards            Card[]
   fragmentBalances FragmentBalance[]
 }
 
@@ -119,113 +304,76 @@ model FragmentBalance {
 }
 
 model Card {
-  id          String          @id @default(uuid())
-  name        String          @unique
-  deckId      String
-  rarityId    String
-  imageUrl    String?
-  description String?
-  acceptedNames Json?
-  spawnEnabled Boolean         @default(true)
-  blacklistReason String?
-  releaseYear Int?
-  rarityScore Int?
-  rarityFactors Json?
-  xpReward    Int
-  dropRate    Float
-  source      String?         @default("manual")
-  sourceId    String?
-  category    String?
-  variant     String          @default("normal")
-  deck        Deck            @relation(fields: [deckId], references: [id])
-  rarity      Rarity          @relation(fields: [rarityId], references: [id])
-  inventory   InventoryItem[]
-  tradeItems  TradeItem[]
-  captures    CaptureLog[]
-  spawnLogs   SpawnLog[]
+  id              String          @id @default(uuid())
+  name            String
+  deckId          String
+  rarityId        String
+  imageUrl        String?
+  description     String?
+  metadata        Json?
+  acceptedNames   Json?
+  releaseYear     Int?
+  rarityScore     Int?
+  rarityFactors   Json?
+  xpReward        Int
+  dropRate        Float
+  source          String          @default("vault")
+  sourceId        String?
+  contentKey      String?         @unique
+  category        String?
+  variant         String          @default("normal")
+  status          ContentStatus   @default(DRAFT)
+  isActive        Boolean         @default(true)
+  retiredAt       DateTime?
+  licenseStatus   String?
+  licenseProofUrl String?
+  deck            Deck            @relation(fields: [deckId], references: [id])
+  rarity          Rarity          @relation(fields: [rarityId], references: [id])
+  inventory       InventoryItem[]
+  tradeItems      TradeItem[]
+  captures        CaptureLog[]
+  encounters      Encounter[]
+  collectionContracts CollectionContract[]
 
+  @@unique([deckId, name])
   @@index([source])
   @@index([sourceId])
   @@index([category])
 }
 
-model MovieImportBlacklist {
-  id        String   @id @default(uuid())
-  deck      String
-  source    String
-  sourceId  String   @unique
-  displayName String
-  reason    String
-  payload   Json?
-  createdAt DateTime @default(now())
-
-  @@index([deck, reason])
-  @@index([source])
-}
-
-model SpawnLog {
-  id           String      @id @default(uuid())
-  userId       String?
-  spawnType    SpawnType
-  cardId       String
-  channelId    String
-  status       SpawnStatus @default(active)
-  createdAt    DateTime    @default(now())
-  capturedAt   DateTime?
-  capturedById String?
-  requester    User?       @relation("SpawnRequestedBy", fields: [userId], references: [id])
-  card         Card        @relation(fields: [cardId], references: [id])
-  capturedBy   User?       @relation("SpawnCapturedBy", fields: [capturedById], references: [id])
-
-  @@index([channelId, status])
-  @@index([status])
-  @@index([createdAt])
-}
-
-model SpawnChargeLog {
-  id            String   @id @default(uuid())
-  userId        String
-  action        String
-  amount        Int
-  chargesBefore Int
-  chargesAfter  Int
-  createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id])
-
-  @@index([userId, createdAt])
-}
-
 model InventoryItem {
-  id       String @id @default(uuid())
+  id       String      @id @default(uuid())
   userId   String
   cardId   String
   variant  CardVariant @default(normal)
-  quantity Int    @default(0)
-  user     User   @relation(fields: [userId], references: [id])
-  card     Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  quantity Int         @default(0)
+  version  Int         @default(0)
+  user     User        @relation(fields: [userId], references: [id])
+  card     Card        @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  archive  ArchivedCard?
 
   @@unique([userId, cardId, variant])
   @@index([userId, cardId])
 }
 
 model Booster {
-  id       String @id @default(uuid())
-  userId   String @unique
-  quantity Int    @default(0)
-  basicQuantity Int @default(0)
-  rareQuantity Int @default(0)
-  epicQuantity Int @default(0)
-  user     User   @relation(fields: [userId], references: [id])
+  id            String @id @default(uuid())
+  userId        String @unique
+  quantity      Int    @default(0)
+  basicQuantity Int    @default(0)
+  rareQuantity  Int    @default(0)
+  epicQuantity  Int    @default(0)
+  user          User   @relation(fields: [userId], references: [id])
 }
 
 model UserBooster {
-  id          String     @id @default(uuid())
+  id          String      @id @default(uuid())
   userId      String
   boosterType BoosterTier
-  quantity    Int        @default(0)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  user        User       @relation(fields: [userId], references: [id])
+  quantity    Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  user        User        @relation(fields: [userId], references: [id])
 
   @@unique([userId, boosterType])
   @@index([userId])
@@ -243,22 +391,27 @@ model Trade {
   user2Confirm Boolean     @default(false)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  completedAt  DateTime?
+  version      Int         @default(0)
+  executionKey String?     @unique
   user1        User        @relation("TradeUser1", fields: [user1Id], references: [id])
   user2        User        @relation("TradeUser2", fields: [user2Id], references: [id])
   items        TradeItem[]
+
+  @@index([status, expiresAt])
 }
 
 model TradeItem {
-  id       String @id @default(uuid())
-  tradeId  String
-  userId   String
-  cardId   String?
+  id          String       @id @default(uuid())
+  tradeId     String
+  userId      String
+  cardId      String?
   boosterType BoosterTier?
-  variant  CardVariant @default(normal)
-  quantity Int
-  trade    Trade  @relation(fields: [tradeId], references: [id])
-  user     User   @relation(fields: [userId], references: [id])
-  card     Card?  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  variant     CardVariant  @default(normal)
+  quantity    Int
+  trade       Trade        @relation(fields: [tradeId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  card        Card?        @relation(fields: [cardId], references: [id], onDelete: Cascade)
 }
 
 model CaptureLog {
@@ -307,6 +460,84 @@ model EconomyLog {
   @@index([userId, createdAt])
 }
 
+model PaymentCustomer {
+  id                 String               @id @default(uuid())
+  userId             String
+  provider           MonetizationProvider
+  providerCustomerId String               @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([provider, updatedAt])
+}
+
+model PaymentOrder {
+  id                         String               @id @default(uuid())
+  userId                     String
+  provider                   MonetizationProvider
+  productKey                 String
+  status                     PaymentOrderStatus   @default(PENDING)
+  amountCents                Int
+  currency                   String               @default("eur")
+  providerCheckoutId         String?
+  providerPaymentId          String?
+  providerCustomerId         String?
+  providerEntitlementId      String?
+  creditsGranted             Int                  @default(0)
+  creditsGrantedAt           DateTime?
+  withdrawalWaiverAcceptedAt DateTime?
+  failureCode                String?
+  metadata                   Json?
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+  user                       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerCheckoutId])
+  @@unique([provider, providerEntitlementId])
+  @@index([userId, createdAt])
+  @@index([provider, status, createdAt])
+  @@index([provider, providerPaymentId])
+}
+
+model UserEntitlement {
+  id                 String               @id @default(uuid())
+  userId             String
+  provider           MonetizationProvider
+  providerExternalId String
+  productKey         String
+  active             Boolean              @default(true)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  lastVerifiedAt     DateTime              @default(now())
+  deletedAt          DateTime?
+  metadata           Json?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerExternalId])
+  @@index([userId, active, endsAt])
+  @@index([productKey, active, endsAt])
+}
+
+model PaymentWebhookEvent {
+  id              String                @id @default(uuid())
+  provider        MonetizationProvider
+  providerEventId String
+  eventType       String
+  status          PaymentWebhookStatus  @default(PROCESSING)
+  attempts        Int                   @default(1)
+  lastError       String?
+  processedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([provider, providerEventId])
+  @@index([status, updatedAt])
+}
+
 model CollectionRewardClaim {
   id        String   @id @default(uuid())
   userId    String
@@ -329,85 +560,882 @@ model ImageAsset {
 }
 
 model ImportJob {
-  id          String       @id @default(uuid())
-  sourceUrl   String
-  imageCredit String?
-  status      ImportStatus @default(pending)
+  id           String       @id @default(uuid())
+  sourceUrl    String
+  imageCredit  String?
+  status       ImportStatus @default(pending)
   imageAssetId String?
-  error       String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  error        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }
 
 model AppConfig {
-  id             String @id @default("default")
-  spawnIntervalS Int    @default(300)
-  captureCooldownS Int  @default(5)
-  spawnChannelId String?
-  forceSpawnRequestedAt DateTime?
-  forceSpawnCardId String?
-  forceSpawnGuildId String?
-  autoSpawnEnabled Boolean @default(true)
-  autoSpawnIntervalMinutes Int @default(5)
-  manualSpawnEnabled Boolean @default(true)
-  manualSpawnCooldownMinutes Int @default(120)
-  manualSpawnMaxCharges Int @default(4)
-  manualSpawnRegenHours Int @default(6)
-  commonSellPrice Int @default(10)
-  uncommonSellPrice Int @default(20)
-  rareSellPrice Int @default(50)
-  veryRareSellPrice Int @default(100)
-  importSellPrice Int @default(200)
-  exoticSellPrice Int @default(500)
-  blackMarketSellPrice Int @default(1500)
-  commonRecyclePrice Int @default(5)
-  uncommonRecyclePrice Int @default(10)
-  rareRecyclePrice Int @default(25)
-  veryRareRecyclePrice Int @default(50)
-  importRecyclePrice Int @default(75)
-  exoticRecyclePrice Int @default(100)
-  blackMarketRecyclePrice Int @default(300)
-  commonFragmentReward Int @default(1)
-  uncommonFragmentReward Int @default(2)
-  rareFragmentReward Int @default(5)
-  veryRareFragmentReward Int @default(10)
-  importFragmentReward Int @default(15)
-  exoticFragmentReward Int @default(25)
-  blackMarketFragmentReward Int @default(75)
-  basicBoosterPrice Int @default(1000)
-  rareBoosterPrice Int @default(3000)
-  epicBoosterPrice Int @default(10000)
-  legendaryBoosterPrice Int @default(30000)
-  basicToRareJackpotRate Float @default(0.02)
-  basicToEpicJackpotRate Float @default(0.005)
-  basicToLegendaryJackpotRate Float @default(0.001)
-  rareToEpicJackpotRate Float @default(0.03)
-  rareToLegendaryJackpotRate Float @default(0.005)
-  epicToLegendaryJackpotRate Float @default(0.02)
-  normalVariantRate Float @default(0.94)
-  shinyVariantRate Float @default(0.05)
-  holoVariantRate Float @default(0.01)
-  scarcityFloor Float @default(0.5)
-  scarcityCap Float @default(3)
-  fusionEnabled Boolean @default(true)
-  boosterPrices Json?
-  basePricesByRarity Json?
-  jackpotRates Json?
-  variantRates Json?
-  craftBoosterFragmentCost Int @default(100)
-  dailyCreditMin Int @default(50)
-  dailyCreditMax Int @default(150)
-  dailyBoosterChance Float @default(0.15)
+  id                               String  @id @default("default")
+  commonSellPrice                  Int     @default(10)
+  uncommonSellPrice                Int     @default(20)
+  rareSellPrice                    Int     @default(50)
+  veryRareSellPrice                Int     @default(100)
+  importSellPrice                  Int     @default(200)
+  exoticSellPrice                  Int     @default(500)
+  blackMarketSellPrice             Int     @default(1500)
+  commonRecyclePrice               Int     @default(5)
+  uncommonRecyclePrice             Int     @default(10)
+  rareRecyclePrice                 Int     @default(25)
+  veryRareRecyclePrice             Int     @default(50)
+  importRecyclePrice               Int     @default(75)
+  exoticRecyclePrice               Int     @default(100)
+  blackMarketRecyclePrice          Int     @default(300)
+  commonFragmentReward             Int     @default(1)
+  uncommonFragmentReward           Int     @default(2)
+  rareFragmentReward               Int     @default(5)
+  veryRareFragmentReward           Int     @default(10)
+  importFragmentReward             Int     @default(15)
+  exoticFragmentReward             Int     @default(25)
+  blackMarketFragmentReward        Int     @default(75)
+  basicBoosterPrice                Int     @default(1000)
+  rareBoosterPrice                 Int     @default(3000)
+  epicBoosterPrice                 Int     @default(10000)
+  legendaryBoosterPrice            Int     @default(30000)
+  basicToRareJackpotRate           Float   @default(0.02)
+  basicToEpicJackpotRate           Float   @default(0.005)
+  basicToLegendaryJackpotRate      Float   @default(0.001)
+  rareToEpicJackpotRate            Float   @default(0.03)
+  rareToLegendaryJackpotRate       Float   @default(0.005)
+  epicToLegendaryJackpotRate       Float   @default(0.02)
+  normalVariantRate                Float   @default(0.989)
+  shinyVariantRate                 Float   @default(0.01)
+  holoVariantRate                  Float   @default(0.001)
+  scarcityFloor                    Float   @default(0.5)
+  scarcityCap                      Float   @default(3)
+  fusionEnabled                    Boolean @default(true)
+  boosterPrices                    Json?
+  basePricesByRarity               Json?
+  jackpotRates                     Json?
+  variantRates                     Json?
+  craftBoosterFragmentCost         Int     @default(100)
+  dailyCreditMin                   Int     @default(50)
+  dailyCreditMax                   Int     @default(150)
+  dailyBoosterChance               Float   @default(0.15)
+  captureConsumableDropRate        Float   @default(0.1)
+  captureConsumableCommonWeight    Int     @default(50)
+  captureConsumableUncommonWeight  Int     @default(30)
+  captureConsumableRareWeight      Int     @default(15)
+  captureConsumableEpicWeight      Int     @default(4)
+  captureConsumableLegendaryWeight Int     @default(1)
 }
 
-model BotGuildConfig {
-  guildId          String   @id
-  guildName        String
-  spawnChannelId   String?
-  isActive         Boolean  @default(true)
-  autoSpawnEnabled Boolean  @default(true)
-  autoSpawnIntervalMinutes Int @default(5)
-  allowedDecks     String[] @default([])
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model WorldDefinition {
+  id                 String               @id @default(uuid())
+  contentKey         String               @unique
+  name               String
+  position           Int
+  minLevel           Int                  @default(0)
+  status             ContentStatus        @default(DRAFT)
+  metadata           Json?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  zones              ZoneDefinition[]
+  decks              Deck[]
+  guildProgress      GuildProgress[]      @relation("FrontierWorld")
+  guildWorldProgress GuildWorldProgress[]
+  bosses             BossDefinition[]
+
+  @@unique([position])
+  @@index([status, position])
+}
+
+model ZoneDefinition {
+  id         String          @id @default(uuid())
+  contentKey String          @unique
+  worldId    String
+  name       String
+  position   Int
+  access     ZoneAccess
+  danger     DangerProfile
+  status     ContentStatus   @default(DRAFT)
+  metadata   Json?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  world      WorldDefinition @relation(fields: [worldId], references: [id])
+  decks      ZoneDeck[]
+  encounters Encounter[]
+
+  @@unique([worldId, position])
+  @@index([worldId, access, status])
+}
+
+model ZoneDeck {
+  id     String         @id @default(uuid())
+  zoneId String
+  deckId String
+  weight Int            @default(1)
+  zone   ZoneDefinition @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  deck   Deck           @relation(fields: [deckId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, deckId])
+  @@index([deckId])
+}
+
+model Guild {
+  id            String                @id @default(uuid())
+  discordId     String                @unique
+  name          String
+  isPrimary     Boolean               @default(false)
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  config        GuildConfiguration?
+  members       GuildMember[]
+  hubs          GuildHub[]
+  progress      GuildProgress?
+  worldProgress GuildWorldProgress[]
+  encounters    Encounter[]
+  ledgerEntries EconomicLedgerEntry[]
+  bossRuns      BossRun[]
+  collectionContracts CollectionContract[]
+  achievementBadgeRoles AchievementBadgeRole[]
+  levelRoles            GuildLevelRole[]
+
+  @@index([isActive])
+  @@index([isPrimary])
+}
+
+model GuildConfiguration {
+  guildId                  String   @id
+  gameChannelId            String?
+  hallOfFameChannelId      String?
+  hallOfFameEnabled        Boolean  @default(false)
+  progressionBossEnabled   Boolean  @default(true)
+  progressionBossWeekday   Int      @default(0)
+  progressionBossLocalTime String   @default("18:00")
+  regularBossEnabled       Boolean  @default(true)
+  adminRoleIds             String[] @default([])
+  timezone                 String   @default("Europe/Paris")
+  locale                   String   @default("fr")
+  premiumEnabled           Boolean  @default(false)
+  version                  Int      @default(0)
+  updatedAt                DateTime @updatedAt
+  guild                    Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+}
+
+model GuildMember {
+  id           String    @id @default(uuid())
+  guildId      String
+  userId       String
+  isActive     Boolean   @default(true)
+  joinedAt     DateTime  @default(now())
+  lastActiveAt DateTime?
+  guild        Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, userId])
+  @@index([userId, isActive])
+  @@index([guildId, lastActiveAt])
+}
+
+model UserProgress {
+  userId             String   @id
+  level              Int      @default(1)
+  xp                 Int      @default(0)
+  unspentSkillPoints Int      @default(0)
+  version            Int      @default(0)
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GuildProgress {
+  guildId            String             @id
+  state              GuildProgressState @default(PROGRESSING)
+  frontierWorldId    String?
+  mastery            Int                @default(0)
+  masteryTarget      Int                @default(0)
+  unlockedWorldCount Int                @default(1)
+  version            Int                @default(0)
+  updatedAt          DateTime           @updatedAt
+  guild              Guild              @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  frontierWorld      WorldDefinition?   @relation("FrontierWorld", fields: [frontierWorldId], references: [id])
+
+  @@index([state])
+}
+
+model GuildWorldProgress {
+  id          String             @id @default(uuid())
+  guildId     String
+  worldId     String
+  state       GuildProgressState @default(LOCKED)
+  mastery     Int                @default(0)
+  unlockedAt  DateTime?
+  completedAt DateTime?
+  version     Int                @default(0)
+  guild       Guild              @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  world       WorldDefinition    @relation(fields: [worldId], references: [id])
+
+  @@unique([guildId, worldId])
+  @@index([guildId, state])
+}
+
+model GuildHub {
+  id        String         @id @default(uuid())
+  guildId   String
+  channelId String
+  messageId String
+  status    GuildHubStatus @default(ACTIVE)
+  activeKey String?        @unique
+  revision  Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  guild     Guild          @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, messageId])
+  @@index([guildId, status])
+}
+
+model Encounter {
+  id                   String           @id @default(uuid())
+  guildId              String
+  zoneId               String
+  cardId               String
+  bossRunId            String?
+  initiatorUserId      String?
+  bossMinion           Boolean          @default(false)
+  tierIncenseTarget    String?
+  eventKey             String?
+  eventSpecial         Boolean          @default(false)
+  eventMetadata        Json?
+  channelId            String
+  messageId            String?
+  status               EncounterStatus  @default(SCHEDULED)
+  seedHash             String
+  opensAt              DateTime
+  closesAt             DateTime
+  initiatorResolvedAt  DateTime?
+  publishAfter         DateTime?
+  publicationClaimedAt DateTime?
+  publishedAt          DateTime?
+  resolvedAt           DateTime?
+  version              Int              @default(0)
+  createdAt            DateTime         @default(now())
+  guild                Guild            @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  zone                 ZoneDefinition   @relation(fields: [zoneId], references: [id])
+  card                 Card             @relation(fields: [cardId], references: [id])
+  bossRun              BossRun?         @relation(fields: [bossRunId], references: [id], onDelete: SetNull)
+  initiator            User?            @relation("EncounterInitiator", fields: [initiatorUserId], references: [id], onDelete: SetNull)
+  attempts             CaptureAttempt[]
+  eventCompletions     ExplorationEventCompletion[]
+
+  @@unique([guildId, messageId])
+  @@index([guildId, status, closesAt])
+  @@index([guildId, initiatorUserId, status, closesAt])
+  @@index([status, closesAt])
+  @@index([status, publishAfter, publishedAt])
+  @@index([bossRunId, bossMinion])
+}
+
+model CaptureAttempt {
+  id                     String                  @id @default(uuid())
+  encounterId            String
+  userId                 String
+  status                 CaptureAttemptStatus    @default(SUBMITTED)
+  answerCorrect          Boolean
+  preparation            String
+  progressionBonus       Int
+  targetPenalty          Int
+  chancePermille         Int
+  randomRollMillion      Int?
+  variant                CardVariant?
+  submittedAt            DateTime                @default(now())
+  resolvedAt             DateTime?
+  rewardEventId          String?                 @unique
+  encounter              Encounter               @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hallOfFameAnnouncement HallOfFameAnnouncement?
+
+  @@unique([encounterId, userId])
+  @@index([userId, submittedAt])
+  @@index([encounterId, status])
+}
+
+model HallOfFameAnnouncement {
+  id               String         @id @default(uuid())
+  captureAttemptId String         @unique
+  channelId        String
+  messageId        String?
+  status           String         @default("PENDING")
+  attempts         Int            @default(0)
+  lastError        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  captureAttempt   CaptureAttempt @relation(fields: [captureAttemptId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt])
+}
+
+model ActionCooldown {
+  id        String   @id @default(uuid())
+  scopeKey  String   @unique
+  action    String
+  userId    String?
+  guildId   String?
+  expiresAt DateTime
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([userId, action])
+  @@index([guildId, action])
+}
+
+model IdempotencyRecord {
+  id            String            @id @default(uuid())
+  scopeKey      String            @unique
+  scope         String
+  key           String
+  requestHash   String
+  status        IdempotencyStatus @default(IN_PROGRESS)
+  response      Json?
+  responseCode  Int?
+  errorCode     String?
+  correlationId String?
+  lockedUntil   DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([scope, key])
+  @@index([status, lockedUntil])
+  @@index([expiresAt])
+}
+
+model EconomicLedgerEntry {
+  id            String      @id @default(uuid())
+  userId        String?
+  guildId       String?
+  asset         LedgerAsset
+  assetKey      String?
+  delta         Int
+  balanceBefore Int
+  balanceAfter  Int
+  reason        String
+  referenceType String
+  referenceId   String
+  operationKey  String      @unique
+  correlationId String?
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+  user          User?       @relation(fields: [userId], references: [id])
+  guild         Guild?      @relation(fields: [guildId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([guildId, createdAt])
+  @@index([referenceType, referenceId])
+  @@index([asset, createdAt])
+}
+
+model OutboxEvent {
+  id            String         @id @default(uuid())
+  eventId       String         @unique
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  eventVersion  Int
+  payload       Json
+  correlationId String?
+  status        DeliveryStatus @default(PENDING)
+  attempts      Int            @default(0)
+  availableAt   DateTime       @default(now())
+  lockedAt      DateTime?
+  lockedBy      String?
+  publishedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime       @default(now())
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId, createdAt])
+}
+
+model ScheduledJob {
+  id          String             @id @default(uuid())
+  queue       String
+  type        String
+  dedupeKey   String             @unique
+  payload     Json
+  status      ScheduledJobStatus @default(PENDING)
+  runAt       DateTime
+  attempts    Int                @default(0)
+  maxAttempts Int                @default(8)
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  completedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([queue, status, runAt])
+  @@index([status, lockedAt])
+}
+
+model ItemDefinition {
+  id            String             @id @default(uuid())
+  contentKey    String             @unique
+  name          String
+  type          ItemType
+  effectKey     String?
+  effectParams  Json?
+  maxStack      Int                @default(1)
+  status        ContentStatus      @default(DRAFT)
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  users         UserItem[]
+  activeEffects UserItemEffect[]
+  equippedBy    EquippedArtifact[]
+}
+
+model UserItem {
+  id         String         @id @default(uuid())
+  userId     String
+  itemId     String
+  quantity   Int            @default(0)
+  version    Int            @default(0)
+  acquiredAt DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item       ItemDefinition @relation(fields: [itemId], references: [id])
+
+  @@unique([userId, itemId])
+  @@index([userId])
+}
+
+model UserItemEffect {
+  id            String         @id @default(uuid())
+  userId        String
+  itemId        String
+  effectKey     String
+  targetKey     String?
+  remainingUses Int            @default(1)
+  version       Int            @default(0)
+  activatedAt   DateTime       @default(now())
+  expiresAt     DateTime?
+  metadata      Json?
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item          ItemDefinition @relation(fields: [itemId], references: [id])
+
+  @@unique([userId, effectKey])
+  @@index([userId, remainingUses])
+  @@index([expiresAt])
+}
+
+model EquippedArtifact {
+  id         String         @id @default(uuid())
+  userId     String
+  itemId     String
+  slot       Int
+  equippedAt DateTime       @default(now())
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item       ItemDefinition @relation(fields: [itemId], references: [id])
+
+  @@unique([userId, slot])
+  @@unique([userId, itemId])
+}
+
+model SkillDefinition {
+  id             String        @id @default(uuid())
+  contentKey     String        @unique
+  name           String
+  description    String        @default("")
+  branch         SkillBranch
+  specialization String?
+  kind           SkillNodeKind @default(COMMON)
+  tier           Int
+  sortOrder      Int           @default(0)
+  cost           Int           @default(1)
+  maxRank        Int           @default(1)
+  prerequisites  Json?
+  effectKey      String
+  effectParams   Json
+  grantsItemKey  String?
+  metadata       Json?
+  status         ContentStatus @default(DRAFT)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  users          UserSkill[]
+
+  @@index([branch, sortOrder])
+}
+
+model UserSkill {
+  id         String          @id @default(uuid())
+  userId     String
+  skillId    String
+  rank       Int             @default(0)
+  unlockedAt DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill      SkillDefinition @relation(fields: [skillId], references: [id])
+
+  @@unique([userId, skillId])
+  @@index([userId])
+}
+
+model UserSkillState {
+  userId                  String       @id
+  committedBranch         SkillBranch?
+  committedSpecialization String?
+  commitmentRank          Int          @default(0)
+  resetCount              Int          @default(0)
+  version                 Int          @default(0)
+  updatedAt               DateTime     @updatedAt
+  user                    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model QuestDefinition {
+  id           String           @id @default(uuid())
+  contentKey   String           @unique
+  name         String
+  eventType    String
+  objectiveKey String
+  target       Int
+  minLevel     Int              @default(1)
+  maxLevel     Int?
+  reward       Json
+  metadata     Json?
+  status       ContentStatus    @default(DRAFT)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  assignments  UserDailyQuest[]
+
+  @@index([eventType, status])
+}
+
+model UserDailyQuest {
+  id                String                  @id @default(uuid())
+  userId            String
+  definitionId      String
+  dayKey            String
+  slot              Int
+  progress          Int                     @default(0)
+  targetSnapshot    Int
+  rewardSnapshot    Json
+  contextSnapshot   Json?
+  status            DailyQuestStatus        @default(ACTIVE)
+  expiresAt         DateTime
+  claimedAt         DateTime?
+  version           Int                     @default(0)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  definition        QuestDefinition         @relation(fields: [definitionId], references: [id])
+  eventApplications QuestEventApplication[]
+
+  @@unique([userId, dayKey, slot])
+  @@index([userId, status, expiresAt])
+  @@index([status, expiresAt])
+}
+
+model UserGameplayState {
+  userId                       String   @id
+  explorations                 Int      @default(0)
+  successfulExplorations       Int      @default(0)
+  captures                     Int      @default(0)
+  captureFailures              Int      @default(0)
+  sameTierFailureKey           String?
+  sameTierFailureCount         Int      @default(0)
+  rareMissStreak               Int      @default(0)
+  darkHuntMissStreak           Int      @default(0)
+  momentum                     Int      @default(0)
+  chainSuccesses               Int      @default(0)
+  transmutations               Int      @default(0)
+  dailyStateKey                String?
+  dailyState                   Json?
+  weeklyStateKey               String?
+  weeklyState                  Json?
+  wishlistDeckId               String?
+  counters                     Json?
+  version                      Int      @default(0)
+  updatedAt                    DateTime @updatedAt
+  user                         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([wishlistDeckId])
+}
+
+model CollectionContract {
+  id                String                   @id @default(uuid())
+  guildId           String
+  requesterUserId   String
+  fulfilledByUserId String?
+  cardId            String
+  type              CollectionContractType
+  status            CollectionContractStatus @default(OPEN)
+  rewardCredits     Int                      @default(0)
+  channelId         String?
+  messageId         String?
+  expiresAt         DateTime
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  version           Int                      @default(0)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  guild             Guild                    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  requester         User                     @relation("ContractRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  fulfilledBy       User?                    @relation("ContractFulfiller", fields: [fulfilledByUserId], references: [id], onDelete: SetNull)
+  card              Card                     @relation(fields: [cardId], references: [id], onDelete: Restrict)
+
+  @@index([guildId, status, createdAt])
+  @@index([requesterUserId, status])
+  @@index([fulfilledByUserId, completedAt])
+  @@index([status, expiresAt])
+  @@index([cardId, status])
+}
+
+model ArchivedCard {
+  id              String        @id @default(uuid())
+  userId          String
+  inventoryItemId String        @unique
+  slot            Int
+  pinned          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slot])
+  @@index([userId])
+}
+
+model ExplorationEventCompletion {
+  id          String    @id @default(uuid())
+  encounterId String
+  userId      String
+  eventKey    String
+  isSpecial   Boolean   @default(false)
+  succeeded   Boolean
+  reward      Json?
+  completedAt DateTime  @default(now())
+  encounter   Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([encounterId, userId])
+  @@index([userId, completedAt])
+  @@index([userId, isSpecial, completedAt])
+}
+
+model QuestEventApplication {
+  id          String         @id @default(uuid())
+  questId     String
+  eventId     String
+  progressKey String?
+  increment   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  quest       UserDailyQuest @relation(fields: [questId], references: [id], onDelete: Cascade)
+
+  @@unique([questId, eventId])
+  @@index([questId, progressKey])
+}
+
+model AchievementDefinition {
+  id           String            @id @default(uuid())
+  contentKey   String            @unique
+  name         String
+  eventType    String
+  objectiveKey String
+  target       Int
+  reward       Json?
+  metadata     Json?
+  hidden       Boolean           @default(false)
+  status       ContentStatus     @default(DRAFT)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  users        UserAchievement[]
+  badgeSelections AchievementBadgeSelection[]
+  badgeRoles      AchievementBadgeRole[]
+
+  @@index([eventType, status])
+}
+
+model UserAchievement {
+  id            String                @id @default(uuid())
+  userId        String
+  achievementId String
+  progress      Int                   @default(0)
+  unlockedAt    DateTime?
+  claimedAt     DateTime?
+  version       Int                   @default(0)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   AchievementDefinition @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+  @@index([userId, unlockedAt])
+}
+
+model AchievementBadgeSelection {
+  id            String                @id @default(uuid())
+  userId        String
+  achievementId String
+  selectedAt    DateTime              @default(now())
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   AchievementDefinition @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId, selectedAt])
+}
+
+model AchievementBadgeRole {
+  id            String                @id @default(uuid())
+  guildId       String
+  achievementId String
+  discordRoleId String                @unique
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  guild         Guild                 @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  achievement   AchievementDefinition @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, achievementId])
+  @@index([guildId])
+}
+
+model GuildLevelRole {
+  id            String   @id @default(uuid())
+  guildId       String
+  minLevel      Int
+  maxLevel      Int
+  discordRoleId String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  guild         Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, minLevel])
+  @@index([guildId, maxLevel])
+}
+
+model UserLevelRoleSync {
+  userId             String    @id
+  lastSyncedGuildDiscordId String?
+  lastSyncedMinLevel Int?
+  lastSyncedMaxLevel Int?
+  lastAttemptedAt    DateTime?
+  lastSyncedAt       DateTime?
+  lastError          String?
+  updatedAt          DateTime  @updatedAt
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lastAttemptedAt])
+}
+
+model BossDefinition {
+  id            String           @id @default(uuid())
+  contentKey    String           @unique
+  worldId       String?
+  name          String
+  kind          BossKind
+  baseTarget    Int
+  durationHours Int
+  reward        Json
+  metadata      Json?
+  status        ContentStatus    @default(DRAFT)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  world         WorldDefinition? @relation(fields: [worldId], references: [id])
+  runs          BossRun[]
+
+  @@index([kind, status])
+}
+
+model BossRun {
+  id                 String                  @id @default(uuid())
+  guildId            String
+  definitionId       String
+  slotKey            String
+  progressionKey     String?
+  category           BossCategory
+  mechanic           BossMechanic
+  status             BossRunStatus           @default(SCHEDULED)
+  targetSnapshot     Int
+  progress           Int                     @default(0)
+  activePlayers      Int
+  objectiveSnapshot  Json
+  rewardSnapshot     Json
+  channelId          String?
+  messageId          String?
+  scheduledAt        DateTime
+  startsAt           DateTime
+  endsAt             DateTime
+  defeatedAt         DateTime?
+  version            Int                     @default(0)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  guild              Guild                   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  definition         BossDefinition          @relation(fields: [definitionId], references: [id])
+  contributions      BossContribution[]
+  presentedResources BossPresentedResource[]
+  rewardGrants       BossRewardGrant[]
+  encounters         Encounter[]
+
+  @@unique([guildId, slotKey])
+  @@index([guildId, status])
+  @@index([status, startsAt, endsAt])
+}
+
+model BossContribution {
+  id           String   @id @default(uuid())
+  bossRunId    String
+  userId       String
+  operationKey String   @unique
+  type         String   @default("MANUAL")
+  resourceKey  String?
+  amount       Int
+  destructive  Boolean  @default(false)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  bossRun      BossRun  @relation(fields: [bossRunId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bossRunId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model BossPresentedResource {
+  id           String   @id @default(uuid())
+  bossRunId    String
+  userId       String
+  scopeKey     String   @unique
+  resourceKey  String
+  resourceType String
+  createdAt    DateTime @default(now())
+  bossRun      BossRun  @relation(fields: [bossRunId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bossRunId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model BossRewardGrant {
+  id        String   @id @default(uuid())
+  bossRunId String
+  userId    String
+  reward    Json
+  createdAt DateTime @default(now())
+  bossRun   BossRun  @relation(fields: [bossRunId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([bossRunId, userId])
+  @@index([userId, createdAt])
+}
+
+model FeatureFlag {
+  id        String   @id @default(uuid())
+  scopeKey  String   @unique
+  key       String
+  guildId   String?
+  enabled   Boolean  @default(false)
+  config    Json?
+  version   Int      @default(0)
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key, enabled])
+  @@index([guildId, key])
 }

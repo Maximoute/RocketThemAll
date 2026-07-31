@@ -1,10 +1,14 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../lib/auth";
 import { prisma } from "@rta/database";
+import { randomUUID } from "node:crypto";
+import { RecycleService } from "@rta/services";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getUserFragmentBalances } from "../../../../lib/fragments";
 import { getDynamicCardValue } from "../../../../lib/economy";
+import { requireUser } from "../../../../lib/guard";
+import { cardVariantImageUrl } from "../../../../lib/card-variant";
+
+const recycleService = new RecycleService();
 
 const RECYCLE_PRICE_KEYS = {
   Common: "commonRecyclePrice",
@@ -37,16 +41,13 @@ const RARITY_COLORS: Record<string, string> = {
   Limited: "#ffd700"
 };
 
-export default async function InventoryCardPage({ params }: { params: { itemId: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.name) {
-    redirect("/login");
-  }
-
-  const user = await prisma.user.findFirst({ where: { username: session.user.name } });
-  if (!user) {
-    return <section className="card">Utilisateur introuvable</section>;
-  }
+export default async function InventoryCardPage({
+  params: paramsPromise
+}: {
+  params: Promise<{ itemId: string }>;
+}) {
+  const params = await paramsPromise;
+  const user = await requireUser();
 
   const item = await prisma.inventoryItem.findFirst({
     where: { id: params.itemId, userId: user.id },
@@ -67,15 +68,7 @@ export default async function InventoryCardPage({ params }: { params: { itemId: 
   async function fragmentFromCardPage(formData: FormData) {
     "use server";
 
-    const actionSession = await getServerSession(authOptions);
-    if (!actionSession?.user?.name) {
-      redirect("/login");
-    }
-
-    const actionUser = await prisma.user.findFirst({ where: { username: actionSession.user.name } });
-    if (!actionUser) {
-      return;
-    }
+    const actionUser = await requireUser();
 
     const quantityRaw = Number(formData.get("quantity") ?? 1);
     const quantity = Number.isFinite(quantityRaw) ? Math.max(1, Math.floor(quantityRaw)) : 1;
@@ -90,45 +83,14 @@ export default async function InventoryCardPage({ params }: { params: { itemId: 
     }
 
     const safeQuantity = Math.min(quantity, currentItem.quantity);
-    const actionConfig = await prisma.appConfig.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
-    const actionRarity = currentItem.card.rarity.name as keyof typeof RECYCLE_PRICE_KEYS;
-    const actionUnitCredits = actionConfig[RECYCLE_PRICE_KEYS[actionRarity]] as number;
-    const actionUnitFragments = actionConfig[FRAGMENT_REWARD_KEYS[actionRarity]] as number;
-    const gainedCredits = actionUnitCredits * safeQuantity;
-    const gainedFragments = actionUnitFragments * safeQuantity;
-
-    await prisma.$transaction(async (tx) => {
-      if (currentItem.quantity === safeQuantity) {
-        await tx.inventoryItem.delete({ where: { id: currentItem.id } });
-      } else {
-        await tx.inventoryItem.update({ where: { id: currentItem.id }, data: { quantity: { decrement: safeQuantity } } });
-      }
-
-      await tx.user.update({
-        where: { id: actionUser.id },
-        data: { credits: { increment: gainedCredits }, fragments: { increment: gainedFragments } }
-      });
-
-      await tx.fragmentBalance.upsert({
-        where: { userId_rarityId: { userId: actionUser.id, rarityId: currentItem.card.rarityId } },
-        update: { quantity: { increment: gainedFragments } },
-        create: { userId: actionUser.id, rarityId: currentItem.card.rarityId, quantity: gainedFragments }
-      });
-
-      await tx.transactionLog.create({
-        data: {
-          userId: actionUser.id,
-          type: "recycle",
-          amount: gainedCredits,
-          metadata: {
-            cardId: currentItem.cardId,
-            quantity: safeQuantity,
-            fragments: gainedFragments,
-            source: "inventory_web_card_page"
-          }
-        }
-      });
-    });
+    await recycleService.recycleCard(
+      actionUser.id,
+      currentItem.cardId,
+      safeQuantity,
+      `web-card-${randomUUID()}`,
+      currentItem.variant,
+      { confirmedLastCopy: formData.get("confirmedLastCopy") === "yes" }
+    );
 
     revalidatePath("/inventory");
     revalidatePath(`/inventory/card/${params.itemId}`);
@@ -136,6 +98,7 @@ export default async function InventoryCardPage({ params }: { params: { itemId: 
   }
 
   const rarityColor = RARITY_COLORS[item.card.rarity.name] ?? "#333";
+  const variantImageUrl = cardVariantImageUrl(item.card.imageUrl, item.variant);
 
   return (
     <section className="card" style={{ maxWidth: "760px", margin: "0 auto" }}>
@@ -144,10 +107,10 @@ export default async function InventoryCardPage({ params }: { params: { itemId: 
       </a>
 
       <div style={{ display: "flex", gap: "1rem", marginTop: "1rem", flexWrap: "wrap" }}>
-        {item.card.imageUrl && (
+        {variantImageUrl && (
           <img
-            src={item.card.imageUrl}
-            alt={item.card.name}
+            src={variantImageUrl}
+            alt={`${item.card.name} ${item.variant}`}
             style={{ width: "220px", height: "300px", objectFit: "cover", borderRadius: "10px", boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}
           />
         )}
@@ -174,6 +137,12 @@ export default async function InventoryCardPage({ params }: { params: { itemId: 
           <form action={fragmentFromCardPage} style={{ display: "grid", gap: "0.6rem", maxWidth: "240px", marginTop: "0.8rem" }}>
             <label htmlFor="quantity">Quantité à fragmenter</label>
             <input id="quantity" name="quantity" type="number" min={1} max={item.quantity} defaultValue={1} />
+            {item.quantity === 1 && (
+              <label>
+                <input type="checkbox" name="confirmedLastCopy" value="yes" required />{" "}
+                Je confirme retirer mon dernier exemplaire
+              </label>
+            )}
             <button type="submit">Fragmenter cette carte</button>
           </form>
         </div>

@@ -1,292 +1,151 @@
-# RocketThemAll - Discord Card Collector Monorepo
+# Rocket Them All
 
-Projet full-stack TypeScript pour un bot Discord de collection de cartes avec application web utilisateur/admin, API backend, PostgreSQL, Prisma et stockage S3 compatible (MinIO local).
+Rocket Them All (RTA) est un jeu de collection et de progression piloté par Discord, avec site joueur/admin, API, worker persistant, PostgreSQL et stockage S3 compatible.
 
-## Stack
-
-- TypeScript
-- Node.js
-- Discord.js
-- Next.js
-- NextAuth (Discord OAuth2)
-- PostgreSQL
-- Prisma ORM
-- Docker + Docker Compose
-- MinIO (S3 compatible)
-- Vitest
+Le dépôt est un monorepo npm TypeScript. Les règles métier déterministes vivent dans un moteur indépendant; les mutations économiques passent par des transactions, un ledger, des clés d’idempotence et une outbox.
 
 ## Architecture
 
-```txt
+```text
 apps/
-	bot/
-	web/
-	api/
-
+  api/          API Express, santé et administration interne
+  bot/          commandes et interactions Discord
+  web/          application Next.js et OAuth Discord
+  worker/       jobs planifiés et publication de l’outbox
 packages/
-	database/
-	services/
-	shared/
-
-docker/
-	postgres/
-	minio/
-
-.env.example
-docker-compose.yml
-README.md
+  auth/         gardes API, Discord et web
+  database/     schéma, migrations et client Prisma
+  game-engine/  règles pures, probabilités et progression
+  services/     cas d’usage transactionnels
+  shared/       constantes et types partagés
+docs/
+  ai-context/   contexte produit et technique persistant
+  audit/        inventaires et rapports générés
 ```
 
-## Fonctionnalites cle
+## Prérequis
 
-- Bot Discord:
-	- /capture <nom>
-	- /inventory
-	- /profile
-	- /cardinfo <nom>
-	- /leaderboard
-	- /booster open
-	- /trade start @user
-	- /trade add <trade_id> <carte>
-	- /trade remove <trade_id> <carte>
-	- /trade confirm <trade_id>
-	- /trade cancel <trade_id>
-- Spawn automatique dans un salon Discord
-- XP/level avec formule: xpRequired = floor(100 * level^1.5)
-- Boosters (3 Common, 1 Uncommon, 1 Rare+)
-- Trade securise avec double confirmation + expiration + logs
-- Web app utilisateur:
-	- /login
-	- /profile
-	- /inventory
-	- /collection
-	- /trades
-- Web app admin:
-	- /admin
-	- /admin/cards
-	- /admin/users
-	- /admin/inventories
-	- /admin/logs
-	- /admin/imports
-	- /admin/config
-- Import image semi-auto depuis URL vers MinIO + workflow ImportJob
+- Node.js 22.17.1 ou une version Node 22 compatible;
+- npm avec support des workspaces;
+- PostgreSQL 16;
+- un stockage S3 compatible, MinIO en local;
+- Docker Compose pour la stack conteneurisée.
 
-## Variables d'environnement
-
-Copier .env.example vers .env et remplir:
-
-```env
-DISCORD_TOKEN=
-DISCORD_CLIENT_ID=
-DISCORD_CLIENT_SECRET=
-DISCORD_GUILD_ID=
-DISCORD_SPAWN_CHANNEL_ID=
-ADMIN_ROLE_ID=
-
-DATABASE_URL=postgresql://collector:collector@postgres:5432/collector
-
-S3_ENDPOINT=http://minio:9000
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=minioadmin
-S3_BUCKET=card-images
-S3_PUBLIC_URL=http://localhost:9000/card-images
-
-NEXTAUTH_SECRET=
-NEXTAUTH_URL=http://localhost:3000
-API_BASE_URL=http://api:4000
-```
-
-## Setup Discord Bot
-
-1. Creer une application Discord Developer Portal.
-2. Activer bot + OAuth2.
-3. Recuperer:
-	 - DISCORD_TOKEN
-	 - DISCORD_CLIENT_ID
-	 - DISCORD_CLIENT_SECRET
-	 - DISCORD_GUILD_ID
-	 - DISCORD_SPAWN_CHANNEL_ID
-4. Inviter le bot avec scope bot + applications.commands.
-
-## Setup OAuth Discord (NextAuth)
-
-1. Dans OAuth2 redirect URI Discord, ajouter:
-	 - http://localhost:3000/api/auth/callback/discord
-2. Renseigner DISCORD_CLIENT_ID et DISCORD_CLIENT_SECRET.
-3. Definir NEXTAUTH_SECRET et NEXTAUTH_URL.
-
-## Lancement Docker
+## Installation locale
 
 ```bash
-docker compose up -d postgres minio minio-init
-```
-
-Ou lancer toute la stack:
-
-```bash
-docker compose up
-```
-
-### Reverse proxy Nginx
-
-Après ajout de Nginx, le site principal est exposé sur `http://localhost`.
-
-- Frontend web : http://localhost/
-- WordPress : http://localhost/blog/
-- API interne : http://localhost/api/
-
-Le service `web` tourne toujours sur `web:3000` en interne, mais l’accès externe passe par Nginx.
-
-## Installation & Prisma
-
-```bash
-npm install
+cp .env.example .env
+npm ci
 npm run prisma:generate
-npm run prisma:migrate
-npm run prisma:seed
+npm run prisma:migrate:deploy
+npm run dev
 ```
 
-## Lancement projet
+Sous PowerShell, utiliser `Copy-Item .env.example .env`.
 
-Terminal 1 (API):
+`npm run dev` compile d’abord les packages puis lance API, bot, worker et web en parallèle. Le bot exige un `DISCORD_TOKEN` valide. Pour ne lancer qu’un composant:
 
 ```bash
 npm run -w @rta/api dev
-```
-
-Terminal 2 (BOT):
-
-```bash
 npm run -w @rta/bot dev
-```
-
-Terminal 3 (WEB):
-
-```bash
+npm run -w @rta/worker dev
 npm run -w @rta/web dev
 ```
 
-## 🎮 Import Pokémon (1000+ cartes)
+Le catalogue `Vault-RTA` est l’unique source de cartes. Il contient exactement 810 cartes publiées et remplace intégralement le contenu présent lors de chaque import avec `RTA_REPLACE_CARDS=true`.
 
-### Option 1 : Auto-Import au Démarrage (Recommandé)
-
-L'API vérifie automatiquement si les Pokémon sont importés. Si la BD est vide, l'import se lance tout seul :
+## Contrôles
 
 ```bash
-docker-compose up -d
-# L'API détecte que la BD est vide
-# ✅ Lance automatiquement l'import de 1000+ Pokémon + variantes Shiny
-# ⏳ ~5-15 minutes
-# ✅ API ready après import
+npm run lint
+npm test
+npm run prisma:validate
+npm run validate:context
+npm run build
+npm audit --audit-level=high
 ```
 
-### Option 2 : Import Manuel via API
+La commande agrégée est:
 
 ```bash
-# Importer TOUS les Pokémon (1000+) + Shiny variants
-curl -X POST http://localhost:4000/admin/init-pokemon
-
-# Response:
-# {
-#   "success": true,
-#   "count": 1234,
-#   "message": "Pokémon initialization complete! 1234 cards imported."
-# }
+npm run check
 ```
 
-### Option 3 : Import via CLI
+L’audit complet du vault source se relance lorsque `Vault-RTA` est disponible à côté du dépôt:
 
 ```bash
-npm run init:pokemon
-# ou
-pnpm ts-node scripts/init-pokemon.ts
+npm run audit:vault
 ```
 
-### Ce qui est Importé
+Il régénère l’index machine, le résumé et l’inventaire de contenu. Le contrôle CI `validate:context` ne dépend pas du vault externe et vérifie les artefacts versionnés.
 
-✅ **Tous les Pokémon** (1000+ depuis PokéAPI)
-✅ **Noms Français** (Salamèche, Dracaufeu, etc. avec accents)
-✅ **Variantes Shiny** (✨ Shiny - beaucoup plus rares)
-✅ **Images Officielles** (depuis GitHub et PokéAPI)
-✅ **Rareté Intelligente** :
-  - Légendaires → Black Market
-  - Starters → Rare
-  - Pikachu → Very Rare
-  - Shiny → Exotic/Black Market
-✅ **Déduplication** (pas de doublons si redémarrage)
+## Base de données
 
-### Timeline Déploiement
-
-```
-docker-compose up -d
-    ↓ (30s)
-PostgreSQL ready
-    ↓
-API startup
-    ↓
-✅ Check: Pokémon in DB? → NON
-    ↓
-🚀 AUTO-IMPORT LANCÉ
-    ├─ Fetch 1000+ Pokémon
-    ├─ + Variantes Shiny
-    ├─ Noms français
-    └─ Insert en BD
-    ↓ (5-15 min selon Internet)
-✅ 1000-1500 cartes importées
-✅ API listening on 4000
-```
-
-### Variables d'Environnement (Optionnelles)
-
-```env
-# Pour importer aussi les films depuis TMDB
-TMDB_API_KEY=your_key_here
-
-# Pour importer aussi les jeux vidéo depuis RAWG
-RAWG_API_KEY=your_key_here
-```
-
-## API Backend
-
-Routes principales:
-
-- GET /cards
-- POST /cards
-- PATCH /cards/:id
-- DELETE /cards/:id
-- GET /users
-- GET /users/:id/inventory
-- PATCH /users/:id/inventory
-- POST /trades
-- PATCH /trades/:id
-- POST /images/upload
-- POST /images/import-url
-- GET /logs
-- GET /config
-- PATCH /config
-- **POST /admin/init-pokemon** ← Import 1000+ Pokémon
-
-Toute la logique metier reside dans packages/services.
-
-## Tests
+Le schéma est dans `packages/database/prisma/schema.prisma`.
 
 ```bash
-npm run test
+npm run prisma:generate
+npm run prisma:migrate:deploy
+npm run prisma:seed
 ```
 
-Couverture incluse:
+En production, utiliser uniquement `migrate deploy`. Ne pas utiliser `migrate dev`. Le replay des migrations et leur plan doivent être testés sur une copie représentative avant mise en production.
 
-- XP
-- Level
-- Booster
-- Trade
-- Capture
-- Inventaire
+## Docker de production
 
-## Notes de scalabilite
+Préparer les secrets:
 
-- Monorepo decouple apps et logique metier
-- Services metier centralises dans packages/services
-- Prisma pour coherence transactionnelle
-- Structure prete pour workers/files de jobs
-- Logs centralises (CaptureLog/AdminLog)
+```bash
+cp .env.production.example .env.production
+```
+
+Construire et démarrer:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml build
+docker compose --env-file .env.production -f docker-compose.production.yml up -d
+```
+
+La composition:
+
+- attend PostgreSQL et MinIO;
+- exécute les migrations une seule fois;
+- démarre API, worker, bot et web sans installation au démarrage;
+- utilise des conteneurs applicatifs non-root et en lecture seule;
+- expose Nginx sur `HTTP_PORT`, 8080 par défaut;
+- ne contient ni WordPress ni MySQL.
+
+Le fichier `docker-compose.yml` historique reste réservé au développement.
+
+## Santé et exploitation
+
+- `GET /health/live`: processus API actif;
+- `GET /health/ready`: connexion PostgreSQL utilisable;
+- les logs API/worker sont structurés en JSON;
+- `BUILD_SHA` identifie la version;
+- `TRUST_PROXY_HOPS=1` est prévu derrière le Nginx fourni;
+- les jobs et événements sont loués avec `FOR UPDATE SKIP LOCKED`, reprise de lease et backoff.
+
+L’outbox est durable. Son adaptateur actuel publie dans les logs structurés; brancher le transport externe retenu avant d’annoncer une livraison Discord ou broker garantie.
+
+## Sécurité
+
+- l’identité web utilise l’UUID interne, distinct du Discord ID et du nom;
+- les droits admin sont rechargés depuis PostgreSQL;
+- les mutations économiques critiques sont conditionnelles, journalisées et idempotentes;
+- les médias proviennent uniquement du Vault et sont synchronisés vers le stockage S3 dédié;
+- l’API borne les corps, le débit, les proxys de confiance et les logs sensibles;
+- aucun secret réel ne doit être versionné.
+
+## Documentation de référence
+
+Commencer par:
+
+- `docs/ai-context/PROJECT_OVERVIEW.md`;
+- `docs/ai-context/TECHNICAL_ARCHITECTURE.md`;
+- `docs/ai-context/CONFLICTS_AND_DECISIONS.md`;
+- `docs/ai-context/TRACEABILITY_MATRIX.md`;
+- `docs/ai-context/PROGRESS.md`;
+- `docs/ai-context/DEPLOYMENT_GUIDE.md`.
+
+Les décisions non confirmées restent recensées dans `OPEN_QUESTIONS.md`; elles ne doivent pas être transformées silencieusement en règles de production.

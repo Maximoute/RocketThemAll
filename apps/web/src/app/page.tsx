@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@rta/database";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const [cardCount, userCount] = await Promise.all([
     prisma.inventoryItem.aggregate({ _sum: { quantity: true } }).catch(() => ({ _sum: { quantity: 0 } })),
@@ -52,8 +54,9 @@ export default async function HomePage() {
         {[
           { href: "/profile",   emoji: "👤", title: "Profil",     desc: "Niveau, XP, historique" },
           { href: "/inventory", emoji: "🃏", title: "Inventaire", desc: "Tes cartes collectées"  },
-          { href: "/shop",      emoji: "🛒", title: "Boutique",   desc: "Achète des boosters"    },
-          { href: "/trades",    emoji: "🔄", title: "Trades",     desc: "Échange avec d'autres"  },
+          { href: "/shop",      emoji: "🛒", title: "Boutique crédits", desc: "Objets, offrandes et boosters" },
+          { href: "/shop?section=premium", emoji: "💳", title: "Boutique €", desc: "VIP, Fondateur et packs de crédits" },
+          { href: "/skills", emoji: "🌳", title: "Compétences", desc: "Tes trois arbres de progression" },
         ].map(({ href, emoji, title, desc }) => (
           <Link key={href} href={href} className="bg-rta-surface border border-rta-border rounded-xl p-5 flex items-center gap-4 hover:border-rta-accentHi hover:bg-rta-surface2 transition-colors group">
             <span className="text-3xl">{emoji}</span>

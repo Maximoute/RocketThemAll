@@ -2,35 +2,45 @@
   "name": "rocket-them-all",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run -ws build",
-    "dev": "npm run -ws dev",
-    "test": "npm run -w @rta/services test",
-    "lint": "npm run -ws lint",
+    "clean": "node scripts/clean-generated.mjs",
+    "build": "npm run clean && npm run build:packages && npm run build:apps",
+    "build:packages": "npm run -w @rta/shared build && npm run -w @rta/game-engine build && npm run -w @rta/database prisma:generate && npm run -w @rta/database build && npm run -w @rta/auth build && npm run -w @rta/services build",
+    "build:apps": "npm run -w @rta/api build && npm run -w @rta/bot build && npm run -w @rta/worker build && npm run -w @rta/web build",
+    "dev": "npm run build:packages && concurrently -k -n api,bot,worker,web \"npm run -w @rta/api dev\" \"npm run -w @rta/bot dev\" \"npm run -w @rta/worker dev\" \"npm run -w @rta/web dev\"",
+    "test": "npm run -ws --if-present test",
+    "test:engine": "npm run -w @rta/game-engine test",
+    "lint": "npm run build:packages && npm run lint:workspaces",
+    "lint:workspaces": "npm run -ws lint",
     "prisma:generate": "npm run -w @rta/database prisma:generate",
+    "prisma:validate": "node scripts/prisma-validate.mjs",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema packages/database/prisma/schema.prisma",
     "prisma:migrate": "npm run -w @rta/database prisma:migrate",
     "prisma:seed": "npm run -w @rta/database prisma:seed",
-    "init:pokemon": "tsx scripts/init-pokemon.ts",
-    "import:pop": "tsx scripts/import-pop.ts",
-    "import:pop:movies": "tsx scripts/import-pop-movies.ts",
-    "import:pop:anime": "tsx scripts/import-pop-anime.ts",
-    "import:pop:games": "tsx scripts/import-pop-games.ts",
-    "import:rocket-league:items": "tsx scripts/import-rocket-league-items.ts",
-    "import:cinema:films": "tsx scripts/import-cinema-films.ts",
-    "import:pop:manual": "tsx scripts/import-pop-manual.ts",
-    "import:pop:all": "tsx scripts/import-pop-all.ts",
-    "import:no-rocket-league": "tsx scripts/import-db-no-rocket-league.ts",
+    "import:vault": "npm run -w @rta/database prisma:import-vault",
+    "audit:vault": "node scripts/audit-vault.mjs",
+    "validate:context": "node scripts/validate-context.mjs",
+    "check": "npm run lint && npm test && npm run prisma:validate && npm run validate:context && npm run build && npm audit --audit-level=high",
     "make-admin": "tsx scripts/make-admin.ts"
   },
   "devDependencies": {
-    "prisma": "^7.8.0",
+    "concurrently": "9.2.4",
+    "prisma": "5.22.0",
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "@prisma/client": "^7.8.0"
+    "@prisma/client": "5.22.0"
+  },
+  "overrides": {
+    "body-parser": "1.20.6",
+    "form-data": "4.0.6",
+    "postcss": "8.5.23",
+    "sharp": "0.35.3",
+    "ws": "8.21.1"
   }
 }

@@ -2,16 +2,22 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AuthButton from "./auth-button";
 
 export default function Nav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { status } = useSession();
 
   const link = (href: string, label: string) => {
-    const active = pathname === href || (href !== "/" && pathname.startsWith(href));
+    const premiumShop = searchParams.get("section") === "premium";
+    const active = href === "/shop"
+      ? pathname === "/shop" && !premiumShop
+      : href === "/shop?section=premium"
+        ? pathname === "/shop" && premiumShop
+        : pathname === href || (href !== "/" && pathname.startsWith(href));
     return (
       <Link
         href={href}
@@ -40,9 +46,11 @@ export default function Nav() {
         {link("/", "Accueil")}
         {link("/profile", "Profil")}
         {link("/inventory", "Inventaire")}
-        {link("/shop", "Boutique")}
+        {link("/shop", "Boutique crédits")}
+        {link("/skills", "Compétences")}
+        {link("/achievements", "Achievements")}
         {link("/collection", "Collection")}
-        {link("/trades", "Trades")}
+        {link("/shop?section=premium", "Boutique €")}
         {status === "authenticated" && link("/admin", "Admin")}
       </nav>
 

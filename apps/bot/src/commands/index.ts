@@ -1,10 +1,9 @@
 import {
   type ChatInputCommandInteraction,
-  type ButtonInteraction
+  type ButtonInteraction,
+  type StringSelectMenuInteraction
 } from "discord.js";
 import { usersService } from "./service-instances.js";
-import { handleSpawn } from "./handlers/spawn.js";
-import { handleCapture } from "./handlers/capture.js";
 import {
   handleSell,
   handleRecycle,
@@ -24,11 +23,21 @@ import { handleProfile } from "./handlers/profile.js";
 import { handleCardinfo } from "./handlers/cardinfo.js";
 import { handleLeaderboard } from "./handlers/leaderboard.js";
 import { handleTrade } from "./handlers/trade.js";
-import { handleAdmin } from "./handlers/admin.js";
+import {
+  handleExplore,
+  handleRtaButton,
+  handleRtaSelect
+} from "./handlers/explore.js";
+import {
+  handleAchievements,
+  handleBoss,
+  handleItems,
+  handleQuests,
+  handleSkills
+} from "./handlers/v2-views.js";
 
 const commandHandlers: Record<string, (interaction: ChatInputCommandInteraction, user: any) => Promise<void>> = {
-  spawn: handleSpawn,
-  capture: handleCapture,
+  explore: handleExplore,
   sell: handleSell,
   recycle: handleRecycle,
   fragment: handleRecycle,
@@ -38,12 +47,16 @@ const commandHandlers: Record<string, (interaction: ChatInputCommandInteraction,
   shop: handleShop,
   boosters: handleBoosters,
   craft: handleCraft,
-  inventory: handleInventory,
+  collection: handleInventory,
   profile: handleProfile,
+  quests: handleQuests,
+  achievements: handleAchievements,
+  skills: handleSkills,
+  items: handleItems,
+  boss: handleBoss,
   cardinfo: handleCardinfo,
   leaderboard: handleLeaderboard,
-  trade: handleTrade,
-  admin: handleAdmin
+  trade: handleTrade
 };
 
 export async function handleCommand(interaction: ChatInputCommandInteraction) {
@@ -74,8 +87,18 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
 }
 
 export async function handleButton(interaction: ButtonInteraction) {
+  if (interaction.customId.startsWith("rta|")) {
+    await handleRtaButton(interaction);
+    return;
+  }
   if (interaction.customId.startsWith("inv_")) {
     await handleInventoryButton(interaction);
+  }
+}
+
+export async function handleSelectMenu(interaction: StringSelectMenuInteraction) {
+  if (interaction.customId.startsWith("rta|")) {
+    await handleRtaSelect(interaction);
   }
 }
 

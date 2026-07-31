@@ -1,7 +1,30 @@
-import NextAuth, { type NextAuthOptions } from "next-auth";
-import DiscordProvider from "next-auth/providers/discord";
+import * as NextAuthModule from "next-auth";
+import type { NextAuthOptions, Session } from "next-auth";
+import * as DiscordProviderModule from "next-auth/providers/discord";
 import { redirect } from "next/navigation";
 import { prisma } from "@rta/database";
+
+type NextAuthFactory = typeof import("next-auth").default;
+type DiscordProviderFactory = typeof import("next-auth/providers/discord").default;
+
+// NextAuth v4 is CommonJS. Normalize both native Node and webpack ESM interop
+// shapes so the compiled workspace package behaves exactly like source imports.
+function unwrapCommonJsDefault<T>(module: unknown): T {
+  let current = module;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!current || typeof current !== "object" || !("default" in current)) {
+      break;
+    }
+    const next = (current as { default: unknown }).default;
+    if (next === current) break;
+    current = next;
+  }
+  return current as T;
+}
+
+const NextAuth = unwrapCommonJsDefault<NextAuthFactory>(NextAuthModule);
+const getServerSession = NextAuthModule.getServerSession;
+const DiscordProvider = unwrapCommonJsDefault<DiscordProviderFactory>(DiscordProviderModule);
 
 type DiscordProfile = {
   id: string;
@@ -13,7 +36,8 @@ export const authOptions: NextAuthOptions = {
   providers: [
     DiscordProvider({
       clientId: process.env.DISCORD_CLIENT_ID ?? "",
-      clientSecret: process.env.DISCORD_CLIENT_SECRET ?? ""
+      clientSecret: process.env.DISCORD_CLIENT_SECRET ?? "",
+      authorization: { params: { scope: "identify" } }
     })
   ],
   secret: process.env.NEXTAUTH_SECRET,
@@ -49,17 +73,19 @@ export const authOptions: NextAuthOptions = {
       if (token.sub) {
         const user = await prisma.user.findUnique({
           where: { discordId: String(token.sub) },
-          select: { isAdmin: true }
+          select: { id: true, isAdmin: true }
         });
-        (token as any).isAdmin = user?.isAdmin ?? false;
+        token.userId = user?.id;
+        token.isAdmin = user?.isAdmin ?? false;
       }
 
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = String(token.sub ?? "");
-        (session.user as any).isAdmin = (token as any).isAdmin ?? false;
+        session.user.id = token.userId;
+        session.user.discordId = token.sub;
+        session.user.isAdmin = token.isAdmin ?? false;
       }
       return session;
     }
@@ -68,17 +94,25 @@ export const authOptions: NextAuthOptions = {
 
 export const authHandler = NextAuth(authOptions);
 
-export function requireUser(session: any) {
-  if (!session?.user?.email && !session?.user?.name) {
-    redirect("/login");
-  }
-  return session;
+export async function resolveSessionUser(session?: Session | null) {
+  const currentSession = session ?? (await getServerSession(authOptions));
+  const userId = currentSession?.user?.id;
+  if (!userId) return null;
+  return prisma.user.findUnique({ where: { id: userId } });
 }
 
-export function requireAdmin(session: any) {
-  const s = requireUser(session);
-  if (!s.user?.isAdmin) {
-    redirect("/profile");
+export async function requireUser() {
+  const user = await resolveSessionUser();
+  if (!user) {
+    return redirect("/login");
   }
-  return s;
+  return user;
+}
+
+export async function requireAdmin() {
+  const user = await requireUser();
+  if (!user.isAdmin) {
+    return redirect("/profile");
+  }
+  return user;
 }

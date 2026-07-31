@@ -1,4 +1,9 @@
-import { EmbedBuilder, type ChatInputCommandInteraction } from "discord.js";
+import {
+  ActionRowBuilder,
+  EmbedBuilder,
+  StringSelectMenuBuilder,
+  type ChatInputCommandInteraction
+} from "discord.js";
 import {
   sellService,
   recycleService,
@@ -7,6 +12,7 @@ import {
   dailyService
 } from "../service-instances.js";
 import { findCardByName } from "../helpers.js";
+import { createInteractionToken } from "../interaction-token.js";
 
 export async function handleSell(interaction: ChatInputCommandInteraction, user: any) {
   const cardName = interaction.options.getString("nom", true);
@@ -18,7 +24,7 @@ export async function handleSell(interaction: ChatInputCommandInteraction, user:
     await interaction.editReply({ embeds: [embed] });
     return;
   }
-  const result = await sellService.sellCard(user.id, card.id, quantity, variant);
+  const result = await sellService.sellCard(user.id, card.id, quantity, interaction.id, variant);
   const embed = new EmbedBuilder()
     .setColor(0x4caf50)
     .setTitle("💰 Vente effectuée")
@@ -35,7 +41,7 @@ export async function handleRecycle(interaction: ChatInputCommandInteraction, us
     await interaction.editReply({ embeds: [embed] });
     return;
   }
-  const result = await recycleService.recycleCard(user.id, card.id, quantity);
+  const result = await recycleService.recycleCard(user.id, card.id, quantity, interaction.id);
   const embed = new EmbedBuilder()
     .setColor(0x9c27b0)
     .setTitle("♻️ Fragmentation effectuée")
@@ -45,11 +51,41 @@ export async function handleRecycle(interaction: ChatInputCommandInteraction, us
 
 export async function handleFusion(interaction: ChatInputCommandInteraction, user: any) {
   const rarityName = interaction.options.getString("rarity", true);
-  const reward = await fusionService.fuse(user.id, rarityName);
+  const preview = await fusionService.getFusionChoices(user.id, rarityName);
+  if (preview.choices.length > 1) {
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xffd700)
+          .setTitle("✨ Transmutation maîtrisée")
+          .setDescription(
+            `Ta compétence propose **${preview.choices.length} résultats** de même tier. ` +
+            `Choisis la carte créée ; les ${preview.cost} cartes ne seront détruites qu'après ce choix.`
+          )
+      ],
+      components: [
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(createInteractionToken("Z", interaction.user.id, rarityName))
+            .setPlaceholder("Choisir le résultat de fusion")
+            .addOptions(preview.choices.map((card) => ({
+              label: card.name.slice(0, 100),
+              value: card.id,
+              description: `${card.rarity.name} · ${card.deck.name}`.slice(0, 100)
+            })))
+        )
+      ]
+    });
+    return;
+  }
+  const reward = await fusionService.fuse(user.id, rarityName, interaction.id);
   const embed = new EmbedBuilder()
     .setColor(0xffd700)
     .setTitle("✨ Fusion réussie")
-    .setDescription(`5 cartes ${rarityName} détruites, tu obtiens ${reward.name} (${reward.rarity.name}).`);
+    .setDescription(
+      `${reward.fusionCost} cartes ${rarityName} détruites, ` +
+      `tu obtiens ${reward.name} (${reward.rarity.name}).`
+    );
   await interaction.editReply({ embeds: [embed] });
 }
 

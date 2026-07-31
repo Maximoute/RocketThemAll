@@ -1,18 +1,25 @@
 import { prisma } from "@rta/database";
 import { notFound } from "next/navigation";
+import VariantCarousel from "./VariantCarousel.client";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  movie: "🎬 Film",
-  tv: "📺 Série",
-  anime: "🎌 Anime",
-  manga: "📖 Manga",
-  video_game: "🎮 Jeu vidéo",
-  meme: "😂 Mème",
-  music: "🎵 Musique",
-  internet: "🌐 Internet",
-  comics: "🦸 Comics",
-  sport: "⚽ Sport",
-  manual: "📋 Manuel",
+type ResourceLink = {
+  label: string;
+  url: string;
+  type?: string;
+  why?: string;
+};
+
+type VaultCardMetadata = {
+  shortDescription?: string | null;
+  longDescription?: string | null;
+  lore?: string | null;
+  sourceUrl?: string | null;
+  worldName?: string | null;
+  primaryZoneName?: string | null;
+  compatibleZoneNames?: string[];
+  sources?: ResourceLink[];
+  exploreFurther?: ResourceLink[];
+  videos?: ResourceLink[];
 };
 
 const RARITY_COLORS: Record<string, string> = {
@@ -22,86 +29,176 @@ const RARITY_COLORS: Record<string, string> = {
   "Very Rare": "#9c27b0",
   Import: "#ff9800",
   Exotic: "#f44336",
-  "Black Market": "#212121",
-  Limited: "#ffd700",
+  "Black Market": "#ffd700"
 };
 
-export default async function CardInfoPage({ params }: { params: { id: string } }) {
+function isExternalUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function resourceLinks(value: unknown): ResourceLink[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const candidate = entry as Record<string, unknown>;
+    if (!isExternalUrl(candidate.url)) return [];
+    return [{
+      label: typeof candidate.label === "string" && candidate.label.trim()
+        ? candidate.label
+        : candidate.url,
+      url: candidate.url,
+      type: typeof candidate.type === "string" ? candidate.type : undefined,
+      why: typeof candidate.why === "string" ? candidate.why : undefined
+    }];
+  });
+}
+
+function ResourceList({ title, resources }: { title: string; resources: ResourceLink[] }) {
+  if (resources.length === 0) return null;
+
+  return (
+    <section className="bg-rta-surface border border-rta-border rounded-xl p-5">
+      <h2 className="font-black text-lg mb-3">{title}</h2>
+      <ul className="grid gap-3">
+        {resources.map((resource, index) => (
+          <li key={`${resource.url}-${index}`} className="bg-rta-surface2 rounded-lg p-3">
+            <a
+              href={resource.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-rta-cta hover:underline"
+            >
+              {resource.label} ↗
+            </a>
+            {resource.why && <p className="text-sm text-rta-muted mt-1">{resource.why}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export default async function CardInfoPage({
+  params: paramsPromise
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const params = await paramsPromise;
   const card = await prisma.card.findUnique({
     where: { id: params.id },
-    include: { deck: true, rarity: true },
+    include: { deck: true, rarity: true }
   });
 
   if (!card) notFound();
 
-  const rarityColor = RARITY_COLORS[card.rarity.name] ?? "#333";
-  const categoryLabel = card.category ? (CATEGORY_LABELS[card.category] ?? card.category) : null;
+  const metadata = (
+    card.metadata && typeof card.metadata === "object" && !Array.isArray(card.metadata)
+      ? card.metadata
+      : {}
+  ) as VaultCardMetadata;
+  const sources = resourceLinks(metadata.sources);
+  const exploreFurther = resourceLinks(metadata.exploreFurther);
+  const videos = resourceLinks(metadata.videos);
+  const directSourceUrl = isExternalUrl(metadata.sourceUrl) ? metadata.sourceUrl : null;
+  const description = metadata.longDescription || card.description || metadata.shortDescription;
+  const rarityColor = RARITY_COLORS[card.rarity.name] ?? "#9e9e9e";
 
   return (
-    <section className="card" style={{ maxWidth: "600px", margin: "0 auto" }}>
-      <a href="/collection" style={{ fontSize: "0.9rem", color: "var(--accent)", textDecoration: "none", marginBottom: "1rem", display: "inline-block" }}>
+    <div className="max-w-5xl mx-auto">
+      <a href="/collection" className="inline-block text-sm text-rta-cta hover:underline mb-5">
         ← Retour à la collection
       </a>
 
-      <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginTop: "1rem" }}>
-        {card.imageUrl && (
-          <img
-            src={card.imageUrl}
-            alt={card.name}
-            style={{ width: "200px", height: "280px", objectFit: "cover", borderRadius: "10px", boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}
-          />
-        )}
-        <div style={{ flex: 1, minWidth: "200px", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <h1 style={{ fontSize: "1.4rem", margin: 0 }}>{card.name}</h1>
+      <section className="bg-rta-surface border border-rta-border rounded-2xl overflow-hidden">
+        <div className="grid md:grid-cols-[320px_1fr]">
+          <VariantCarousel cardName={card.name} normalImageUrl={card.imageUrl} />
 
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{
-              fontWeight: 700,
-              color: rarityColor,
-              background: `${rarityColor}18`,
-              padding: "0.25rem 0.6rem",
-              borderRadius: "6px",
-              fontSize: "0.9rem",
-              border: `1px solid ${rarityColor}44`
-            }}>
-              {card.rarity.name}
-            </span>
-            {categoryLabel && (
-              <span style={{
-                background: "rgba(0,0,0,0.07)",
-                padding: "0.25rem 0.6rem",
-                borderRadius: "6px",
-                fontSize: "0.9rem"
-              }}>
-                {categoryLabel}
+          <div className="p-6 md:p-8">
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span
+                className="font-bold px-2.5 py-1 rounded-md text-sm"
+                style={{
+                  color: rarityColor,
+                  backgroundColor: `${rarityColor}18`,
+                  border: `1px solid ${rarityColor}55`
+                }}
+              >
+                {card.rarity.name}
               </span>
+              {card.category && (
+                <span className="bg-rta-surface2 border border-rta-border px-2.5 py-1 rounded-md text-sm">
+                  {card.category}
+                </span>
+              )}
+            </div>
+
+            <h1 className="text-3xl font-black tracking-tight">{card.name}</h1>
+            {metadata.shortDescription && metadata.shortDescription !== description && (
+              <p className="text-rta-muted mt-2">{metadata.shortDescription}</p>
+            )}
+
+            <dl className="grid sm:grid-cols-2 gap-4 mt-6 text-sm">
+              <div>
+                <dt className="text-rta-muted">Deck</dt>
+                <dd className="font-bold">{card.deck.name}</dd>
+              </div>
+              {metadata.worldName && (
+                <div>
+                  <dt className="text-rta-muted">Monde</dt>
+                  <dd className="font-bold">{metadata.worldName}</dd>
+                </div>
+              )}
+              {metadata.primaryZoneName && (
+                <div>
+                  <dt className="text-rta-muted">Zone principale</dt>
+                  <dd className="font-bold">{metadata.primaryZoneName}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-rta-muted">Récompense</dt>
+                <dd className="font-bold">+{card.xpReward} XP</dd>
+              </div>
+            </dl>
+
+            {directSourceUrl && (
+              <a
+                href={directSourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex mt-6 text-sm font-bold text-rta-cta hover:underline"
+              >
+                Consulter la source principale ↗
+              </a>
             )}
           </div>
-
-          <div style={{ fontSize: "0.9rem", color: "var(--muted)" }}>
-            <strong>Deck :</strong> {card.deck.name}
-          </div>
-
-          <div style={{ fontSize: "0.9rem", color: "var(--muted)" }}>
-            <strong>XP :</strong> +{card.xpReward} &nbsp;|&nbsp;
-            <strong>Drop rate :</strong> {(card.dropRate * 100).toFixed(1)}%
-          </div>
-
-          {card.source && (
-            <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>
-              <strong>Source :</strong> {card.source}
-              {card.sourceId ? ` — ${card.sourceId}` : ""}
-            </div>
-          )}
         </div>
+      </section>
+
+      <div className="grid gap-5 mt-5">
+        {description && (
+          <section className="bg-rta-surface border border-rta-border rounded-xl p-5">
+            <h2 className="font-black text-lg mb-2">Description</h2>
+            <p className="text-rta-muted leading-7 whitespace-pre-line">{description}</p>
+          </section>
+        )}
+
+        {metadata.lore && (
+          <section className="bg-rta-surface border border-rta-border rounded-xl p-5">
+            <h2 className="font-black text-lg mb-2">À savoir</h2>
+            <p className="text-rta-muted leading-7 whitespace-pre-line">{metadata.lore}</p>
+          </section>
+        )}
+
+        <ResourceList title="Vidéos" resources={videos} />
+        <ResourceList title="Sources" resources={sources} />
+        <ResourceList title="Pour aller plus loin" resources={exploreFurther} />
       </div>
-
-      {card.description && (
-        <div style={{ marginTop: "1.5rem", padding: "1rem", background: "rgba(0,0,0,0.04)", borderRadius: "8px", lineHeight: 1.6 }}>
-          <strong>Description</strong>
-          <p style={{ margin: "0.5rem 0 0", color: "var(--muted)", fontSize: "0.95rem" }}>{card.description}</p>
-        </div>
-      )}
-    </section>
+    </div>
   );
 }

@@ -1,20 +1,18 @@
 import { prisma } from "@rta/database";
-import { adminUpdateSpawnCharges, getSpawnEnergySnapshot } from "../../../lib/spawn-energy";
+import { AdminEconomyService } from "@rta/services";
+import { randomUUID } from "node:crypto";
 import { requireAdmin } from "../../../lib/guard";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
-function formatDuration(ms: number | null) {
-  if (ms === null || ms <= 0) {
-    return "Aucune (charges pleines)";
-  }
+const adminEconomyService = new AdminEconomyService();
 
-  const totalMinutes = Math.ceil(ms / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours}h ${minutes}m`;
-}
-
-export default async function AdminUsersPage({ searchParams }: { searchParams: { q?: string; role?: string } }) {
+export default async function AdminUsersPage({
+  searchParams: searchParamsPromise
+}: {
+  searchParams: Promise<{ q?: string; role?: string; notice?: string; error?: string }>;
+}) {
+  const searchParams = await searchParamsPromise;
   const currentAdmin = await requireAdmin();
   const q = (searchParams.q ?? "").trim();
   const roleFilter = searchParams.role ?? "all";
@@ -34,6 +32,30 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
       data: {
         adminId: currentAdmin.id,
         action: nextValue ? "USER_PROMOTED_ADMIN" : "USER_DEMOTED_ADMIN",
+        target: userId
+      }
+    });
+
+    revalidatePath("/admin/users");
+  }
+
+  async function toggleUnlimitedExplorations(formData: FormData) {
+    "use server";
+    await requireAdmin();
+    const userId = String(formData.get("userId") ?? "");
+    const nextValue = String(formData.get("nextValue") ?? "false") === "true";
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { unlimitedExplorations: nextValue }
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: currentAdmin.id,
+        action: nextValue
+          ? "USER_UNLIMITED_EXPLORATIONS_GRANTED"
+          : "USER_UNLIMITED_EXPLORATIONS_REVOKED",
         target: userId
       }
     });
@@ -96,63 +118,76 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
     revalidatePath("/admin/users");
   }
 
-  async function updateEconomy(formData: FormData) {
+  async function adjustEconomy(formData: FormData) {
     "use server";
-    await requireAdmin();
+    const admin = await requireAdmin();
     const userId = String(formData.get("userId") ?? "");
-    const credits = Math.max(0, Number(formData.get("credits") ?? 0));
-    const fragments = Math.max(0, Number(formData.get("fragments") ?? 0));
-
-    await prisma.user.update({ where: { id: userId }, data: { credits, fragments } });
-    await prisma.adminLog.create({
-      data: {
-        adminId: currentAdmin.id,
-        action: "USER_ECONOMY_UPDATED",
-        target: userId,
-        metadata: { credits, fragments }
-      }
-    });
-
+    const creditDelta = Math.trunc(Number(formData.get("creditDelta") ?? 0));
+    const fragmentDelta = Math.trunc(Number(formData.get("fragmentDelta") ?? 0));
+    const reason = String(formData.get("reason") ?? "");
+    try {
+      await adminEconomyService.adjustBalance({
+        adminId: admin.id,
+        userId,
+        creditDelta,
+        fragmentDelta,
+        reason,
+        operationKey: `admin:${admin.id}:balance:${randomUUID()}`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ajustement impossible.";
+      redirect(`/admin/users?error=${encodeURIComponent(message)}`);
+    }
     revalidatePath("/admin/users");
+    revalidatePath("/admin/economy");
+    redirect("/admin/users?notice=Solde mis à jour et audité.");
   }
 
-  async function setSpawnCharges(formData: FormData) {
+  async function grantXp(formData: FormData) {
     "use server";
-    await requireAdmin();
+    const admin = await requireAdmin();
     const userId = String(formData.get("userId") ?? "");
-    const quantity = Number(formData.get("quantity") ?? 0);
-
-    const snapshot = await adminUpdateSpawnCharges(userId, quantity);
-
-    await prisma.adminLog.create({
-      data: {
-        adminId: currentAdmin.id,
-        action: "SPAWN_CHARGES_UPDATED",
-        target: userId,
-        metadata: { quantity: snapshot.charges }
-      }
-    });
-
+    const xp = Math.trunc(Number(formData.get("xp") ?? 0));
+    const reason = String(formData.get("reason") ?? "");
+    try {
+      await adminEconomyService.grantXp({
+        adminId: admin.id,
+        userId,
+        xp,
+        reason,
+        operationKey: `admin:${admin.id}:xp:${randomUUID()}`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Don d’XP impossible.";
+      redirect(`/admin/users?error=${encodeURIComponent(message)}`);
+    }
     revalidatePath("/admin/users");
+    redirect("/admin/users?notice=XP attribuée.");
   }
 
-  async function resetSpawnCharges(formData: FormData) {
+  async function grantItem(formData: FormData) {
     "use server";
-    await requireAdmin();
+    const admin = await requireAdmin();
     const userId = String(formData.get("userId") ?? "");
-    const config = await prisma.appConfig.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
-    const snapshot = await adminUpdateSpawnCharges(userId, config.manualSpawnMaxCharges ?? 4);
-
-    await prisma.adminLog.create({
-      data: {
-        adminId: currentAdmin.id,
-        action: "SPAWN_CHARGES_RESET",
-        target: userId,
-        metadata: { quantity: snapshot.charges }
-      }
-    });
-
+    const itemKey = String(formData.get("itemKey") ?? "");
+    const quantity = Math.trunc(Number(formData.get("quantity") ?? 1));
+    const reason = String(formData.get("reason") ?? "");
+    try {
+      await adminEconomyService.grantItem({
+        adminId: admin.id,
+        userId,
+        itemKey,
+        quantity,
+        reason,
+        operationKey: `admin:${admin.id}:item:${randomUUID()}`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Don d’objet impossible.";
+      redirect(`/admin/users?error=${encodeURIComponent(message)}`);
+    }
     revalidatePath("/admin/users");
+    revalidatePath("/admin/inventories");
+    redirect("/admin/users?notice=Objet attribué.");
   }
 
   async function giveCard(formData: FormData) {
@@ -189,42 +224,50 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
     revalidatePath("/admin/users");
   }
 
-  const users = await prisma.user.findMany({
-    where: {
-      ...(q ? { OR: [{ username: { contains: q, mode: "insensitive" as const } }, { discordId: { contains: q } }] } : {}),
-      ...(roleFilter === "admin" ? { isAdmin: true } : {}),
-      ...(roleFilter === "user" ? { isAdmin: false } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      userBoosters: true,
-      spawnLogs: {
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        include: { card: true }
+  const [users, itemCatalog] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        ...(q ? { OR: [{ username: { contains: q, mode: "insensitive" as const } }, { discordId: { contains: q } }] } : {}),
+        ...(roleFilter === "admin" ? { isAdmin: true } : {}),
+        ...(roleFilter === "user" ? { isAdmin: false } : {}),
       },
-      spawnChargeLogs: {
-        orderBy: { createdAt: "desc" },
-        take: 5
-      },
-      inventory: {
-        select: {
-          quantity: true
-        }
-      },
-      _count: {
-        select: {
-          inventory: true,
-          captureLogs: true
+      orderBy: { createdAt: "desc" },
+      include: {
+        userBoosters: true,
+        inventory: {
+          select: {
+            quantity: true
+          }
+        },
+        _count: {
+          select: {
+            inventory: true,
+            captureLogs: true
+          }
         }
       }
-    }
-  });
+    }),
+    prisma.itemDefinition.findMany({
+      where: { status: "PUBLISHED" },
+      orderBy: [{ type: "asc" }, { name: "asc" }]
+    })
+  ]);
 
   return (
     <div>
       <h1 className="text-2xl font-black tracking-tight mb-1">Gestion Utilisateurs</h1>
-      <p className="text-rta-muted text-sm mb-6">Profils, rôles admin, boosters, économie, spawns. Voir inventaire via le lien dédié.</p>
+      <p className="text-rta-muted text-sm mb-6">Profils, rôles admin, boosters et économie. Voir inventaire via le lien dédié.</p>
+
+      {searchParams.notice && (
+        <p className="card" style={{ borderColor: "#22c55e", color: "#166534" }}>
+          {searchParams.notice}
+        </p>
+      )}
+      {searchParams.error && (
+        <p className="card" style={{ borderColor: "#ef4444", color: "#991b1b" }}>
+          {searchParams.error}
+        </p>
+      )}
 
       <div className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
         <form method="GET" style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
@@ -247,26 +290,34 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
         </form>
         <p className="mt-2 text-xs text-rta-muted">{users.length} utilisateur(s) trouvé(s)</p>
       </div>
-      {await Promise.all(users.map(async (user) => {
-        const energy = await getSpawnEnergySnapshot(user.id);
+      {users.map((user) => {
         const boosterMap = new Map(user.userBoosters.map((b) => [b.boosterType, b.quantity]));
         return (
           <article key={user.id} className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
             <p><strong>{user.username}</strong> ({user.discordId})</p>
             <p>Lv.{user.level} | XP {user.xp}</p>
             <p>Admin: {user.isAdmin ? "oui" : "non"}</p>
+            <p>Explorations illimitées: {user.unlimitedExplorations ? "oui" : "non"}</p>
             <p>Crédits: {user.credits} | Fragments: {user.fragments}</p>
             <p>Boosters: basic {boosterMap.get("basic") ?? 0} | rare {boosterMap.get("rare") ?? 0} | epic {boosterMap.get("epic") ?? 0} | legendary {boosterMap.get("legendary") ?? 0}</p>
             <p>Inventaire: {user._count.inventory} cartes uniques, {user.inventory.reduce((sum, i) => sum + i.quantity, 0)} cartes totales</p>
             <p>Captures: {user._count.captureLogs}</p>
-            <p>Charges /spawn: {energy.charges}/{energy.maxCharges}</p>
-            <p>Prochaine recharge: {formatDuration(energy.nextChargeInMs)}</p>
             <p><a href={`/admin/inventories?userId=${user.id}`}>Voir/Gerer inventaire</a></p>
 
             <form action={toggleAdmin} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
               <input type="hidden" name="userId" value={user.id} />
               <input type="hidden" name="nextValue" value={String(!user.isAdmin)} />
               <button type="submit">{user.isAdmin ? "Retirer admin" : "Rendre admin"}</button>
+            </form>
+
+            <form action={toggleUnlimitedExplorations} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+              <input type="hidden" name="userId" value={user.id} />
+              <input type="hidden" name="nextValue" value={String(!user.unlimitedExplorations)} />
+              <button type="submit">
+                {user.unlimitedExplorations
+                  ? "Retirer les explorations illimitées"
+                  : "Donner les explorations illimitées"}
+              </button>
             </form>
 
             <form action={setBooster} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
@@ -278,22 +329,34 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
               <button type="submit">Mettre a jour boosters</button>
             </form>
 
-            <form action={updateEconomy} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+            <form action={adjustEconomy} style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
               <input type="hidden" name="userId" value={user.id} />
-              <input type="number" name="credits" min={0} defaultValue={user.credits} />
-              <input type="number" name="fragments" min={0} defaultValue={user.fragments} />
-              <button type="submit">Mettre a jour économie</button>
+              <input type="number" name="creditDelta" defaultValue={0} placeholder="+/- crédits" required />
+              <input type="number" name="fragmentDelta" defaultValue={0} placeholder="+/- fragments" required />
+              <input type="text" name="reason" placeholder="Motif obligatoire" minLength={3} required />
+              <button type="submit">Ajouter / retirer</button>
             </form>
 
-            <form action={setSpawnCharges} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+            <form action={grantXp} style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
               <input type="hidden" name="userId" value={user.id} />
-              <input type="number" name="quantity" min={0} defaultValue={energy.charges} />
-              <button type="submit">Mettre a jour charges /spawn</button>
+              <input type="number" name="xp" min={1} defaultValue={100} required />
+              <input type="text" name="reason" placeholder="Motif du gain d’XP" minLength={3} required />
+              <button type="submit">Donner de l’XP</button>
             </form>
 
-            <form action={resetSpawnCharges} style={{ marginBottom: "8px" }}>
+            <form action={grantItem} style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
               <input type="hidden" name="userId" value={user.id} />
-              <button type="submit">Reset charges a max</button>
+              <select name="itemKey" required defaultValue="">
+                <option value="" disabled>Choisir un objet</option>
+                {itemCatalog.map((item) => (
+                  <option key={item.id} value={item.contentKey}>
+                    {item.name} · {item.type}
+                  </option>
+                ))}
+              </select>
+              <input type="number" name="quantity" min={1} defaultValue={1} required />
+              <input type="text" name="reason" placeholder="Motif du don" minLength={3} required />
+              <button type="submit">Donner l’objet</button>
             </form>
 
             <form action={giveCard} style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap", alignItems: "center" }}>
@@ -308,22 +371,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: {
               <button type="submit">🎁 Give carte</button>
             </form>
 
-            <p><strong>Derniers spawns:</strong></p>
-            <ul>
-              {user.spawnLogs.length === 0 ? <li>Aucun</li> : user.spawnLogs.map((log) => (
-                <li key={log.id}>{log.createdAt.toLocaleString("fr-FR")} - {log.card.name} - {log.status}</li>
-              ))}
-            </ul>
-
-            <p><strong>Historique charges:</strong></p>
-            <ul>
-              {user.spawnChargeLogs.length === 0 ? <li>Aucun</li> : user.spawnChargeLogs.map((log) => (
-                <li key={log.id}>{log.createdAt.toLocaleString("fr-FR")} - {log.action} ({log.chargesBefore} → {log.chargesAfter})</li>
-              ))}
-            </ul>
           </article>
         );
-      }))}
+      })}
     </div>
   );
 }

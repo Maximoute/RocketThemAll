@@ -4,23 +4,28 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",
-    "lint": "echo 'No lint configured for services'",
-    "test": "vitest run"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run tests"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.670.0",
+    "@aws-sdk/client-s3": "3.1095.0",
     "@rta/database": "1.0.0",
+    "@rta/game-engine": "1.0.0",
     "@rta/shared": "1.0.0",
+    "undici": "6.28.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "vitest": "^4.1.5"
+    "vitest": "4.1.10"
   }
 }

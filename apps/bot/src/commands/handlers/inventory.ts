@@ -3,10 +3,19 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  StringSelectMenuBuilder,
   type ChatInputCommandInteraction,
-  type ButtonInteraction
+  type ButtonInteraction,
+  type StringSelectMenuInteraction
 } from "discord.js";
-import { inventoryService, inventoryCache } from "../service-instances.js";
+import {
+  inventoryService,
+  inventoryCache,
+  economyService,
+  prisma,
+  recycleService
+} from "../service-instances.js";
+import { createInteractionToken } from "../interaction-token.js";
 
 const rarityEmojiMap: Record<string, string> = {
   Common: "⚪",
@@ -30,7 +39,52 @@ const rarityColorMap: Record<string, number> = {
   Limited: 0xffd700
 };
 
-export async function handleInventory(interaction: ChatInputCommandInteraction, user: any) {
+type CollectionEntry = (typeof inventoryCache) extends Map<string, Array<infer Entry>>
+  ? Entry
+  : never;
+
+const recyclableRarities = new Set([
+  "Common",
+  "Uncommon",
+  "Rare",
+  "Very Rare",
+  "Import",
+  "Exotic",
+  "Black Market"
+]);
+
+function recycleMenu(
+  discordUserId: string,
+  pageItems: CollectionEntry[]
+) {
+  const recyclable = pageItems.filter((entry) =>
+    recyclableRarities.has(entry.card.rarity?.name ?? "")
+  );
+  if (recyclable.length === 0) return null;
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(createInteractionToken("d", discordUserId))
+      .setPlaceholder("Recycler une carte de cette page")
+      .addOptions(recyclable.map((entry) => {
+        const rarityName = entry.card.rarity?.name ?? "?";
+        return {
+          label: entry.card.name.slice(0, 100),
+          value: entry.id,
+          description:
+            `${entry.variant} · ${rarityName} · ${entry.quantity} possédée(s)`.slice(0, 100)
+        };
+      }))
+  );
+}
+
+export async function handleInventory(
+  interaction:
+    | ChatInputCommandInteraction
+    | ButtonInteraction
+    | StringSelectMenuInteraction,
+  user: any,
+  notice?: string
+) {
   const inventory = await inventoryService.getInventory(user.id);
   const discordUserId = interaction.user.id;
 
@@ -43,24 +97,62 @@ export async function handleInventory(interaction: ChatInputCommandInteraction, 
   const start = page * pageSize;
   const end = start + pageSize;
   const pageItems = sorted.slice(start, end);
-  const totalPages = Math.ceil(sorted.length / pageSize);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const estimateSkill = await prisma.userSkill.findFirst({
+    where: {
+      userId: user.id,
+      rank: { gt: 0 },
+      skill: { effectKey: "COL_CROSS_VALUE_ESTIMATE", status: "PUBLISHED" }
+    },
+    select: { id: true }
+  });
+  const estimates = new Map<string, {
+    unitPrice: number;
+    circulationCount: number;
+    wishlistInterest: number;
+  }>();
+  if (estimateSkill) {
+    await Promise.all(pageItems.map(async (entry) => {
+      const [value, wishlistInterest] = await Promise.all([
+        economyService.getDynamicSellPrice(
+          entry.cardId,
+          supportedVariant(entry.variant)
+        ),
+        prisma.userGameplayState.count({
+          where: { wishlistDeckId: entry.card.deckId }
+        })
+      ]);
+      estimates.set(entry.id, {
+        unitPrice: value.unitPrice,
+        circulationCount: value.circulationCount,
+        wishlistInterest
+      });
+    }));
+  }
 
   const embed = new EmbedBuilder()
-    .setTitle("📦 Inventaire")
+    .setTitle("🗃️ Collection")
     .setColor(0x5865f2)
     .setFooter({ text: `Page ${page + 1}/${totalPages} (${sorted.length} cartes total)` });
 
   if (pageItems.length === 0) {
-    embed.setDescription("Inventaire vide");
+    embed.setDescription(
+      `${notice ? `${notice}\n\n` : ""}Ta collection est vide.`
+    );
   } else {
     const description = pageItems
       .map((i) => {
         const rarityName = (i.card as any).rarity?.name ?? "?";
         const emoji = rarityEmojiMap[rarityName] ?? "❓";
-        return `${emoji} **${i.card.name}** x${i.quantity}`;
+        const estimate = estimates.get(i.id);
+        return `${emoji} **${i.card.name}** [${i.variant}] x${i.quantity}` +
+          (estimate
+            ? ` · ≈${estimate.unitPrice} cr · circulation ${estimate.circulationCount}` +
+              ` · intérêt ${estimate.wishlistInterest}`
+            : "");
       })
       .join("\n");
-    embed.setDescription(description);
+    embed.setDescription(`${notice ? `${notice}\n\n` : ""}${description}`);
 
     const firstRarityName = (pageItems[0].card as any).rarity?.name ?? "?";
     const embedColor = rarityColorMap[firstRarityName] ?? 0x5865f2;
@@ -83,11 +175,111 @@ export async function handleInventory(interaction: ChatInputCommandInteraction, 
     );
   }
 
-  if (buttons.components.length > 0) {
-    await interaction.editReply({ embeds: [embed], components: [buttons] });
-  } else {
-    await interaction.editReply({ embeds: [embed] });
+  const components = [];
+  if (buttons.components.length > 0) components.push(buttons);
+  const menu = recycleMenu(discordUserId, pageItems);
+  if (menu) components.push(menu);
+  await interaction.editReply({ embeds: [embed], components });
+}
+
+function supportedVariant(value: string): "normal" | "shiny" | "holo" {
+  if (value === "normal" || value === "shiny" || value === "holo") return value;
+  return "normal";
+}
+
+export async function handleRecycleCardSelect(
+  interaction: StringSelectMenuInteraction,
+  user: any,
+  inventoryItemId: string
+) {
+  const entry = await prisma.inventoryItem.findFirst({
+    where: {
+      id: inventoryItemId,
+      userId: user.id,
+      quantity: { gt: 0 }
+    },
+    include: {
+      card: { include: { rarity: true } }
+    }
+  });
+  if (!entry) {
+    await handleInventory(interaction, user, "❌ Cette carte n'est plus disponible.");
+    return;
   }
+  const variant = supportedVariant(entry.variant);
+  const quote = await recycleService.getRecycleQuote(
+    user.id,
+    entry.cardId,
+    1,
+    variant
+  );
+  const embed = new EmbedBuilder()
+    .setColor(0x9c27b0)
+    .setTitle("♻️ Confirmer le recyclage")
+    .setDescription(
+      `Tu vas détruire **1× ${entry.card.name}** [${variant}].\n\n` +
+      `Tu recevras exactement :\n` +
+      `💳 **${quote.credits} crédits**\n` +
+      `🧩 **${quote.fragments} fragments ${entry.card.rarity.name}**\n\n` +
+      `Stock restant après confirmation : **${entry.quantity - 1}**`
+    )
+    .setFooter({ text: "Cette action est définitive." });
+  await interaction.editReply({
+    embeds: [embed],
+    components: [
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(createInteractionToken("m", interaction.user.id, entry.id))
+          .setLabel("Confirmer le recyclage")
+          .setEmoji("♻️")
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(createInteractionToken("v", interaction.user.id))
+          .setLabel("Annuler")
+          .setStyle(ButtonStyle.Secondary)
+      )
+    ]
+  });
+}
+
+export async function handleRecycleCardConfirm(
+  interaction: ButtonInteraction,
+  user: any,
+  inventoryItemId: string
+) {
+  const entry = await prisma.inventoryItem.findFirst({
+    where: {
+      id: inventoryItemId,
+      userId: user.id,
+      quantity: { gt: 0 }
+    },
+    include: { card: true }
+  });
+  if (!entry) {
+    await handleInventory(interaction, user, "❌ Cette carte n'est plus disponible.");
+    return;
+  }
+  const result = await recycleService.recycleCard(
+    user.id,
+    entry.cardId,
+    1,
+    interaction.id,
+    supportedVariant(entry.variant),
+    { confirmedLastCopy: true }
+  );
+  await handleInventory(
+    interaction,
+    user,
+    `✅ **${result.card.name}** [${entry.variant}] recyclée : ` +
+      `+${result.credits} crédits et +${result.fragments} fragments.`
+  );
+}
+
+export async function handleRecycleCardCancel(
+  interaction: ButtonInteraction,
+  user: any
+) {
+  await handleInventory(interaction, user, "Recyclage annulé.");
 }
 
 export async function handleInventoryButton(interaction: ButtonInteraction) {
@@ -118,12 +310,12 @@ export async function handleInventoryButton(interaction: ButtonInteraction) {
       const cached = inventoryCache.get(userId);
       if (!cached || cached.length === 0) {
         console.error(`[Button] Cache miss or empty for user ${userId}`);
-        await interaction.reply({ content: "Cache expiré, refais /inventory", ephemeral: true });
+        await interaction.reply({ content: "Cache expiré, refais /collection", ephemeral: true });
         return;
       }
 
       const pageSize = 10;
-      const totalPages = Math.ceil(cached.length / pageSize);
+      const totalPages = Math.max(1, Math.ceil(cached.length / pageSize));
       let nextPage = currentPage;
 
       if (direction === "next" && currentPage < totalPages - 1) {
@@ -141,7 +333,7 @@ export async function handleInventoryButton(interaction: ButtonInteraction) {
       const pageItems = cached.slice(start, end);
 
       const embed = new EmbedBuilder()
-        .setTitle("📦 Inventaire")
+        .setTitle("🗃️ Collection")
         .setColor(0x5865f2)
         .setFooter({ text: `Page ${nextPage + 1}/${totalPages} (${cached.length} cartes total)` });
 
@@ -149,7 +341,7 @@ export async function handleInventoryButton(interaction: ButtonInteraction) {
         .map((i) => {
           const rarityName = (i.card as any).rarity?.name ?? "?";
           const emoji = rarityEmojiMap[rarityName] ?? "❓";
-          return `${emoji} **${i.card.name}** x${i.quantity}`;
+          return `${emoji} **${i.card.name}** [${i.variant}] x${i.quantity}`;
         })
         .join("\n");
       embed.setDescription(description);
@@ -172,8 +364,12 @@ export async function handleInventoryButton(interaction: ButtonInteraction) {
           .setDisabled(nextPage >= totalPages - 1)
       );
 
+      const menu = recycleMenu(userId, pageItems);
       console.log(`[Button] Updating to page ${nextPage + 1}`);
-      await interaction.update({ embeds: [embed], components: [buttons] });
+      await interaction.update({
+        embeds: [embed],
+        components: menu ? [buttons, menu] : [buttons]
+      });
     } catch (error) {
       console.error("[Button] Error:", error);
       await interaction.reply({ content: "Erreur lors du changement de page", ephemeral: true });

@@ -1,12 +1,16 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../lib/auth";
 import { prisma } from "@rta/database";
-import { redirect } from "next/navigation";
+import { randomUUID } from "node:crypto";
+import { RecycleService, SellService } from "@rta/services";
 import { revalidatePath } from "next/cache";
 import { RARITIES } from "@rta/shared";
 import InventoryFiltersClient from "./filters.client";
 import { FRAGMENT_CHAIN, FRAGMENT_CRAFT_COST, getSourceRarityForTarget, getUserFragmentBalances, type FragmentRarity } from "../../lib/fragments";
 import { getDynamicCardValue, getDynamicCardValuesBatch, getUserInventoryValue } from "../../lib/economy";
+import { requireUser } from "../../lib/guard";
+import { cardVariantImageUrl } from "../../lib/card-variant";
+
+const recycleService = new RecycleService();
+const sellService = new SellService();
 
 const POP_CATEGORIES: { value: string; label: string }[] = [
   { value: "movie", label: "🎬 Films" },
@@ -63,29 +67,18 @@ const FRAGMENT_REWARD_KEYS = {
   "Black Market": "blackMarketFragmentReward"
 } as const;
 
-export default async function InventoryPage({ searchParams }: { searchParams: SearchParams }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.name) {
-    redirect("/login");
-  }
-
-  const user = await prisma.user.findFirst({ where: { username: session.user.name } });
-  if (!user) {
-    return <section className="card">Utilisateur introuvable</section>;
-  }
+export default async function InventoryPage({
+  searchParams: searchParamsPromise
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const searchParams = await searchParamsPromise;
+  const user = await requireUser();
 
   async function recycleFromInventory(formData: FormData) {
     "use server";
 
-    const actionSession = await getServerSession(authOptions);
-    if (!actionSession?.user?.name) {
-      redirect("/login");
-    }
-
-    const actionUser = await prisma.user.findFirst({ where: { username: actionSession.user.name } });
-    if (!actionUser) {
-      return;
-    }
+    const actionUser = await requireUser();
 
     const itemId = String(formData.get("itemId") ?? "").trim();
     const quantityRaw = Number(formData.get("quantity") ?? 1);
@@ -101,40 +94,14 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
     }
 
     const safeQuantity = Math.min(quantity, item.quantity);
-    const config = await prisma.appConfig.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
-    const rarity = item.card.rarity.name as keyof typeof RECYCLE_PRICE_KEYS;
-    const unitCredits = config[RECYCLE_PRICE_KEYS[rarity]] as number;
-    const unitFragments = config[FRAGMENT_REWARD_KEYS[rarity]] as number;
-    const gainedCredits = unitCredits * safeQuantity;
-    const gainedFragments = unitFragments * safeQuantity;
-
-    await prisma.$transaction(async (tx) => {
-      if (item.quantity === safeQuantity) {
-        await tx.inventoryItem.delete({ where: { id: item.id } });
-      } else {
-        await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: { decrement: safeQuantity } } });
-      }
-
-      await tx.user.update({
-        where: { id: actionUser.id },
-        data: { credits: { increment: gainedCredits }, fragments: { increment: gainedFragments } }
-      });
-
-      await tx.fragmentBalance.upsert({
-        where: { userId_rarityId: { userId: actionUser.id, rarityId: item.card.rarityId } },
-        update: { quantity: { increment: gainedFragments } },
-        create: { userId: actionUser.id, rarityId: item.card.rarityId, quantity: gainedFragments }
-      });
-
-      await tx.transactionLog.create({
-        data: {
-          userId: actionUser.id,
-          type: "recycle",
-          amount: gainedCredits,
-          metadata: { cardId: item.cardId, quantity: safeQuantity, fragments: gainedFragments, source: "inventory_web" }
-        }
-      });
-    });
+    await recycleService.recycleCard(
+      actionUser.id,
+      item.cardId,
+      safeQuantity,
+      `web-${randomUUID()}`,
+      item.variant,
+      { confirmedLastCopy: formData.get("confirmedLastCopy") === "yes" }
+    );
 
     revalidatePath("/inventory");
     revalidatePath("/profile");
@@ -143,15 +110,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
   async function sellFromInventory(formData: FormData) {
     "use server";
 
-    const actionSession = await getServerSession(authOptions);
-    if (!actionSession?.user?.name) {
-      redirect("/login");
-    }
-
-    const actionUser = await prisma.user.findFirst({ where: { username: actionSession.user.name } });
-    if (!actionUser) {
-      return;
-    }
+    const actionUser = await requireUser();
 
     const itemId = String(formData.get("itemId") ?? "").trim();
     const quantityRaw = Number(formData.get("quantity") ?? 1);
@@ -167,56 +126,14 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
     }
 
     const safeQuantity = Math.min(quantity, item.quantity);
-    const dynamic = await getDynamicCardValue(item.cardId, item.variant);
-    const dynamicUnitPrice = dynamic?.unitPrice ?? 0;
-    const unitSellPrice = Math.floor(dynamicUnitPrice * 0.8);
-    const gainedCredits = unitSellPrice * safeQuantity;
-
-    await prisma.$transaction(async (tx) => {
-      if (item.quantity === safeQuantity) {
-        await tx.inventoryItem.delete({ where: { id: item.id } });
-      } else {
-        await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: { decrement: safeQuantity } } });
-      }
-
-      if (gainedCredits > 0) {
-        await tx.user.update({ where: { id: actionUser.id }, data: { credits: { increment: gainedCredits } } });
-      }
-
-      await tx.transactionLog.create({
-        data: {
-          userId: actionUser.id,
-          type: "sell",
-          amount: gainedCredits,
-          metadata: {
-            source: "inventory_web",
-            priceRatio: 0.8,
-            cardId: item.cardId,
-            variant: item.variant,
-            quantity: safeQuantity,
-            dynamicUnitPrice,
-            soldUnitPrice: unitSellPrice
-          }
-        }
-      });
-
-      await tx.economyLog.create({
-        data: {
-          userId: actionUser.id,
-          type: "sell_card",
-          amount: gainedCredits,
-          metadata: {
-            source: "inventory_web",
-            priceRatio: 0.8,
-            cardId: item.cardId,
-            variant: item.variant,
-            quantity: safeQuantity,
-            dynamicUnitPrice,
-            soldUnitPrice: unitSellPrice
-          }
-        }
-      });
-    });
+    await sellService.sellCard(
+      actionUser.id,
+      item.cardId,
+      safeQuantity,
+      `web-${randomUUID()}`,
+      item.variant,
+      { confirmedLastCopy: formData.get("confirmedLastCopy") === "yes" }
+    );
 
     revalidatePath("/inventory");
     revalidatePath("/profile");
@@ -225,15 +142,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
   async function craftCardFromFragments(formData: FormData) {
     "use server";
 
-    const actionSession = await getServerSession(authOptions);
-    if (!actionSession?.user?.name) {
-      redirect("/login");
-    }
-
-    const actionUser = await prisma.user.findFirst({ where: { username: actionSession.user.name } });
-    if (!actionUser) {
-      return;
-    }
+    const actionUser = await requireUser();
 
     const targetRarity = String(formData.get("targetRarity") ?? "") as FragmentRarity;
     if (!FRAGMENT_CHAIN.includes(targetRarity)) {
@@ -260,7 +169,14 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
       return;
     }
 
-    const pool = await prisma.card.findMany({ where: { rarityId: targetRarityRow.id } });
+    const pool = await prisma.card.findMany({
+      where: {
+        rarityId: targetRarityRow.id,
+        source: "vault",
+        status: "PUBLISHED",
+        isActive: true
+      }
+    });
     if (pool.length === 0) {
       return;
     }
@@ -305,6 +221,9 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
     where: {
       userId: user.id,
       card: {
+        source: "vault",
+        status: "PUBLISHED" as const,
+        isActive: true,
         name: searchParams.q ? { contains: searchParams.q, mode: "insensitive" as const } : undefined,
         deck: searchParams.deck ? { name: searchParams.deck } : undefined,
         rarity: searchParams.rarity ? { name: searchParams.rarity } : undefined,
@@ -469,11 +388,12 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
           {items.map((item) => {
             const dynamic = dynamicValues.get(`${item.cardId}:${item.variant}`);
             const rarity = item.card.rarity.name;
+            const variantImageUrl = cardVariantImageUrl(item.card.imageUrl, item.variant);
             return (
               <article key={item.id} className={`bg-rta-surface border rounded-xl overflow-hidden transition-transform duration-200 hover:-translate-y-1 relative ${rarityGlow[rarity] ?? "border-rta-border"}`}>
                 <div className="aspect-[3/4] w-full bg-gradient-to-b from-rta-surface2 to-rta-bg flex items-center justify-center relative">
-                  {item.card.imageUrl ? (
-                    <img src={item.card.imageUrl} alt={item.card.name} className="w-full h-full object-cover absolute inset-0" />
+                  {variantImageUrl ? (
+                    <img src={variantImageUrl} alt={`${item.card.name} ${item.variant}`} className="w-full h-full object-cover absolute inset-0" />
                   ) : (
                     <span className="text-4xl opacity-30">🃏</span>
                   )}
@@ -495,6 +415,9 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
                   <p className="text-[0.65rem] text-rta-muted mt-1">
                     {dynamic?.unitPrice ?? 0} crédits / unité
                   </p>
+                  <p className="text-[0.65rem] uppercase tracking-wide text-rta-cta mt-1">
+                    Variante {item.variant}
+                  </p>
                   <a href={`/inventory/card/${item.id}`} className="text-xs text-rta-success hover:underline mt-1 block">
                     Voir la fiche →
                   </a>
@@ -502,6 +425,11 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
                     <form action={recycleFromInventory} className="flex-1">
                       <input type="hidden" name="itemId" value={item.id} />
                       <input type="hidden" name="quantity" value={1} />
+                      {item.quantity === 1 && (
+                        <label className="block text-[0.62rem] text-rta-muted mb-1">
+                          <input type="checkbox" name="confirmedLastCopy" value="yes" required /> dernier exemplaire
+                        </label>
+                      )}
                       <button type="submit" className="w-full text-[0.68rem] py-1 rounded bg-rta-bg border border-rta-border text-rta-muted hover:text-rta-ink hover:border-rta-accent transition-colors">
                         Fragmenter
                       </button>
@@ -509,6 +437,11 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
                     <form action={sellFromInventory} className="flex-1">
                       <input type="hidden" name="itemId" value={item.id} />
                       <input type="hidden" name="quantity" value={1} />
+                      {item.quantity === 1 && (
+                        <label className="block text-[0.62rem] text-rta-muted mb-1">
+                          <input type="checkbox" name="confirmedLastCopy" value="yes" required /> dernier exemplaire
+                        </label>
+                      )}
                       <button type="submit" className="w-full text-[0.68rem] py-1 rounded bg-rta-bg border border-rta-border text-rta-muted hover:text-rta-ink hover:border-rta-cta transition-colors">
                         Vendre 80%
                       </button>

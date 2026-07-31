@@ -1,0 +1,16 @@
+.git
+.github
+.next
+**/.next
+**/.next-dev
+**/dist
+**/node_modules
+node_modules
+.env
+.env.*
+!.env.example
+!.env.production.example
+coverage
+*.log
+Vault-RTA
+docs/ai-context/vault-index.json

@@ -1,6 +1,7 @@
-import { prisma } from "@rta/database";
+import { Prisma, prisma } from "@rta/database";
 import { CollectionService } from "./collection.service.js";
 import { AppError } from "./errors.js";
+import { assertCardCanLeaveCollection } from "./collection-protection.js";
 
 const TRADE_EXPIRATION_MS = 10 * 60 * 1000;
 
@@ -50,82 +51,101 @@ export class TradeService {
     }
     const safeQuantity = this.requirePositiveQuantity(quantity, "quantity");
 
-    const trade = await this.getPendingTrade(tradeId);
-    this.assertTradeUser(trade, userId);
-
-    const item = await prisma.inventoryItem.findUnique({
-      where: { userId_cardId_variant: { userId, cardId, variant } }
-    });
-    if (!item || item.quantity < safeQuantity) {
-      throw new AppError("Insufficient cards for trade", 409);
-    }
-
-    await prisma.tradeItem.upsert({
-      where: {
-        id: `${tradeId}:${userId}:card:${cardId}:${variant}`
-      },
-      update: {
-        quantity: { increment: safeQuantity }
-      },
-      create: {
-        id: `${tradeId}:${userId}:card:${cardId}:${variant}`,
-        tradeId,
+    await prisma.$transaction(async (tx) => {
+      const trade = await this.lockPendingTrade(tx, tradeId);
+      this.assertTradeUser(trade, userId);
+      const offerId = `${tradeId}:${userId}:card:${cardId}:${variant}`;
+      const [inventory, offered] = await Promise.all([
+        tx.inventoryItem.findUnique({
+          where: { userId_cardId_variant: { userId, cardId, variant } }
+        }),
+        tx.tradeItem.findUnique({ where: { id: offerId } })
+      ]);
+      if (!inventory || inventory.quantity < (offered?.quantity ?? 0) + safeQuantity) {
+        throw new AppError("Insufficient cards for trade", 409);
+      }
+      await assertCardCanLeaveCollection(tx, {
         userId,
         cardId,
         variant,
-        quantity: safeQuantity
-      }
-    });
-
-    await this.resetConfirmations(tradeId);
-    await prisma.adminLog.create({
-      data: {
-        action: "TRADE_ITEM_ADDED",
-        target: tradeId,
-        metadata: { userId, cardId, quantity: safeQuantity, variant }
-      }
+        quantity: (offered?.quantity ?? 0) + safeQuantity,
+        // Adding is followed by the trade's own two-party confirmation.
+        confirmedLastCopy: true
+      });
+      await tx.tradeItem.upsert({
+        where: { id: offerId },
+        update: { quantity: { increment: safeQuantity } },
+        create: {
+          id: offerId,
+          tradeId,
+          userId,
+          cardId,
+          variant,
+          quantity: safeQuantity
+        }
+      });
+      await this.resetConfirmations(tx, tradeId);
+      await tx.adminLog.create({
+        data: {
+          action: "TRADE_ITEM_ADDED",
+          target: tradeId,
+          metadata: { userId, cardId, quantity: safeQuantity, variant }
+        }
+      });
     });
   }
 
   async addBooster(tradeId: string, userId: string, boosterType: "basic" | "rare" | "epic" | "legendary", quantity: number) {
-    const trade = await this.getPendingTrade(tradeId);
-    this.assertTradeUser(trade, userId);
-
-    const safeQuantity = Math.max(1, Math.floor(quantity));
-    const owned = await prisma.userBooster.findUnique({ where: { userId_boosterType: { userId, boosterType } } });
-    if (!owned || owned.quantity < safeQuantity) {
-      throw new AppError("Boosters insuffisants pour ce trade", 409);
-    }
-
-    await prisma.tradeItem.upsert({
-      where: { id: `${tradeId}:${userId}:booster:${boosterType}` },
-      update: { quantity: { increment: safeQuantity } },
-      create: {
-        id: `${tradeId}:${userId}:booster:${boosterType}`,
-        tradeId,
-        userId,
-        boosterType,
-        quantity: safeQuantity
+    const safeQuantity = this.requirePositiveQuantity(quantity, "quantity");
+    await prisma.$transaction(async (tx) => {
+      const trade = await this.lockPendingTrade(tx, tradeId);
+      this.assertTradeUser(trade, userId);
+      const offerId = `${tradeId}:${userId}:booster:${boosterType}`;
+      const [owned, offered] = await Promise.all([
+        tx.userBooster.findUnique({
+          where: { userId_boosterType: { userId, boosterType } }
+        }),
+        tx.tradeItem.findUnique({ where: { id: offerId } })
+      ]);
+      if (!owned || owned.quantity < (offered?.quantity ?? 0) + safeQuantity) {
+        throw new AppError("Boosters insuffisants pour ce trade", 409);
       }
+      await tx.tradeItem.upsert({
+        where: { id: offerId },
+        update: { quantity: { increment: safeQuantity } },
+        create: {
+          id: offerId,
+          tradeId,
+          userId,
+          boosterType,
+          quantity: safeQuantity
+        }
+      });
+      await this.resetConfirmations(tx, tradeId);
     });
-
-    await this.resetConfirmations(tradeId);
   }
 
   async addCredits(tradeId: string, userId: string, amount: number) {
-    const trade = await this.getPendingTrade(tradeId);
-    this.assertTradeUser(trade, userId);
     const safeAmount = Math.max(0, Math.floor(amount));
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user || user.credits < safeAmount) {
-      throw new AppError("Crédits insuffisants pour ce trade", 409);
-    }
-
-    await prisma.trade.update({
-      where: { id: tradeId },
-      data: userId === trade.user1Id ? { user1Credits: safeAmount } : { user2Credits: safeAmount }
+    await prisma.$transaction(async (tx) => {
+      const trade = await this.lockPendingTrade(tx, tradeId);
+      this.assertTradeUser(trade, userId);
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user || user.credits < safeAmount) {
+        throw new AppError("Crédits insuffisants pour ce trade", 409);
+      }
+      await tx.trade.update({
+        where: { id: tradeId },
+        data: {
+          ...(userId === trade.user1Id
+            ? { user1Credits: safeAmount }
+            : { user2Credits: safeAmount }),
+          user1Confirm: false,
+          user2Confirm: false,
+          version: { increment: 1 }
+        }
+      });
     });
-    await this.resetConfirmations(tradeId);
   }
 
   async removeItem(tradeId: string, userId: string, cardId: string, quantity: number, variant: "normal" | "shiny" | "holo" = "normal") {
@@ -134,71 +154,81 @@ export class TradeService {
     }
     const safeQuantity = this.requirePositiveQuantity(quantity, "quantity");
 
-    const trade = await this.getPendingTrade(tradeId);
-    this.assertTradeUser(trade, userId);
-
-    const item = await prisma.tradeItem.findUnique({
-      where: { id: `${tradeId}:${userId}:card:${cardId}:${variant}` }
-    });
-
-    if (!item) {
-      throw new AppError("Trade item not found", 404);
-    }
-
-    if (item.quantity <= safeQuantity) {
-      await prisma.tradeItem.delete({ where: { id: item.id } });
-    } else {
-      await prisma.tradeItem.update({
-        where: { id: item.id },
-        data: { quantity: { decrement: safeQuantity } }
+    await prisma.$transaction(async (tx) => {
+      const trade = await this.lockPendingTrade(tx, tradeId);
+      this.assertTradeUser(trade, userId);
+      const item = await tx.tradeItem.findUnique({
+        where: { id: `${tradeId}:${userId}:card:${cardId}:${variant}` }
       });
-    }
-
-    await this.resetConfirmations(tradeId);
-    await prisma.adminLog.create({
-      data: {
-        action: "TRADE_ITEM_REMOVED",
-        target: tradeId,
-        metadata: { userId, cardId, quantity: safeQuantity, variant }
+      if (!item) throw new AppError("Trade item not found", 404);
+      if (item.quantity <= safeQuantity) {
+        await tx.tradeItem.delete({ where: { id: item.id } });
+      } else {
+        await tx.tradeItem.update({
+          where: { id: item.id },
+          data: { quantity: { decrement: safeQuantity } }
+        });
       }
+      await this.resetConfirmations(tx, tradeId);
+      await tx.adminLog.create({
+        data: {
+          action: "TRADE_ITEM_REMOVED",
+          target: tradeId,
+          metadata: { userId, cardId, quantity: safeQuantity, variant }
+        }
+      });
     });
   }
 
   async removeBooster(tradeId: string, userId: string, boosterType: "basic" | "rare" | "epic" | "legendary", quantity: number) {
-    const trade = await this.getPendingTrade(tradeId);
-    this.assertTradeUser(trade, userId);
-
-    const item = await prisma.tradeItem.findUnique({ where: { id: `${tradeId}:${userId}:booster:${boosterType}` } });
-    if (!item) {
-      throw new AppError("Trade booster not found", 404);
-    }
-
-    const safeQuantity = Math.max(1, Math.floor(quantity));
-    if (item.quantity <= safeQuantity) {
-      await prisma.tradeItem.delete({ where: { id: item.id } });
-    } else {
-      await prisma.tradeItem.update({ where: { id: item.id }, data: { quantity: { decrement: safeQuantity } } });
-    }
-
-    await this.resetConfirmations(tradeId);
+    const safeQuantity = this.requirePositiveQuantity(quantity, "quantity");
+    await prisma.$transaction(async (tx) => {
+      const trade = await this.lockPendingTrade(tx, tradeId);
+      this.assertTradeUser(trade, userId);
+      const item = await tx.tradeItem.findUnique({
+        where: { id: `${tradeId}:${userId}:booster:${boosterType}` }
+      });
+      if (!item) throw new AppError("Trade booster not found", 404);
+      if (item.quantity <= safeQuantity) {
+        await tx.tradeItem.delete({ where: { id: item.id } });
+      } else {
+        await tx.tradeItem.update({
+          where: { id: item.id },
+          data: { quantity: { decrement: safeQuantity } }
+        });
+      }
+      await this.resetConfirmations(tx, tradeId);
+    });
   }
 
   async removeCredits(tradeId: string, userId: string) {
-    const trade = await this.getPendingTrade(tradeId);
-    this.assertTradeUser(trade, userId);
-    await prisma.trade.update({
-      where: { id: tradeId },
-      data: userId === trade.user1Id ? { user1Credits: 0 } : { user2Credits: 0 }
+    await prisma.$transaction(async (tx) => {
+      const trade = await this.lockPendingTrade(tx, tradeId);
+      this.assertTradeUser(trade, userId);
+      await tx.trade.update({
+        where: { id: tradeId },
+        data: {
+          ...(userId === trade.user1Id ? { user1Credits: 0 } : { user2Credits: 0 }),
+          user1Confirm: false,
+          user2Confirm: false,
+          version: { increment: 1 }
+        }
+      });
     });
-    await this.resetConfirmations(tradeId);
   }
 
   async confirmTrade(tradeId: string, userId: string) {
-    const trade = await this.getPendingTrade(tradeId);
-    this.assertTradeUser(trade, userId);
-
-    const data = userId === trade.user1Id ? { user1Confirm: true } : { user2Confirm: true };
-    const updated = await prisma.trade.update({ where: { id: tradeId }, data });
+    const updated = await prisma.$transaction(async (tx) => {
+      const trade = await this.lockPendingTrade(tx, tradeId, true);
+      this.assertTradeUser(trade, userId);
+      if (trade.status === "completed") return trade;
+      const data =
+        userId === trade.user1Id
+          ? { user1Confirm: true, version: { increment: 1 } }
+          : { user2Confirm: true, version: { increment: 1 } };
+      await tx.trade.update({ where: { id: tradeId }, data });
+      return tx.trade.findUniqueOrThrow({ where: { id: tradeId } });
+    });
 
     if (updated.user1Confirm && updated.user2Confirm) {
       return this.executeTrade(tradeId);
@@ -216,133 +246,246 @@ export class TradeService {
   }
 
   async cancelTrade(tradeId: string, userId: string) {
-    const trade = await this.getPendingTrade(tradeId);
-    this.assertTradeUser(trade, userId);
-
-    const updatedTrade = await prisma.trade.update({
-      where: { id: tradeId },
-      data: { status: "cancelled" }
+    return prisma.$transaction(async (tx) => {
+      const trade = await this.lockPendingTrade(tx, tradeId);
+      this.assertTradeUser(trade, userId);
+      const updatedTrade = await tx.trade.update({
+        where: { id: tradeId },
+        data: { status: "cancelled", version: { increment: 1 } }
+      });
+      await tx.adminLog.create({
+        data: {
+          action: "TRADE_CANCELLED",
+          target: tradeId,
+          metadata: { userId }
+        }
+      });
+      return updatedTrade;
     });
-
-    await prisma.adminLog.create({
-      data: {
-        action: "TRADE_CANCELLED",
-        target: tradeId,
-        metadata: { userId }
-      }
-    });
-
-    return updatedTrade;
   }
 
   async expireTrades() {
     await prisma.trade.updateMany({
       where: { status: "pending", expiresAt: { lt: new Date() } },
-      data: { status: "expired" }
+      data: { status: "expired", version: { increment: 1 } }
     });
   }
 
   private async executeTrade(tradeId: string) {
-    const items = await prisma.tradeItem.findMany({ where: { tradeId } });
+    const executionKey = `trade:${tradeId}:execute:v1`;
+    const executed = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.trade.updateMany({
+        where: {
+          id: tradeId,
+          status: "pending",
+          user1Confirm: true,
+          user2Confirm: true,
+          expiresAt: { gt: new Date() }
+        },
+        data: { status: "confirmed", executionKey, version: { increment: 1 } }
+      });
+      if (claimed.count !== 1) return null;
 
-    try {
-      await prisma.$transaction(async (tx) => {
-        const trade = await tx.trade.findUniqueOrThrow({ where: { id: tradeId } });
-        const user1 = await tx.user.findUniqueOrThrow({ where: { id: trade.user1Id } });
-        const user2 = await tx.user.findUniqueOrThrow({ where: { id: trade.user2Id } });
+      const trade = await tx.trade.findUniqueOrThrow({ where: { id: tradeId } });
+      const items = await tx.tradeItem.findMany({ where: { tradeId } });
 
-        if (user1.credits < trade.user1Credits || user2.credits < trade.user2Credits) {
-          throw new AppError("Crédits insuffisants lors de l'exécution du trade", 409);
-        }
+      for (const lockedUserId of [trade.user1Id, trade.user2Id].sort()) {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${lockedUserId} FOR UPDATE`
+        );
+      }
+      const user1 = await tx.user.findUniqueOrThrow({ where: { id: trade.user1Id } });
+      const user2 = await tx.user.findUniqueOrThrow({ where: { id: trade.user2Id } });
+      if (user1.credits < trade.user1Credits || user2.credits < trade.user2Credits) {
+        throw new AppError("Crédits insuffisants lors de l'exécution du trade", 409);
+      }
 
-        for (const item of items) {
-          if (item.cardId) {
-            const inv = await tx.inventoryItem.findUnique({
-              where: { userId_cardId_variant: { userId: item.userId, cardId: item.cardId, variant: item.variant } }
-            });
-
-            if (!inv || inv.quantity < item.quantity) {
-              throw new AppError("Insufficient cards during trade execution", 409);
-            }
-
-            if (inv.quantity === item.quantity) {
-              await tx.inventoryItem.delete({ where: { id: inv.id } });
-            } else {
-              await tx.inventoryItem.update({
-                where: { id: inv.id },
-                data: { quantity: { decrement: item.quantity } }
-              });
-            }
-          } else {
-            const ownedBooster = await tx.userBooster.findUnique({ where: { userId_boosterType: { userId: item.userId, boosterType: item.boosterType! } } });
-            if (!ownedBooster || ownedBooster.quantity < item.quantity) {
-              throw new AppError("Insufficient boosters during trade execution", 409);
-            }
-            await tx.userBooster.update({ where: { userId_boosterType: { userId: item.userId, boosterType: item.boosterType! } }, data: { quantity: { decrement: item.quantity } } });
+      for (const item of items) {
+        if (item.cardId) {
+          await assertCardCanLeaveCollection(tx, {
+            userId: item.userId,
+            cardId: item.cardId,
+            variant: item.variant,
+            quantity: item.quantity,
+            confirmedLastCopy: true
+          });
+          const consumed = await tx.inventoryItem.updateMany({
+            where: {
+              userId: item.userId,
+              cardId: item.cardId,
+              variant: item.variant,
+              quantity: { gte: item.quantity }
+            },
+            data: { quantity: { decrement: item.quantity }, version: { increment: 1 } }
+          });
+          if (consumed.count !== 1) {
+            throw new AppError("Insufficient cards during trade execution", 409);
           }
-        }
-
-        for (const item of items) {
-          const targetUser = item.userId === trade.user1Id ? trade.user2Id : trade.user1Id;
-          if (item.cardId) {
-            await tx.inventoryItem.upsert({
-              where: { userId_cardId_variant: { userId: targetUser, cardId: item.cardId, variant: item.variant } },
-              update: { quantity: { increment: item.quantity } },
-              create: { userId: targetUser, cardId: item.cardId, variant: item.variant, quantity: item.quantity }
-            });
-          } else {
-            await tx.userBooster.upsert({
-              where: { userId_boosterType: { userId: targetUser, boosterType: item.boosterType! } },
-              update: { quantity: { increment: item.quantity } },
-              create: { userId: targetUser, boosterType: item.boosterType!, quantity: item.quantity }
-            });
+        } else if (item.boosterType) {
+          const consumed = await tx.userBooster.updateMany({
+            where: {
+              userId: item.userId,
+              boosterType: item.boosterType,
+              quantity: { gte: item.quantity }
+            },
+            data: { quantity: { decrement: item.quantity } }
+          });
+          if (consumed.count !== 1) {
+            throw new AppError("Insufficient boosters during trade execution", 409);
           }
+        } else {
+          throw new AppError("Invalid trade item", 409);
         }
+      }
 
-        if (trade.user1Credits > 0 || trade.user2Credits > 0) {
-          await tx.user.update({ where: { id: trade.user1Id }, data: { credits: { decrement: trade.user1Credits, increment: trade.user2Credits } } });
-          await tx.user.update({ where: { id: trade.user2Id }, data: { credits: { decrement: trade.user2Credits, increment: trade.user1Credits } } });
+      for (const item of items) {
+        const targetUser = item.userId === trade.user1Id ? trade.user2Id : trade.user1Id;
+        if (item.cardId) {
+          await tx.inventoryItem.upsert({
+            where: {
+              userId_cardId_variant: {
+                userId: targetUser,
+                cardId: item.cardId,
+                variant: item.variant
+              }
+            },
+            update: { quantity: { increment: item.quantity }, version: { increment: 1 } },
+            create: {
+              userId: targetUser,
+              cardId: item.cardId,
+              variant: item.variant,
+              quantity: item.quantity
+            }
+          });
+        } else {
+          await tx.userBooster.upsert({
+            where: {
+              userId_boosterType: { userId: targetUser, boosterType: item.boosterType! }
+            },
+            update: { quantity: { increment: item.quantity } },
+            create: {
+              userId: targetUser,
+              boosterType: item.boosterType!,
+              quantity: item.quantity
+            }
+          });
         }
+      }
 
-        await tx.trade.update({ where: { id: tradeId }, data: { status: "completed" } });
-        await tx.adminLog.create({
+      const user1Delta = trade.user2Credits - trade.user1Credits;
+      const user2Delta = trade.user1Credits - trade.user2Credits;
+      await tx.user.update({
+        where: { id: trade.user1Id },
+        data: { credits: { increment: user1Delta }, balanceVersion: { increment: 1 } }
+      });
+      await tx.user.update({
+        where: { id: trade.user2Id },
+        data: { credits: { increment: user2Delta }, balanceVersion: { increment: 1 } }
+      });
+
+      for (const ledger of [
+        { user: user1, delta: user1Delta, suffix: "user1" },
+        { user: user2, delta: user2Delta, suffix: "user2" }
+      ]) {
+        if (ledger.delta === 0) continue;
+        await tx.economicLedgerEntry.create({
           data: {
-            action: "TRADE_COMPLETED",
-            target: tradeId,
-            metadata: { itemCount: items.length, user1Credits: trade.user1Credits, user2Credits: trade.user2Credits }
+            userId: ledger.user.id,
+            asset: "CREDITS",
+            delta: ledger.delta,
+            balanceBefore: ledger.user.credits,
+            balanceAfter: ledger.user.credits + ledger.delta,
+            reason: "trade.completed",
+            referenceType: "Trade",
+            referenceId: tradeId,
+            operationKey: `${executionKey}:${ledger.suffix}`
           }
         });
-        await tx.transactionLog.create({ data: { userId: trade.user1Id, type: "trade", amount: trade.user2Credits - trade.user1Credits, metadata: { tradeId } } });
-        await tx.transactionLog.create({ data: { userId: trade.user2Id, type: "trade", amount: trade.user1Credits - trade.user2Credits, metadata: { tradeId } } });
-        await tx.economyLog.create({ data: { userId: trade.user1Id, type: "trade", amount: trade.user2Credits - trade.user1Credits, metadata: { tradeId } } });
-        await tx.economyLog.create({ data: { userId: trade.user2Id, type: "trade", amount: trade.user1Credits - trade.user2Credits, metadata: { tradeId } } });
+      }
+
+      await tx.trade.update({
+        where: { id: tradeId },
+        data: { status: "completed", completedAt: new Date(), version: { increment: 1 } }
       });
-    } catch (error) {
-      console.error("[trade] executeTrade failed", {
-        tradeId,
-        message: error instanceof Error ? error.message : String(error)
+      await tx.adminLog.create({
+        data: {
+          action: "TRADE_COMPLETED",
+          target: tradeId,
+          metadata: {
+            executionKey,
+            itemCount: items.length,
+            user1Credits: trade.user1Credits,
+            user2Credits: trade.user2Credits
+          }
+        }
       });
-      throw error;
+      await tx.transactionLog.create({
+        data: {
+          userId: trade.user1Id,
+          type: "trade",
+          amount: user1Delta,
+          metadata: { tradeId, executionKey }
+        }
+      });
+      await tx.transactionLog.create({
+        data: {
+          userId: trade.user2Id,
+          type: "trade",
+          amount: user2Delta,
+          metadata: { tradeId, executionKey }
+        }
+      });
+      await tx.outboxEvent.create({
+        data: {
+          eventId: `${executionKey}:completed`,
+          aggregateType: "Trade",
+          aggregateId: tradeId,
+          eventType: "trade.completed",
+          eventVersion: 1,
+          payload: {
+            tradeId,
+            user1Id: trade.user1Id,
+            user2Id: trade.user2Id,
+            itemCount: items.length
+          }
+        }
+      });
+      return { user1Id: trade.user1Id, user2Id: trade.user2Id };
+    });
+
+    if (!executed) {
+      const existing = await prisma.trade.findUnique({
+        where: { id: tradeId },
+        include: { items: true }
+      });
+      if (existing?.status === "completed") return existing;
+      throw new AppError("Trade could not be claimed for execution", 409);
     }
 
-    await this.collectionService.grantCollectionRewards((await prisma.trade.findUniqueOrThrow({ where: { id: tradeId } })).user1Id);
-    await this.collectionService.grantCollectionRewards((await prisma.trade.findUniqueOrThrow({ where: { id: tradeId } })).user2Id);
-
+    await Promise.all([
+      this.collectionService.grantCollectionRewards(executed.user1Id),
+      this.collectionService.grantCollectionRewards(executed.user2Id)
+    ]);
     return prisma.trade.findUnique({ where: { id: tradeId }, include: { items: true } });
   }
 
-  private async getPendingTrade(tradeId: string) {
-    const trade = await prisma.trade.findUnique({ where: { id: tradeId } });
+  private async lockPendingTrade(
+    tx: Prisma.TransactionClient,
+    tradeId: string,
+    allowCompleted = false
+  ) {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Trade" WHERE "id" = ${tradeId} FOR UPDATE`);
+    const trade = await tx.trade.findUnique({ where: { id: tradeId } });
     if (!trade) {
       throw new AppError("Trade not found", 404);
     }
 
     if (trade.status !== "pending") {
+      if (allowCompleted && trade.status === "completed") return trade;
       throw new AppError("Trade is not pending", 409);
     }
 
-    if (trade.expiresAt.getTime() < Date.now()) {
-      await prisma.trade.update({ where: { id: tradeId }, data: { status: "expired" } });
+    if (trade.expiresAt.getTime() <= Date.now()) {
       throw new AppError("Trade has expired", 409);
     }
 
@@ -355,10 +498,10 @@ export class TradeService {
     }
   }
 
-  private async resetConfirmations(tradeId: string) {
-    await prisma.trade.update({
+  private async resetConfirmations(tx: Prisma.TransactionClient, tradeId: string) {
+    await tx.trade.update({
       where: { id: tradeId },
-      data: { user1Confirm: false, user2Confirm: false }
+      data: { user1Confirm: false, user2Confirm: false, version: { increment: 1 } }
     });
   }
 }
