@@ -101,8 +101,14 @@ export const authOptions: NextAuthOptions = {
 
 export const authHandler = NextAuth(authOptions);
 
+export function getAuthSession() {
+  return getServerSession(authOptions);
+}
+
 export async function resolveSessionUser(session?: Session | null) {
-  const currentSession = session ?? (await getServerSession(authOptions));
+  // `null` is a known anonymous session. Only `undefined` means the caller has
+  // not resolved authentication yet and requires a server-side lookup.
+  const currentSession = session === undefined ? await getAuthSession() : session;
   const userId = currentSession?.user?.id;
   const discordId = currentSession?.user?.discordId;
   if (!userId || !isDiscordSnowflake(discordId)) return null;

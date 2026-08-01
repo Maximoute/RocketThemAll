@@ -12,7 +12,12 @@ export default function Nav() {
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated";
 
-  const link = (href: string, label: string, playerOnly = false) => {
+  const link = (
+    href: string,
+    label: string,
+    playerOnly = false,
+    waitForAuthentication = false,
+  ) => {
     const premiumShop = searchParams.get("section") === "premium";
     const active = href === "/shop"
       ? pathname === "/shop" && !premiumShop
@@ -22,7 +27,7 @@ export default function Nav() {
     return (
       <Link
         href={playerOnly && !isAuthenticated ? "/login" : href}
-        prefetch={playerOnly ? isAuthenticated : undefined}
+        prefetch={playerOnly || waitForAuthentication ? isAuthenticated : undefined}
         className={[
           "px-2 sm:px-3 py-2 text-sm rounded-md border-b-2 transition-colors whitespace-nowrap text-center",
           active
@@ -51,7 +56,7 @@ export default function Nav() {
         {link("/shop", "Boutique crédits", true)}
         {link("/skills", "Compétences", true)}
         {link("/achievements", "Achievements", true)}
-        {link("/collection", "Collection")}
+        {link("/collection", "Collection", false, true)}
         {link("/shop?section=premium", "Boutique €", true)}
         {session?.user?.isAdmin === true && link("/admin", "Admin", true)}
       </nav>

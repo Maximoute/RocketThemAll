@@ -74,3 +74,23 @@ test("production PostgreSQL starts unprivileged without gosu", async () => {
   assert.match(dockerfile, /rm -f \/usr\/local\/bin\/gosu/);
   assert.match(dockerfile, /USER 999:70/);
 });
+
+test("anonymous landing pages do not preload player data", async () => {
+  const [webAuth, guard, layout, providers, navigation, home, playerLink] = await Promise.all([
+    source("packages/auth/src/web-auth.ts"),
+    source("apps/web/src/lib/guard.ts"),
+    source("apps/web/src/app/layout.tsx"),
+    source("apps/web/src/components/providers.tsx"),
+    source("apps/web/src/components/nav.tsx"),
+    source("apps/web/src/app/page.tsx"),
+    source("apps/web/src/components/player-link.tsx")
+  ]);
+
+  assert.match(webAuth, /session\s*===\s*undefined\s*\?\s*await\s+getAuthSession\(\)\s*:\s*session/);
+  assert.match(guard, /cache\(sharedGetAuthSession\)/);
+  assert.match(layout, /<Providers\s+session=\{session\}>/);
+  assert.match(providers, /<SessionProvider\s+session=\{session\}>/);
+  assert.match(navigation, /link\("\/collection",\s*"Collection",\s*false,\s*true\)/);
+  assert.match(playerLink, /prefetch=\{isAuthenticated\}/);
+  assert.doesNotMatch(home, /prisma\.inventoryItem|prisma\.user/);
+});

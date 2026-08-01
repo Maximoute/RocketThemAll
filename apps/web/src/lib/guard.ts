@@ -1,12 +1,27 @@
+import { cache } from "react";
+import { redirect } from "next/navigation";
 import {
-  requireUser as sharedRequireUser,
-  requireAdmin as sharedRequireAdmin,
-  resolveSessionUser as sharedResolveSessionUser
+  getAuthSession as sharedGetAuthSession,
+  resolveSessionUser as sharedResolveSessionUser,
 } from "@rta/auth/web-auth";
 
-// Keep concrete local bindings instead of bare re-exports. Next's production
-// tree-shaker can otherwise lose named exports across a transpiled workspace
-// package and generate pages that call `undefined` at runtime.
-export const requireUser = sharedRequireUser;
-export const requireAdmin = sharedRequireAdmin;
-export const resolveSessionUser = sharedResolveSessionUser;
+// Resolve authentication once per server render. RootLayout and protected
+// pages share this cached result, and SessionProvider receives it as its
+// initial state so the browser does not need an anonymous session API call.
+export const getAuthSession = cache(sharedGetAuthSession);
+
+export async function resolveSessionUser() {
+  return sharedResolveSessionUser(await getAuthSession());
+}
+
+export async function requireUser() {
+  const user = await resolveSessionUser();
+  if (!user) return redirect("/login");
+  return user;
+}
+
+export async function requireAdmin() {
+  const user = await requireUser();
+  if (!user.isAdmin) return redirect("/profile");
+  return user;
+}

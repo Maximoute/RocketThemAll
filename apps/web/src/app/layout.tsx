@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import Providers from "../components/providers";
 import Nav from "../components/nav";
 import Footer from "../components/footer";
+import { getAuthSession } from "../lib/guard";
 
 export const metadata: Metadata = {
   title: {
@@ -18,11 +19,13 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const session = await getAuthSession();
+
   return (
     <html lang="fr">
       <body className="bg-rta-bg text-rta-ink font-sans min-h-screen flex flex-col">
-        <Providers>
+        <Providers session={session}>
           <Suspense fallback={<div className="h-16 border-b border-rta-border bg-rta-surface" />}>
             <Nav />
           </Suspense>
