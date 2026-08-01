@@ -1,4 +1,8 @@
-import { EmbedBuilder, type ChatInputCommandInteraction } from "discord.js";
+import {
+  EmbedBuilder,
+  type AutocompleteInteraction,
+  type ChatInputCommandInteraction
+} from "discord.js";
 import {
   cardsService,
   economyService,
@@ -8,6 +12,29 @@ import {
   attachCardImage,
   type CardImageVariant
 } from "../card-media.js";
+import {
+  cardinfoDeckChoices,
+  cardinfoNameChoices,
+  type CardinfoAutocompleteCard
+} from "../cardinfo-autocomplete.js";
+
+const AUTOCOMPLETE_CACHE_MS = 5 * 60_000;
+let autocompleteCache: { expiresAt: number; cards: CardinfoAutocompleteCard[] } | null = null;
+
+async function autocompleteCatalog() {
+  if (autocompleteCache && autocompleteCache.expiresAt > Date.now()) {
+    return autocompleteCache.cards;
+  }
+  const cards = (await cardsService.getCards()).map((card) => ({
+    id: card.id,
+    name: card.name,
+    contentKey: card.contentKey,
+    acceptedNames: card.acceptedNames,
+    deckName: card.deck.name
+  }));
+  autocompleteCache = { expiresAt: Date.now() + AUTOCOMPLETE_CACHE_MS, cards };
+  return cards;
+}
 
 const rarityColors: Record<string, number> = {
   Common: 0x9e9e9e,
@@ -68,6 +95,22 @@ function firstExternalUrl(value: unknown): string | null {
     }
   }
   return null;
+}
+
+export async function handleCardinfoAutocomplete(interaction: AutocompleteInteraction) {
+  const focused = interaction.options.getFocused(true);
+  const cards = await autocompleteCatalog();
+
+  if (focused.name === "nom") {
+    const deck = interaction.options.getString("deck");
+    await interaction.respond(cardinfoNameChoices(cards, String(focused.value), deck));
+    return;
+  }
+  if (focused.name === "deck") {
+    await interaction.respond(cardinfoDeckChoices(cards, String(focused.value)));
+    return;
+  }
+  await interaction.respond([]);
 }
 
 export async function handleCardinfo(interaction: ChatInputCommandInteraction, user: any) {

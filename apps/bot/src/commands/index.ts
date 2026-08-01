@@ -1,5 +1,6 @@
 import {
   type ChatInputCommandInteraction,
+  type AutocompleteInteraction,
   type ButtonInteraction,
   type StringSelectMenuInteraction
 } from "discord.js";
@@ -16,7 +17,10 @@ import {
 } from "./handlers/shop.js";
 import { handleInventory, handleInventoryButton } from "./handlers/inventory.js";
 import { handleProfile } from "./handlers/profile.js";
-import { handleCardinfo } from "./handlers/cardinfo.js";
+import {
+  handleCardinfo,
+  handleCardinfoAutocomplete
+} from "./handlers/cardinfo.js";
 import { handleLeaderboard } from "./handlers/leaderboard.js";
 import { handleTrade } from "./handlers/trade.js";
 import {
@@ -82,6 +86,14 @@ export async function handleButton(interaction: ButtonInteraction) {
   if (interaction.customId.startsWith("inv_")) {
     await handleInventoryButton(interaction);
   }
+}
+
+export async function handleAutocomplete(interaction: AutocompleteInteraction) {
+  if (interaction.commandName === "cardinfo") {
+    await handleCardinfoAutocomplete(interaction);
+    return;
+  }
+  await interaction.respond([]);
 }
 
 export async function handleSelectMenu(interaction: StringSelectMenuInteraction) {

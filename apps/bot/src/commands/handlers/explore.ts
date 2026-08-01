@@ -25,6 +25,7 @@ import {
   createInteractionToken,
   parseInteractionToken
 } from "../interaction-token.js";
+import { encounterPublicationNonce } from "../encounter-publication.js";
 import { attachCardImage } from "../card-media.js";
 import { announceHallOfFameCapture } from "../hall-of-fame.js";
 import {
@@ -339,7 +340,7 @@ async function publishEncounterAfterPrivateCapture(
     const files = await attachCardImage(embed, encounter.card);
     const message = await channel.send({
       content: "🌐 La rencontre est maintenant ouverte aux autres joueurs !",
-      nonce: encounter.id,
+      nonce: encounterPublicationNonce(encounter.id),
       enforceNonce: true,
       allowedMentions: { parse: [] },
       embeds: [embed],

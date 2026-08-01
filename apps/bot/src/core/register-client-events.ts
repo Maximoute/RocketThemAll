@@ -1,6 +1,11 @@
 import { Client, Events } from "discord.js";
 import { AppError, ConfigService } from "@rta/services";
-import { handleCommand, handleButton, handleSelectMenu } from "../commands/index.js";
+import {
+  handleAutocomplete,
+  handleCommand,
+  handleButton,
+  handleSelectMenu
+} from "../commands/index.js";
 import {
   resumePendingEncounterPublications,
   retireLegacyPublicExplorationHubs
@@ -53,6 +58,18 @@ export function registerClientEvents(client: Client, configService: ConfigServic
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isAutocomplete()) {
+      try {
+        await handleAutocomplete(interaction);
+      } catch (error) {
+        console.error("Unable to answer command autocomplete", error);
+        if (!interaction.responded) {
+          await interaction.respond([]).catch(() => undefined);
+        }
+      }
+      return;
+    }
+
     if (interaction.isChatInputCommand()) {
       try {
         await interaction.deferReply({

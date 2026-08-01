@@ -87,6 +87,7 @@ export const commandBuilders = [
         .setName("nom")
         .setDescription("Nom ou identifiant Vault de la carte")
         .setRequired(true)
+        .setAutocomplete(true)
     )
     .addStringOption(variantOption)
     .addStringOption((option) =>
@@ -94,6 +95,7 @@ export const commandBuilders = [
         .setName("deck")
         .setDescription("Deck de la carte si plusieurs cartes ont le même nom")
         .setRequired(false)
+        .setAutocomplete(true)
     ),
   new SlashCommandBuilder().setName("leaderboard").setDescription("Voir le classement"),
   new SlashCommandBuilder()
