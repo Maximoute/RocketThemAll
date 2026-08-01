@@ -1,15 +1,21 @@
-import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@rta/database";
+import PlayerLink from "../components/player-link";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const [cardCount, userCount] = await Promise.all([
-    prisma.inventoryItem.aggregate({ _sum: { quantity: true } }).catch(() => ({ _sum: { quantity: 0 } })),
-    prisma.user.count().catch(() => 0),
-  ]);
+const getPublicCatalogStats = unstable_cache(
+  async () => Promise.all([
+    prisma.card.count({ where: { status: "PUBLISHED", isActive: true } }).catch(() => 0),
+    prisma.worldDefinition.count({ where: { status: "PUBLISHED" } }).catch(() => 0),
+  ]),
+  ["home-public-catalog-stats"],
+  { revalidate: 300 }
+);
 
-  const totalCards = cardCount._sum.quantity ?? 0;
+export default async function HomePage() {
+  // Public landing data only: never touch a player's account or inventory here.
+  const [cardCount, worldCount] = await getPublicCatalogStats();
 
   return (
     <div>
@@ -25,12 +31,12 @@ export default async function HomePage() {
             Collectionne des cartes sur Discord · Suis ta progression sur le web
           </p>
           <div className="flex gap-3 justify-center flex-wrap">
-            <Link href="/inventory" className="px-5 py-2.5 bg-rta-cta text-rta-bg font-bold rounded-lg hover:bg-rta-cta/90 transition-colors">
+            <PlayerLink href="/inventory" className="px-5 py-2.5 bg-rta-cta text-rta-bg font-bold rounded-lg hover:bg-rta-cta/90 transition-colors">
               Voir mon inventaire →
-            </Link>
-            <Link href="/shop" className="px-5 py-2.5 border border-rta-success text-rta-success font-bold rounded-lg hover:bg-rta-success/10 transition-colors">
+            </PlayerLink>
+            <PlayerLink href="/shop" className="px-5 py-2.5 border border-rta-success text-rta-success font-bold rounded-lg hover:bg-rta-success/10 transition-colors">
               Boutique
-            </Link>
+            </PlayerLink>
           </div>
         </div>
       </section>
@@ -38,8 +44,8 @@ export default async function HomePage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         {[
-          { value: totalCards.toLocaleString("fr-FR"), label: "Cartes collectées", color: "text-rta-success" },
-          { value: userCount.toLocaleString("fr-FR"), label: "Joueurs inscrits",    color: "text-rta-cta"    },
+          { value: cardCount.toLocaleString("fr-FR"), label: "Cartes disponibles", color: "text-rta-success" },
+          { value: worldCount.toLocaleString("fr-FR"), label: "Mondes disponibles", color: "text-rta-cta"    },
           { value: "Multi-univers",                    label: "Univers disponibles", color: "text-rta-gold"  },
         ].map(({ value, label, color }) => (
           <div key={label} className="bg-rta-surface border border-rta-border rounded-xl p-4 text-center">
@@ -58,13 +64,13 @@ export default async function HomePage() {
           { href: "/shop?section=premium", emoji: "💳", title: "Boutique €", desc: "VIP, Fondateur et packs de crédits" },
           { href: "/skills", emoji: "🌳", title: "Compétences", desc: "Tes trois arbres de progression" },
         ].map(({ href, emoji, title, desc }) => (
-          <Link key={href} href={href} className="bg-rta-surface border border-rta-border rounded-xl p-5 flex items-center gap-4 hover:border-rta-accentHi hover:bg-rta-surface2 transition-colors group">
+          <PlayerLink key={href} href={href} className="bg-rta-surface border border-rta-border rounded-xl p-5 flex items-center gap-4 hover:border-rta-accentHi hover:bg-rta-surface2 transition-colors group">
             <span className="text-3xl">{emoji}</span>
             <div>
               <div className="font-bold text-rta-ink group-hover:text-rta-cta transition-colors">{title}</div>
               <div className="text-xs text-rta-muted mt-0.5">{desc}</div>
             </div>
-          </Link>
+          </PlayerLink>
         ))}
       </div>
     </div>

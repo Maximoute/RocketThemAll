@@ -9,9 +9,10 @@ import AuthButton from "./auth-button";
 export default function Nav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const isAuthenticated = status === "authenticated";
 
-  const link = (href: string, label: string) => {
+  const link = (href: string, label: string, playerOnly = false) => {
     const premiumShop = searchParams.get("section") === "premium";
     const active = href === "/shop"
       ? pathname === "/shop" && !premiumShop
@@ -20,7 +21,8 @@ export default function Nav() {
         : pathname === href || (href !== "/" && pathname.startsWith(href));
     return (
       <Link
-        href={href}
+        href={playerOnly && !isAuthenticated ? "/login" : href}
+        prefetch={playerOnly ? isAuthenticated : undefined}
         className={[
           "px-2 sm:px-3 py-2 text-sm rounded-md border-b-2 transition-colors whitespace-nowrap text-center",
           active
@@ -44,14 +46,14 @@ export default function Nav() {
 
       <nav className="order-3 w-full grid grid-cols-3 gap-1 md:order-2 md:w-auto md:flex md:items-center md:gap-0.5">
         {link("/", "Accueil")}
-        {link("/profile", "Profil")}
-        {link("/inventory", "Inventaire")}
-        {link("/shop", "Boutique crédits")}
-        {link("/skills", "Compétences")}
-        {link("/achievements", "Achievements")}
+        {link("/profile", "Profil", true)}
+        {link("/inventory", "Inventaire", true)}
+        {link("/shop", "Boutique crédits", true)}
+        {link("/skills", "Compétences", true)}
+        {link("/achievements", "Achievements", true)}
         {link("/collection", "Collection")}
-        {link("/shop?section=premium", "Boutique €")}
-        {session?.user?.isAdmin === true && link("/admin", "Admin")}
+        {link("/shop?section=premium", "Boutique €", true)}
+        {session?.user?.isAdmin === true && link("/admin", "Admin", true)}
       </nav>
 
       <div className="order-2 shrink-0 md:order-3">
