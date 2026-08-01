@@ -5,7 +5,7 @@ La production utilise des images immuables construites par GitHub Actions. Le VP
 ## Architecture
 
 1. Un push sur `RTAV2` lance les tests de CI et le workflow de production.
-2. GitHub construit six images (`api`, `bot`, `worker`, `web`, `migrate`, `postgres`) et les publie dans GHCR avec le SHA Git complet comme tag.
+2. GitHub construit sept images (`api`, `bot`, `worker`, `web`, `migrate`, `postgres`, `caddy`) et les publie dans GHCR avec le SHA Git complet comme tag.
 3. GitHub ouvre une connexion SSH avec le compte limité `deploy`, transfère uniquement les fichiers Compose/proxy et lance `scripts/deploy-vps.sh`.
 4. Le script sauvegarde PostgreSQL avant une migration, télécharge les images, attend les healthchecks et bascule atomiquement le lien `/srv/rocketthemall/current`.
 5. En cas d'échec, le script tente de redémarrer la version précédente.

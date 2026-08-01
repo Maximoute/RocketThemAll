@@ -1,4 +1,6 @@
 services:
+  caddy:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-caddy:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
   postgres:
     image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-postgres:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
   migrate:

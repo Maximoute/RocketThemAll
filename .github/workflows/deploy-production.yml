@@ -82,7 +82,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and publish image
         id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           target: ${{ matrix.target }}
@@ -98,22 +98,30 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-  publish-postgres-image:
-    name: Publish PostgreSQL
+  publish-infrastructure-images:
+    name: Publish ${{ matrix.component }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     needs: quality-gate
     permissions:
       contents: read
       packages: write
       id-token: write
       attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: postgres
+            dockerfile: docker/postgres/Dockerfile
+          - component: caddy
+            dockerfile: docker/caddy/Dockerfile
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Compute immutable image name
         id: image
         shell: bash
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-postgres" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.component }}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
@@ -122,14 +130,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and publish image
         id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
-          file: docker/postgres/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
-          cache-from: type=gha,scope=production-postgres
-          cache-to: type=gha,mode=max,scope=production-postgres
+          cache-from: type=gha,scope=production-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=production-${{ matrix.component }}
       - name: Attest image provenance
         uses: actions/attest-build-provenance@78e6cbd37d0ac1a40113c04f2037dacf1ea3f12e # v4
         with:
@@ -141,7 +149,7 @@ jobs:
     name: Deploy immutable release
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    needs: [publish-app-images, publish-postgres-image]
+    needs: [publish-app-images, publish-infrastructure-images]
     environment: production
     permissions:
       contents: read
