@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { requireAdmin } from "../../lib/guard";
 import AdminSidebar from "./AdminSidebar.client";
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  await requireAdmin();
+
   return (
     <div className="-mx-6 -mt-7 flex min-h-screen">
       {/* Top bar */}

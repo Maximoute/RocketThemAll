@@ -24,6 +24,17 @@ test("admin authorization has no username lookup fallback", async () => {
   assert.doesNotMatch(makeAdmin, /where\s*:\s*\{\s*username\b/);
 });
 
+test("admin navigation and layouts fail closed for regular users", async () => {
+  const [navigation, adminLayout] = await Promise.all([
+    source("apps/web/src/components/nav.tsx"),
+    source("apps/web/src/app/admin/layout.tsx")
+  ]);
+
+  assert.match(navigation, /session\?\.user\?\.isAdmin\s*===\s*true/);
+  assert.doesNotMatch(navigation, /status\s*===\s*["']authenticated["']\s*&&\s*link\(["']\/admin/);
+  assert.match(adminLayout, /await\s+requireAdmin\(\)/);
+});
+
 test("the web image optimizer cannot fetch remote URLs", async () => {
   const nextConfig = await source("apps/web/next.config.mjs");
   assert.match(nextConfig, /remotePatterns\s*:\s*\[\s*\]/);

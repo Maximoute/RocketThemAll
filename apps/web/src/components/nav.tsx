@@ -9,7 +9,7 @@ import AuthButton from "./auth-button";
 export default function Nav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { status } = useSession();
+  const { data: session } = useSession();
 
   const link = (href: string, label: string) => {
     const premiumShop = searchParams.get("section") === "premium";
@@ -51,7 +51,7 @@ export default function Nav() {
         {link("/achievements", "Achievements")}
         {link("/collection", "Collection")}
         {link("/shop?section=premium", "Boutique €")}
-        {status === "authenticated" && link("/admin", "Admin")}
+        {session?.user?.isAdmin === true && link("/admin", "Admin")}
       </nav>
 
       <div className="order-2 shrink-0 md:order-3">
