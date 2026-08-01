@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requireUser } from "../../lib/guard";
 import { FRAGMENT_CRAFT_COST, getUserFragmentBalances } from "../../lib/fragments";
 import { getUserInventoryValue } from "../../lib/economy";
+import DiscordAvatar from "./DiscordAvatar.client";
 
 const achievementService = new AchievementService();
 const monetizationService = new MonetizationService();
@@ -34,8 +35,12 @@ export default async function ProfilePage() {
     <div>
       {/* Header */}
       <div className="bg-gradient-to-br from-rta-surface to-rta-surface2 border border-rta-border rounded-2xl p-6 flex items-center gap-5 mb-4">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-rta-accent to-rta-success flex items-center justify-center text-2xl border-2 border-rta-cta shadow-[0_0_16px_rgba(242,130,65,0.4)] shrink-0">
-          👤
+        <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-rta-accent to-rta-success border-2 border-rta-cta shadow-[0_0_16px_rgba(242,130,65,0.4)] shrink-0">
+          <DiscordAvatar
+            avatarUrl={user.avatarUrl}
+            discordId={user.discordId}
+            username={user.username}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-black tracking-tight truncate">{user.username}</h1>
