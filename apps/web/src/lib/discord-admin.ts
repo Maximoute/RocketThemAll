@@ -17,24 +17,26 @@ export type DiscordGuildRole = {
 };
 
 const TEXT_CHANNEL_TYPES = new Set([0, 5]);
+const DISCORD_SNOWFLAKE = /^\d{17,20}$/;
 
-export async function fetchGuildGameChannels(guildId: string): Promise<DiscordGameChannel[]> {
-  const token = process.env.DISCORD_TOKEN;
-  if (!token) {
-    return [];
-  }
-
-  const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
+function discordRequest(path: string, token: string) {
+  return fetch(`https://discord.com/api/v10${path}`, {
     headers: {
       Authorization: `Bot ${token}`,
       "Content-Type": "application/json"
     },
+    signal: AbortSignal.timeout(5_000),
     cache: "no-store"
   });
+}
 
-  if (!response.ok) {
-    return [];
-  }
+export async function fetchGuildGameChannels(guildId: string): Promise<DiscordGameChannel[]> {
+  if (!DISCORD_SNOWFLAKE.test(guildId)) return [];
+  const token = process.env.DISCORD_TOKEN;
+  if (!token) return [];
+
+  const response = await discordRequest(`/guilds/${guildId}/channels`, token);
+  if (!response.ok) return [];
 
   const channels = await response.json() as DiscordChannel[];
   return channels
@@ -44,15 +46,10 @@ export async function fetchGuildGameChannels(guildId: string): Promise<DiscordGa
 }
 
 export async function fetchGuildRoles(guildId: string): Promise<DiscordGuildRole[]> {
+  if (!DISCORD_SNOWFLAKE.test(guildId)) return [];
   const token = process.env.DISCORD_TOKEN;
   if (!token) return [];
-  const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
-    headers: {
-      Authorization: `Bot ${token}`,
-      "Content-Type": "application/json"
-    },
-    cache: "no-store"
-  });
+  const response = await discordRequest(`/guilds/${guildId}/roles`, token);
   if (!response.ok) return [];
   const roles = await response.json() as DiscordGuildRole[];
   return roles.sort((left, right) => right.position - left.position);

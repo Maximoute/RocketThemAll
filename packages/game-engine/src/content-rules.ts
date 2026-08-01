@@ -58,6 +58,18 @@ export const DANGER_RARITY_WEIGHTS: Readonly<
   ]
 };
 
+export const PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT = 25;
+
+const CORE_RARITY_ORDER: readonly CoreRarity[] = [
+  "Common",
+  "Uncommon",
+  "Rare",
+  "Very Rare",
+  "Import",
+  "Exotic",
+  "Black Market"
+];
+
 export const DECK_RARITY_COUNTS: Readonly<Record<CoreRarity, number>> = {
   Common: 9,
   Uncommon: 7,
@@ -104,6 +116,61 @@ export function rarityWeightsForDanger(
   boostedRarity?: CoreRarity | null
 ): readonly WeightedValue<CoreRarity>[] {
   const baseWeights = DANGER_RARITY_WEIGHTS[profile];
+  if (!boostedRarity || !baseWeights.some((entry) => entry.value === boostedRarity)) {
+    return baseWeights;
+  }
+  const otherWeight = baseWeights.reduce(
+    (total, entry) => total + (entry.value === boostedRarity ? 0 : entry.weight),
+    0
+  );
+  return baseWeights.map((entry) => ({
+    value: entry.value,
+    weight: entry.value === boostedRarity ? otherWeight : entry.weight
+  }));
+}
+
+/**
+ * Premium routes upgrade one quarter of every rarity band to the next tier.
+ * The total weight is preserved and Black Market stays at the highest tier.
+ */
+export function applyPremiumRouteRarityBonus(
+  entries: readonly WeightedValue<CoreRarity>[]
+): readonly WeightedValue<CoreRarity>[] {
+  const weights = new Map<CoreRarity, number>();
+  const upgradePercent = PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT;
+  const retainedPercent = 100 - upgradePercent;
+
+  for (const entry of entries) {
+    const rarityIndex = CORE_RARITY_ORDER.indexOf(entry.value);
+    const nextRarity = CORE_RARITY_ORDER[rarityIndex + 1];
+    if (!nextRarity) {
+      weights.set(entry.value, (weights.get(entry.value) ?? 0) + entry.weight * 100);
+      continue;
+    }
+    weights.set(
+      entry.value,
+      (weights.get(entry.value) ?? 0) + entry.weight * retainedPercent
+    );
+    weights.set(
+      nextRarity,
+      (weights.get(nextRarity) ?? 0) + entry.weight * upgradePercent
+    );
+  }
+
+  return CORE_RARITY_ORDER.flatMap((value) => {
+    const weight = weights.get(value) ?? 0;
+    return weight > 0 ? [{ value, weight }] : [];
+  });
+}
+
+export function rarityWeightsForRoute(
+  profile: DangerProfile,
+  premium: boolean,
+  boostedRarity?: CoreRarity | null
+): readonly WeightedValue<CoreRarity>[] {
+  const baseWeights = premium
+    ? applyPremiumRouteRarityBonus(DANGER_RARITY_WEIGHTS[profile])
+    : DANGER_RARITY_WEIGHTS[profile];
   if (!boostedRarity || !baseWeights.some((entry) => entry.value === boostedRarity)) {
     return baseWeights;
   }

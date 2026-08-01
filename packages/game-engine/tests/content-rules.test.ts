@@ -4,8 +4,11 @@ import {
   DECK_RARITY_COUNTS,
   INCENSE_VARIANT_WEIGHTS,
   VARIANT_WEIGHTS,
+  PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT,
   applyRarityWeightMultiplier,
+  applyPremiumRouteRarityBonus,
   rarityWeightsForDanger,
+  rarityWeightsForRoute,
   rollRarityForDanger,
   rollRarityForDangerWithBoost,
   rollVariant,
@@ -76,4 +79,47 @@ describe("content rules", () => {
     expect(boosted.find((entry) => entry.value === "Import")?.weight).toBe(500);
     expect(applyRarityWeightMultiplier(base, "Exotic", 1.4)).toBe(base);
   });
+
+  it("moves 25 percent of premium route odds up by one rarity tier", () => {
+    expect(PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT).toBe(25);
+    expect(applyPremiumRouteRarityBonus(DANGER_RARITY_WEIGHTS.Calm)).toEqual([
+      { value: "Common", weight: 4_875 },
+      { value: "Uncommon", weight: 3_500 },
+      { value: "Rare", weight: 1_375 },
+      { value: "Very Rare", weight: 250 }
+    ]);
+  });
+
+  it("keeps premium route odds at the same total and above the free expected rarity", () => {
+    for (const profile of Object.keys(DANGER_RARITY_WEIGHTS) as Array<keyof typeof DANGER_RARITY_WEIGHTS>) {
+      const free = rarityWeightsForRoute(profile, false);
+      const premium = rarityWeightsForRoute(profile, true);
+      const freeTotal = free.reduce((sum, entry) => sum + entry.weight, 0);
+      const premiumTotal = premium.reduce((sum, entry) => sum + entry.weight, 0);
+      const expectedRank = (entries: typeof free, total: number) => entries.reduce(
+        (sum, entry) => sum + CORE_RARITY_RANK[entry.value] * entry.weight,
+        0
+      ) / total;
+
+      expect(premiumTotal).toBe(freeTotal * 100);
+      expect(expectedRank(premium, premiumTotal)).toBeGreaterThan(expectedRank(free, freeTotal));
+    }
+  });
+
+  it("keeps an incense target at exactly 50 percent on a premium route", () => {
+    const weights = rarityWeightsForRoute("Calm", true, "Rare");
+    const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
+    const rare = weights.find((entry) => entry.value === "Rare")?.weight ?? 0;
+    expect(rare / total).toBe(0.5);
+  });
 });
+
+const CORE_RARITY_RANK: Record<keyof typeof DECK_RARITY_COUNTS, number> = {
+  Common: 0,
+  Uncommon: 1,
+  Rare: 2,
+  "Very Rare": 3,
+  Import: 4,
+  Exotic: 5,
+  "Black Market": 6
+};

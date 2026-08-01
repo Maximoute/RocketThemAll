@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-postgres:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+  migrate:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-migrate:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+  api:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-api:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+  worker:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-worker:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+  bot:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-bot:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+  web:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-web:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}

@@ -11,7 +11,11 @@ export const metadata: Metadata = {
     template: "%s"
   },
   description:
-    "Jeu communautaire de collection et de progression connecté à Discord."
+    "Jeu communautaire de collection et de progression connecté à Discord.",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/favicon.png"
+  }
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

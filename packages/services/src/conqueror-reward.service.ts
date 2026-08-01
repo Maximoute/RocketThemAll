@@ -29,6 +29,7 @@ interface BoosterChoiceSnapshot {
   cardIds: string[];
   variants: VariantName[];
   claimed: boolean;
+  selectedIndexes?: number[];
   selectedIndex?: number;
 }
 
@@ -56,6 +57,76 @@ const CONQUEROR_CARD_WEIGHTS: Record<
   import: { "Very Rare": 20, Import: 50, Exotic: 27, "Black Market": 3 },
   exotic: { Import: 25, Exotic: 65, "Black Market": 10 }
 };
+
+const SHOP_BOOSTER_CONFIG = {
+  "booster.basic": {
+    tier: "common",
+    boosterType: "basic",
+    offered: 3,
+    kept: 1,
+    weights: { Common: 1 }
+  },
+  "booster.rare": {
+    tier: "rare",
+    boosterType: "rare",
+    offered: 4,
+    kept: 2,
+    weights: { Rare: 1 }
+  },
+  "booster.epic": {
+    tier: "very_rare",
+    boosterType: "epic",
+    offered: 5,
+    kept: 3,
+    weights: { "Very Rare": 1 }
+  },
+  "booster.legendary": {
+    tier: "exotic",
+    boosterType: "legendary",
+    offered: 6,
+    kept: 4,
+    weights: { "Black Market": 1 }
+  }
+} as const;
+
+export const CONQUEROR_BOOSTER_RULES: Record<
+  ConquerorRewardTier,
+  { offered: number; kept: number }
+> = {
+  common: { offered: 3, kept: 1 },
+  uncommon: { offered: 4, kept: 2 },
+  rare: { offered: 5, kept: 3 },
+  very_rare: { offered: 6, kept: 4 },
+  import: { offered: 7, kept: 5 },
+  exotic: { offered: 8, kept: 6 }
+};
+
+type ShopBoosterKey = keyof typeof SHOP_BOOSTER_CONFIG;
+
+function boosterConfig(itemKey: string) {
+  if (itemKey in SHOP_BOOSTER_CONFIG) {
+    const config = SHOP_BOOSTER_CONFIG[itemKey as ShopBoosterKey];
+    return {
+      tier: config.tier as ConquerorRewardTier,
+      offered: config.offered,
+      kept: config.kept,
+      weights: config.weights as Partial<Record<string, number>>,
+      boosterType: config.boosterType as "basic" | "rare" | "epic" | "legendary"
+    };
+  }
+  const tier = tierFromItemKey(itemKey, "booster");
+  return {
+    tier,
+    ...CONQUEROR_BOOSTER_RULES[tier],
+    weights: CONQUEROR_CARD_WEIGHTS[tier],
+    boosterType: null
+  };
+}
+
+export function boosterSelectionRule(itemKey: string) {
+  const { offered, kept } = boosterConfig(itemKey);
+  return { offered, kept, discarded: offered - kept };
+}
 
 export const CONQUEROR_CHEST_RANGES: Record<
   ConquerorRewardTier,
@@ -122,14 +193,33 @@ function parseBoosterSnapshot(value: Prisma.JsonValue | null): BoosterChoiceSnap
   if (
     typeof candidate.itemKey !== "string" ||
     !Array.isArray(candidate.cardIds) ||
-    candidate.cardIds.length !== 3 ||
+    candidate.cardIds.length < 3 ||
+    candidate.cardIds.length > 8 ||
     !candidate.cardIds.every((entry) => typeof entry === "string") ||
     !Array.isArray(candidate.variants) ||
-    candidate.variants.length !== 3 ||
+    candidate.variants.length !== candidate.cardIds.length ||
     !candidate.variants.every(
       (entry) => entry === "normal" || entry === "shiny" || entry === "holo"
     ) ||
-    typeof candidate.claimed !== "boolean"
+    typeof candidate.claimed !== "boolean" ||
+    (
+      candidate.selectedIndex !== undefined &&
+      (
+        !Number.isSafeInteger(candidate.selectedIndex) ||
+        Number(candidate.selectedIndex) < 0 ||
+        Number(candidate.selectedIndex) >= 8
+      )
+    ) ||
+    (
+      candidate.selectedIndexes !== undefined &&
+      (
+        !Array.isArray(candidate.selectedIndexes) ||
+        !candidate.selectedIndexes.every(
+          (entry) => Number.isSafeInteger(entry) && Number(entry) >= 0 &&
+            Number(entry) < 8
+        )
+      )
+    )
   ) {
     throw new AppError("La sélection enregistrée du booster est invalide.", 500);
   }
@@ -208,7 +298,8 @@ export class ConquerorRewardService {
     itemKey: string,
     requestedOpeningNumber?: number
   ) {
-    const tier = tierFromItemKey(itemKey, "booster");
+    const selectionConfig = boosterConfig(itemKey);
+    const tier = selectionConfig.tier;
     const result = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw(
         Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`
@@ -217,9 +308,15 @@ export class ConquerorRewardService {
       if (!item || item.status !== "PUBLISHED" || item.type !== "BOOSTER") {
         throw new AppError("Ce Booster du Conquérant n'est pas disponible.", 404);
       }
-      const owned = await tx.userItem.findUnique({
-        where: { userId_itemId: { userId, itemId: item.id } }
-      });
+      const owned = selectionConfig.boosterType
+        ? await tx.userBooster.findUnique({
+            where: {
+              userId_boosterType: { userId, boosterType: selectionConfig.boosterType }
+            }
+          })
+        : await tx.userItem.findUnique({
+            where: { userId_itemId: { userId, itemId: item.id } }
+          });
       if (!owned || owned.quantity < 1) {
         throw new AppError("Tu ne possèdes pas ce Booster du Conquérant.", 409);
       }
@@ -254,7 +351,7 @@ export class ConquerorRewardService {
       }
 
       const random = createSeededRandom(scopeKey);
-      const weights = CONQUEROR_CARD_WEIGHTS[tier];
+      const weights = selectionConfig.weights;
       const rarityNames = Object.keys(weights);
       const pool = await tx.card.findMany({
         where: {
@@ -268,13 +365,13 @@ export class ConquerorRewardService {
         include: { rarity: true, deck: true },
         orderBy: { id: "asc" }
       });
-      if (pool.length < 3) {
+      if (pool.length < selectionConfig.offered) {
         throw new AppError("Le catalogue ne contient pas assez de cartes éligibles.", 500);
       }
 
       const cards = [];
       const usedCardIds = new Set<string>();
-      for (let index = 0; index < 3; index += 1) {
+      for (let index = 0; index < selectionConfig.offered; index += 1) {
         const availableRarities = rarityNames.filter((rarityName) =>
           pool.some((card) =>
             card.rarity.name === rarityName && !usedCardIds.has(card.id)
@@ -331,9 +428,16 @@ export class ConquerorRewardService {
     return {
       tier: result.tier,
       itemName: result.itemName,
+      itemKey,
       openingNumber: result.openingNumber,
       claimed: result.snapshot.claimed,
+      selectedIndexes: result.snapshot.selectedIndexes ?? (
+        result.snapshot.selectedIndex === undefined
+          ? undefined
+          : [result.snapshot.selectedIndex]
+      ),
       selectedIndex: result.snapshot.selectedIndex,
+      keepCount: Math.max(1, result.snapshot.cardIds.length - 2),
       choices: result.snapshot.cardIds.map((cardId, index) => {
         const card = cardsById.get(cardId);
         if (!card) throw new AppError("Une carte réservée n'existe plus.", 500);
@@ -346,10 +450,20 @@ export class ConquerorRewardService {
     userId: string,
     itemKey: string,
     openingNumber: number,
-    selectedIndex: number
+    selectedIndexesInput: number | number[]
   ) {
-    const tier = tierFromItemKey(itemKey, "booster");
-    if (!Number.isSafeInteger(selectedIndex) || selectedIndex < 0 || selectedIndex > 2) {
+    const config = boosterConfig(itemKey);
+    const tier = config.tier;
+    const selectedIndexes = [...new Set(
+      (Array.isArray(selectedIndexesInput)
+        ? selectedIndexesInput
+        : [selectedIndexesInput])
+        .map(Number)
+    )].sort((left, right) => left - right);
+    if (
+      selectedIndexes.length === 0 ||
+      selectedIndexes.some((index) => !Number.isSafeInteger(index) || index < 0)
+    ) {
       throw new AppError("Choix de carte invalide.", 400);
     }
     const result = await prisma.$transaction(async (tx) => {
@@ -373,17 +487,30 @@ export class ConquerorRewardService {
       const scopeKey = `conqueror-choice:${userId}:${itemKey}:${openingNumber}`;
       const selection = await tx.idempotencyRecord.findUnique({ where: { scopeKey } });
       if (!selection) {
-        throw new AppError("Ouvre d'abord le booster pour générer ses trois choix.", 409);
+        throw new AppError("Ouvre d'abord le booster pour générer ses choix.", 409);
       }
       const snapshot = parseBoosterSnapshot(selection.response);
+      const keepCount = Math.max(1, snapshot.cardIds.length - 2);
+      if (
+        selectedIndexes.length !== keepCount ||
+        selectedIndexes.some((index) => index >= snapshot.cardIds.length)
+      ) {
+        throw new AppError(
+          `Sélectionne exactement ${keepCount} carte(s) parmi les ${snapshot.cardIds.length} proposées.`,
+          400
+        );
+      }
       if (snapshot.claimed) {
-        const replayIndex = snapshot.selectedIndex;
-        if (replayIndex === undefined) {
+        const replayIndexes = snapshot.selectedIndexes ?? (
+          snapshot.selectedIndex === undefined ? [] : [snapshot.selectedIndex]
+        );
+        if (replayIndexes.length === 0) {
           throw new AppError("La sélection enregistrée est incomplète.", 500);
         }
         return {
-          cardId: snapshot.cardIds[replayIndex]!,
-          variant: snapshot.variants[replayIndex]!,
+          cardIds: replayIndexes.map((index) => snapshot.cardIds[index]!),
+          variants: replayIndexes.map((index) => snapshot.variants[index]!),
+          itemName: item.name,
           replayed: true
         };
       }
@@ -391,83 +518,122 @@ export class ConquerorRewardService {
         throw new AppError("Cette sélection de booster n'est plus active.", 409);
       }
 
-      const owned = await tx.userItem.findUnique({
-        where: { userId_itemId: { userId, itemId: item.id } }
-      });
+      const owned = config.boosterType
+        ? await tx.userBooster.findUnique({
+            where: {
+              userId_boosterType: { userId, boosterType: config.boosterType }
+            }
+          })
+        : await tx.userItem.findUnique({
+            where: { userId_itemId: { userId, itemId: item.id } }
+          });
       if (!owned || owned.quantity < 1) {
-        throw new AppError("Tu ne possèdes plus ce Booster du Conquérant.", 409);
+        throw new AppError("Tu ne possèdes plus ce booster.", 409);
       }
-      const cardId = snapshot.cardIds[selectedIndex]!;
-      const variant = snapshot.variants[selectedIndex]!;
-      const card = await tx.card.findUnique({ where: { id: cardId } });
-      if (!card || card.status !== "PUBLISHED" || !card.isActive) {
-        throw new AppError("La carte choisie n'est plus disponible.", 409);
-      }
-      const inventory = await tx.inventoryItem.findUnique({
+      const selectedCards = selectedIndexes.map((selectedIndex) => ({
+        selectedIndex,
+        cardId: snapshot.cardIds[selectedIndex]!,
+        variant: snapshot.variants[selectedIndex]!
+      }));
+      const availableCardCount = await tx.card.count({
         where: {
-          userId_cardId_variant: {
-            userId,
-            cardId,
-            variant: variant as CardVariant
-          }
+          id: { in: selectedCards.map((entry) => entry.cardId) },
+          status: "PUBLISHED",
+          isActive: true
         }
       });
-      const consumed = await tx.userItem.updateMany({
-        where: { id: owned.id, quantity: { gt: 0 }, version: owned.version },
-        data: { quantity: { decrement: 1 }, version: { increment: 1 } }
-      });
-      if (consumed.count !== 1) throw new AppError("Ton inventaire a changé.", 409);
-      await tx.inventoryItem.upsert({
-        where: {
-          userId_cardId_variant: {
-            userId,
-            cardId,
-            variant: variant as CardVariant
+      if (availableCardCount !== selectedCards.length) {
+        throw new AppError("La carte choisie n'est plus disponible.", 409);
+      }
+      const inventories = await Promise.all(selectedCards.map((entry) =>
+        tx.inventoryItem.findUnique({
+          where: {
+            userId_cardId_variant: {
+              userId,
+              cardId: entry.cardId,
+              variant: entry.variant as CardVariant
+            }
           }
-        },
-        update: { quantity: { increment: 1 }, version: { increment: 1 } },
-        create: { userId, cardId, variant: variant as CardVariant, quantity: 1 }
+        })
+      ));
+      const consumed = config.boosterType
+        ? await tx.userBooster.updateMany({
+            where: {
+              id: owned.id,
+              userId,
+              boosterType: config.boosterType,
+              quantity: { gt: 0 }
+            },
+            data: { quantity: { decrement: 1 } }
+          })
+        : await tx.userItem.updateMany({
+            where: {
+              id: owned.id,
+              quantity: { gt: 0 },
+              version: "version" in owned ? owned.version : undefined
+            },
+            data: { quantity: { decrement: 1 }, version: { increment: 1 } }
+          });
+      if (consumed.count !== 1) throw new AppError("Ton inventaire a changé.", 409);
+      await tx.economicLedgerEntry.create({
+        data: {
+          userId,
+          asset: config.boosterType ? "BOOSTER" : "ITEM",
+          assetKey: config.boosterType ?? itemKey,
+          delta: -1,
+          balanceBefore: owned.quantity,
+          balanceAfter: owned.quantity - 1,
+          reason: config.boosterType ? "booster.opened" : "conqueror.booster_opened",
+          referenceType: config.boosterType ? "Booster" : "ItemDefinition",
+          referenceId: config.boosterType ?? item.id,
+          operationKey: `${scopeKey}:item`
+        }
       });
-      await tx.economicLedgerEntry.createMany({
-        data: [
-          {
-            userId,
-            asset: "ITEM",
-            assetKey: itemKey,
-            delta: -1,
-            balanceBefore: owned.quantity,
-            balanceAfter: owned.quantity - 1,
-            reason: "conqueror.booster_opened",
-            referenceType: "ItemDefinition",
-            referenceId: item.id,
-            operationKey: `${scopeKey}:item`
+      for (const [index, entry] of selectedCards.entries()) {
+        const inventory = inventories[index];
+        await tx.inventoryItem.upsert({
+          where: {
+            userId_cardId_variant: {
+              userId,
+              cardId: entry.cardId,
+              variant: entry.variant as CardVariant
+            }
           },
-          {
+          update: { quantity: { increment: 1 }, version: { increment: 1 } },
+          create: {
+            userId,
+            cardId: entry.cardId,
+            variant: entry.variant as CardVariant,
+            quantity: 1
+          }
+        });
+        await tx.economicLedgerEntry.create({
+          data: {
             userId,
             asset: "CARD",
-            assetKey: `${cardId}:${variant}`,
+            assetKey: `${entry.cardId}:${entry.variant}`,
             delta: 1,
             balanceBefore: inventory?.quantity ?? 0,
             balanceAfter: (inventory?.quantity ?? 0) + 1,
-            reason: "conqueror.booster_choice",
+            reason: "booster.choice",
             referenceType: "ItemDefinition",
             referenceId: item.id,
-            operationKey: `${scopeKey}:card`,
-            metadata: { selectedIndex, tier }
+            operationKey: `${scopeKey}:card:${entry.selectedIndex}`,
+            metadata: { selectedIndex: entry.selectedIndex, tier, itemKey }
           }
-        ]
-      });
+        });
+      }
       await tx.transactionLog.create({
         data: {
           userId,
           type: "booster",
-          amount: 1,
+          amount: selectedCards.length,
           metadata: {
-            action: "open_conqueror",
+            action: "open_choice",
             itemKey,
-            cardId,
-            variant,
-            selectedIndex
+            cardIds: selectedCards.map((entry) => entry.cardId),
+            variants: selectedCards.map((entry) => entry.variant),
+            selectedIndexes
           }
         }
       });
@@ -478,13 +644,18 @@ export class ConquerorRewardService {
           aggregateId: userId,
           eventType: "booster.opened",
           eventVersion: 1,
-          payload: { userId, boosterType: itemKey, cardIds: [cardId], variants: [variant] }
+          payload: {
+            userId,
+            boosterType: config.boosterType ?? itemKey,
+            cardIds: selectedCards.map((entry) => entry.cardId),
+            variants: selectedCards.map((entry) => entry.variant)
+          }
         }
       });
       const updatedSnapshot: BoosterChoiceSnapshot = {
         ...snapshot,
         claimed: true,
-        selectedIndex
+        selectedIndexes
       };
       await tx.idempotencyRecord.update({
         where: { scopeKey },
@@ -503,15 +674,31 @@ export class ConquerorRewardService {
           version: { increment: 1 }
         }
       });
-      return { cardId, variant, replayed: false };
+      return {
+        cardIds: selectedCards.map((entry) => entry.cardId),
+        variants: selectedCards.map((entry) => entry.variant),
+        itemName: item.name,
+        replayed: false
+      };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-    const card = await prisma.card.findUniqueOrThrow({
-      where: { id: result.cardId },
+    const cardRows = await prisma.card.findMany({
+      where: { id: { in: result.cardIds } },
       include: { rarity: true, deck: true }
     });
+    const cardsById = new Map(cardRows.map((card) => [card.id, card]));
+    const cards = result.cardIds.map((cardId, index) => {
+      const card = cardsById.get(cardId);
+      if (!card) throw new AppError("Une carte obtenue n'existe plus.", 500);
+      return { card, variant: result.variants[index]! };
+    });
     if (!result.replayed) await this.collectionService.grantCollectionRewards(userId);
-    return { ...result, card };
+    return {
+      ...result,
+      cards,
+      card: cards[0]!.card,
+      variant: cards[0]!.variant
+    };
   }
 
   async openChest(

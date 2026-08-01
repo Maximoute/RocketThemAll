@@ -4,14 +4,19 @@ import { AppError } from "./errors.js";
 import { assertCardCanLeaveCollection } from "./collection-protection.js";
 
 const TRADE_EXPIRATION_MS = 10 * 60 * 1000;
+const MAX_TRADE_QUANTITY = 1_000_000;
+const MAX_TRADE_CREDITS = 2_000_000_000;
 
 export class TradeService {
   private readonly collectionService = new CollectionService();
 
   private requirePositiveQuantity(quantity: number, fieldName: string) {
     const safeValue = Number.isFinite(quantity) ? Math.floor(quantity) : 0;
-    if (safeValue <= 0) {
-      throw new AppError(`${fieldName} must be a positive integer`, 400);
+    if (safeValue <= 0 || safeValue > MAX_TRADE_QUANTITY) {
+      throw new AppError(
+        `${fieldName} must be a positive integer no greater than ${MAX_TRADE_QUANTITY}`,
+        400
+      );
     }
     return safeValue;
   }
@@ -126,7 +131,10 @@ export class TradeService {
   }
 
   async addCredits(tradeId: string, userId: string, amount: number) {
-    const safeAmount = Math.max(0, Math.floor(amount));
+    const safeAmount = Number.isFinite(amount) ? Math.floor(amount) : -1;
+    if (safeAmount < 0 || safeAmount > MAX_TRADE_CREDITS) {
+      throw new AppError(`amount must be between 0 and ${MAX_TRADE_CREDITS}`, 400);
+    }
     await prisma.$transaction(async (tx) => {
       const trade = await this.lockPendingTrade(tx, tradeId);
       this.assertTradeUser(trade, userId);

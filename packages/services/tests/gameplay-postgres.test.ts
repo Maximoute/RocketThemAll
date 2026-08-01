@@ -376,31 +376,49 @@ suite("gameplay PostgreSQL integration", () => {
             { itemId: booster.id, quantity: 1 },
             { itemId: chest.id, quantity: 1 }
           ]
-        }
+        },
+        userBoosters: { create: { boosterType: "rare", quantity: 1 } }
       }
     });
     userIds.push(user.id);
     const service = new ConquerorRewardService();
     const prepared = await service.prepareBoosterChoices(user.id, booster.contentKey);
-    expect(prepared.choices).toHaveLength(3);
-    expect(new Set(prepared.choices.map((choice) => choice.card.id)).size).toBe(3);
+    expect(prepared.choices).toHaveLength(5);
+    expect(prepared.keepCount).toBe(3);
+    expect(new Set(prepared.choices.map((choice) => choice.card.id)).size).toBe(5);
 
     const claimed = await service.claimBoosterChoice(
       user.id,
       booster.contentKey,
       prepared.openingNumber,
-      1
+      [0, 1, 2]
     );
     const replay = await service.claimBoosterChoice(
       user.id,
       booster.contentKey,
       prepared.openingNumber,
-      1
+      [0, 1, 2]
     );
     expect(replay.replayed).toBe(true);
-    expect(replay.card.id).toBe(claimed.card.id);
+    expect(replay.cards.map((entry) => entry.card.id)).toEqual(
+      claimed.cards.map((entry) => entry.card.id)
+    );
     expect(await prisma.userItem.findUniqueOrThrow({
       where: { userId_itemId: { userId: user.id, itemId: booster.id } }
+    })).toMatchObject({ quantity: 0 });
+
+    const shopPrepared = await service.prepareBoosterChoices(user.id, "booster.rare");
+    expect(shopPrepared.choices).toHaveLength(4);
+    expect(shopPrepared.keepCount).toBe(2);
+    const shopClaimed = await service.claimBoosterChoice(
+      user.id,
+      "booster.rare",
+      shopPrepared.openingNumber,
+      [0, 1]
+    );
+    expect(shopClaimed.cards).toHaveLength(2);
+    expect(await prisma.userBooster.findUniqueOrThrow({
+      where: { userId_boosterType: { userId: user.id, boosterType: "rare" } }
     })).toMatchObject({ quantity: 0 });
 
     const chestKey = `${prefix}-chest-open`;

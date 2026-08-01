@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+
+EXT_IF="$(ip -4 route show default | awk '{print $5; exit}')"
+if [ -z "$EXT_IF" ]; then
+  echo "No default IPv4 interface found" >&2
+  exit 1
+fi
+
+iptables -w -N RTA-INPUT 2>/dev/null || true
+iptables -w -F RTA-INPUT
+iptables -w -C INPUT -j RTA-INPUT 2>/dev/null || iptables -w -I INPUT 1 -j RTA-INPUT
+iptables -w -A RTA-INPUT -i lo -j ACCEPT
+iptables -w -A RTA-INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -w -A RTA-INPUT -i "$EXT_IF" -p udp --sport 67 --dport 68 -j ACCEPT
+iptables -w -A RTA-INPUT -p icmp -j ACCEPT
+iptables -w -A RTA-INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+iptables -w -A RTA-INPUT -j DROP
+
+ip6tables -w -N RTA6-INPUT 2>/dev/null || true
+ip6tables -w -F RTA6-INPUT
+ip6tables -w -C INPUT -j RTA6-INPUT 2>/dev/null || ip6tables -w -I INPUT 1 -j RTA6-INPUT
+ip6tables -w -A RTA6-INPUT -i lo -j ACCEPT
+ip6tables -w -A RTA6-INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+ip6tables -w -A RTA6-INPUT -p ipv6-icmp -j ACCEPT
+ip6tables -w -A RTA6-INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+ip6tables -w -A RTA6-INPUT -j DROP
+
+if iptables -w -nL DOCKER-USER >/dev/null 2>&1; then
+  iptables -w -F DOCKER-USER
+  iptables -w -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  iptables -w -A DOCKER-USER ! -i "$EXT_IF" -j RETURN
+  iptables -w -A DOCKER-USER -i "$EXT_IF" -p tcp -m conntrack --ctorigdstport 80 -j ACCEPT
+  iptables -w -A DOCKER-USER -i "$EXT_IF" -p tcp -m conntrack --ctorigdstport 443 -j ACCEPT
+  iptables -w -A DOCKER-USER -i "$EXT_IF" -p udp -m conntrack --ctorigdstport 443 -j ACCEPT
+  iptables -w -A DOCKER-USER -i "$EXT_IF" -j DROP
+  iptables -w -A DOCKER-USER -j RETURN
+fi
+
+if ip6tables -w -nL DOCKER-USER >/dev/null 2>&1; then
+  ip6tables -w -F DOCKER-USER
+  ip6tables -w -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  ip6tables -w -A DOCKER-USER ! -i "$EXT_IF" -j RETURN
+  ip6tables -w -A DOCKER-USER -i "$EXT_IF" -p tcp -m conntrack --ctorigdstport 80 -j ACCEPT
+  ip6tables -w -A DOCKER-USER -i "$EXT_IF" -p tcp -m conntrack --ctorigdstport 443 -j ACCEPT
+  ip6tables -w -A DOCKER-USER -i "$EXT_IF" -p udp -m conntrack --ctorigdstport 443 -j ACCEPT
+  ip6tables -w -A DOCKER-USER -i "$EXT_IF" -j DROP
+  ip6tables -w -A DOCKER-USER -j RETURN
+fi

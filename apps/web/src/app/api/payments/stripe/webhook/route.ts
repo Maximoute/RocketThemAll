@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const monetizationService = new MonetizationService();
+const MAX_WEBHOOK_BYTES = 1_000_000;
 
 function resourceId(
   value: string | { id: string } | null | undefined
@@ -133,6 +134,13 @@ async function processStripeEvent(stripe: Stripe, event: Stripe.Event) {
 }
 
 export async function POST(request: Request) {
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_WEBHOOK_BYTES) {
+    return Response.json(
+      { ok: false, error: "Stripe webhook payload is too large" },
+      { status: 413 }
+    );
+  }
   const stripe = getStripeClient();
   const secret = stripeWebhookSecret();
   if (!stripe || !secret) {
@@ -151,6 +159,12 @@ export async function POST(request: Request) {
   let event: Stripe.Event;
   try {
     const payload = await request.text();
+    if (Buffer.byteLength(payload, "utf8") > MAX_WEBHOOK_BYTES) {
+      return Response.json(
+        { ok: false, error: "Stripe webhook payload is too large" },
+        { status: 413 }
+      );
+    }
     event = stripe.webhooks.constructEvent(payload, signature, secret);
   } catch {
     return Response.json(

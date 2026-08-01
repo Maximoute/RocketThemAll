@@ -12,11 +12,7 @@ import {
   handleDaily
 } from "./handlers/economy.js";
 import {
-  handleShop,
-  handleBoosters,
-  handleCraft,
-  handleBoosterBuy,
-  handleBoosterOpen
+  handleShop
 } from "./handlers/shop.js";
 import { handleInventory, handleInventoryButton } from "./handlers/inventory.js";
 import { handleProfile } from "./handlers/profile.js";
@@ -45,8 +41,6 @@ const commandHandlers: Record<string, (interaction: ChatInputCommandInteraction,
   value: handleValue,
   daily: handleDaily,
   shop: handleShop,
-  boosters: handleBoosters,
-  craft: handleCraft,
   collection: handleInventory,
   profile: handleProfile,
   quests: handleQuests,
@@ -67,17 +61,11 @@ export async function handleCommand(interaction: ChatInputCommandInteraction) {
     interaction.user.displayAvatarURL()
   );
 
-  // Booster buy/open are subcommands of "booster" but routed separately
-  if (interaction.commandName === "booster") {
-    const sub = interaction.options.getSubcommand();
-    if (sub === "buy") {
-      await handleBoosterBuy(interaction, user);
-      return;
-    }
-    if (sub === "open") {
-      await handleBoosterOpen(interaction, user);
-      return;
-    }
+  if (["booster", "boosters", "craft"].includes(interaction.commandName)) {
+    await interaction.editReply(
+      "Cette ancienne commande a été retirée. Ouvre `/items`, puis utilise le bouton **Ouvrir un booster**."
+    );
+    return;
   }
 
   const handler = commandHandlers[interaction.commandName];
@@ -102,4 +90,4 @@ export async function handleSelectMenu(interaction: StringSelectMenuInteraction)
   }
 }
 
-export { registerCommands, registerGuildCommands } from "./register.js";
+export { clearGuildCommands, registerCommands } from "./register.js";

@@ -1,12 +1,17 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22.17.1-bookworm-slim AS dependencies
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS dependencies
 WORKDIR /app
 ENV CI=true
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates openssl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates openssl \
+    && npm install --global npm@12.0.2 \
+    && npm pack --silent --pack-destination /tmp brace-expansion@5.0.8 \
+    && rm -rf /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
+    && mkdir -p /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
+    && tar -xzf /tmp/brace-expansion-5.0.8.tgz --strip-components=1 \
+        -C /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
+    && rm /tmp/brace-expansion-5.0.8.tgz
 
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
@@ -23,7 +28,7 @@ COPY packages/database/prisma/schema.prisma ./packages/database/prisma/schema.pr
 RUN npm ci
 
 FROM dependencies AS build
-ARG RTA_PUBLIC_BASE_URL=http://localhost:8080
+ARG RTA_PUBLIC_BASE_URL=http://localhost:3000
 ENV RTA_PUBLIC_BASE_URL=${RTA_PUBLIC_BASE_URL}
 COPY tsconfig.base.json ./
 COPY apps ./apps
@@ -35,13 +40,14 @@ RUN npm run build
 FROM build AS production-dependencies
 RUN npm prune --omit=dev
 
-FROM node:22.17.1-bookworm-slim AS service-runtime
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS service-runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates openssl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates openssl \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+        /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
 
 COPY --from=production-dependencies --chown=node:node /app/package.json /app/package-lock.json ./
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
@@ -67,15 +73,16 @@ ENV NODE_ENV=production
 USER node
 CMD ["npm", "exec", "--", "prisma", "migrate", "deploy", "--schema", "packages/database/prisma/schema.prisma"]
 
-FROM node:22.17.1-bookworm-slim AS web
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates openssl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates openssl \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+        /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
 
 COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static

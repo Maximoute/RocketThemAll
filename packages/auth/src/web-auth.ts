@@ -3,6 +3,7 @@ import type { NextAuthOptions, Session } from "next-auth";
 import * as DiscordProviderModule from "next-auth/providers/discord";
 import { redirect } from "next/navigation";
 import { prisma } from "@rta/database";
+import { isDiscordSnowflake, sessionMatchesPersistedIdentity } from "./identity.js";
 
 type NextAuthFactory = typeof import("next-auth").default;
 type DiscordProviderFactory = typeof import("next-auth/providers/discord").default;
@@ -49,6 +50,9 @@ export const authOptions: NextAuthOptions = {
 
       const p = profile as unknown as DiscordProfile;
       const discordId = String(p.id);
+      if (!isDiscordSnowflake(discordId)) {
+        return false;
+      }
       const username = String(p.username ?? "unknown");
       const avatar = p.avatar ? `https://cdn.discordapp.com/avatars/${discordId}/${p.avatar}.png` : undefined;
       await prisma.user.upsert({
@@ -66,17 +70,20 @@ export const authOptions: NextAuthOptions = {
     },
     async jwt({ token, profile }) {
       const p = profile as unknown as DiscordProfile | undefined;
-      if (p?.id) {
+      if (p?.id && isDiscordSnowflake(String(p.id))) {
         token.sub = String(p.id);
       }
 
-      if (token.sub) {
+      if (isDiscordSnowflake(token.sub)) {
         const user = await prisma.user.findUnique({
-          where: { discordId: String(token.sub) },
+          where: { discordId: token.sub },
           select: { id: true, isAdmin: true }
         });
         token.userId = user?.id;
         token.isAdmin = user?.isAdmin ?? false;
+      } else {
+        token.userId = undefined;
+        token.isAdmin = false;
       }
 
       return token;
@@ -84,7 +91,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.userId;
-        session.user.discordId = token.sub;
+        session.user.discordId = isDiscordSnowflake(token.sub) ? token.sub : undefined;
         session.user.isAdmin = token.isAdmin ?? false;
       }
       return session;
@@ -97,8 +104,17 @@ export const authHandler = NextAuth(authOptions);
 export async function resolveSessionUser(session?: Session | null) {
   const currentSession = session ?? (await getServerSession(authOptions));
   const userId = currentSession?.user?.id;
-  if (!userId) return null;
-  return prisma.user.findUnique({ where: { id: userId } });
+  const discordId = currentSession?.user?.discordId;
+  if (!userId || !isDiscordSnowflake(discordId)) return null;
+
+  // Discord's immutable snowflake is the authentication authority. The
+  // internal id is checked as a second binding so a stale or forged session
+  // can never be resolved through a mutable username.
+  const user = await prisma.user.findUnique({ where: { discordId } });
+  if (!user || !sessionMatchesPersistedIdentity({ id: userId, discordId }, user)) {
+    return null;
+  }
+  return user;
 }
 
 export async function requireUser() {

@@ -9,6 +9,7 @@ import {
   type Client,
   type StringSelectMenuInteraction
 } from "discord.js";
+import { PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT } from "@rta/services";
 import {
   AppError,
   achievementService,
@@ -42,6 +43,7 @@ import {
   handleAchievements,
   handleBoss,
   handleBossButton,
+  handleBoosterInventory,
   handleConquerorBoosterBack,
   handleConquerorBoosterConfirm,
   handleConquerorBoosterPreview,
@@ -337,12 +339,25 @@ async function publishEncounterAfterPrivateCapture(
     const files = await attachCardImage(embed, encounter.card);
     const message = await channel.send({
       content: "🌐 La rencontre est maintenant ouverte aux autres joueurs !",
+      nonce: encounter.id,
+      enforceNonce: true,
       allowedMentions: { parse: [] },
       embeds: [embed],
       files,
       components: encounterComponents(encounter.id)
     });
-    await exploreService.attachEncounterMessage(encounter.id, message.id);
+    const attached = await exploreService.attachEncounterMessage(encounter.id, message.id);
+    if (!attached) {
+      await message.delete().catch((error) => {
+        console.warn("Unable to remove a duplicate encounter publication", {
+          encounterId,
+          messageId: message.id,
+          error
+        });
+      });
+      await exploreService.releaseEncounterPublication(encounterId);
+      return false;
+    }
     return true;
   } catch (error) {
     await exploreService.releaseEncounterPublication(encounterId);
@@ -601,7 +616,8 @@ function zoneProposalPayload(
             ? `\n🏛️ Résonance d'archives : ${entry.intel.archiveResonance.slice(5)}`
             : "") +
         (entry.zone.access === "PREMIUM"
-          ? `\nEntrée : ${premiumZoneCreditCost(entry.zone.metadata)} crédit(s) ou 1 Pass`
+          ? `\n🎲 Bonus rareté : ${PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT} % des tirages gagnent un palier` +
+            `\nEntrée : ${premiumZoneCreditCost(entry.zone.metadata)} crédit(s) ou 1 Pass`
           : ""),
       inline: false
     })));
@@ -721,6 +737,8 @@ async function handleZoneButton(
           .setDescription(
             `Cette zone liée au deck **${deck.name}** coûte ` +
             `**${selection.premiumCreditCost} crédit(s)** ou **1 Pass d'expédition**.\n\n` +
+            `🎲 **Bonus premium :** ${PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT} % des tirages ` +
+            `passent au palier de rareté supérieur.\n\n` +
             (selection.activeInvaderMultiplier > 1
               ? `🌑 Envahisseur actif : coût normal ${selection.premiumBaseCreditCost}, ` +
                 `modificateur ×${selection.activeInvaderMultiplier} jusqu’à la fin du boss.\n\n`
@@ -757,6 +775,9 @@ async function handleZoneButton(
     phase: "PRIVATE"
   });
   const preparationNotices = [
+    result.zone.access === "PREMIUM"
+      ? `🎲 Route premium : ${PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT} % des tirages gagnent un palier de rareté.`
+      : null,
     result.premiumPayment === "PASS"
       ? "🎟️ Un Pass d'expédition a été utilisé."
       : result.premiumPayment === "CREDITS"
@@ -1183,6 +1204,9 @@ async function handleScannerButton(
         .setDescription(
           `Deck lié : **${result.deck.name}**\n` +
           `Danger : **${result.zone.danger}**\n\n` +
+          (result.zone.access === "PREMIUM"
+            ? `🎲 Bonus premium appliqué : **${PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT} %** des tirages gagnent un palier.\n\n`
+            : "") +
           `Cartes standards : **${result.bands.standard} %**\n` +
           `Cartes rares : **${result.bands.rare} %**\n` +
           `Cartes exceptionnelles : **${result.bands.exceptional} %**` +
@@ -1646,7 +1670,37 @@ async function handleAnswerSelect(
   await interaction.editReply({ embeds: [captureCountdownEmbed(1)], components: [] });
   await wait(1_000);
   const succeeded = result.attempt.status === "SUCCEEDED";
-  const publicAt = new Date(Date.now() + PUBLICATION_DELAY_MS);
+  let publicAt = result.publication.publishAfter;
+  if (result.publication.phase === "PRIVATE" && result.publication.shouldSchedule) {
+    const requestedPublicAt = new Date(Date.now() + PUBLICATION_DELAY_MS);
+    try {
+      const publication = await exploreService.scheduleEncounterPublication(
+        encounterId,
+        user.id,
+        requestedPublicAt
+      );
+      if (publication) {
+        publicAt = publication.publishAfter;
+        queueEncounterPublication(
+          interaction.client,
+          encounterId,
+          publication.publishAfter
+        );
+      }
+    } catch (error) {
+      console.error("Unable to schedule encounter after the initiator capture", {
+        encounterId,
+        userId: user.id,
+        error
+      });
+    }
+  }
+  const publicationNotice = result.publication.phase === "PUBLIC"
+    ? "\n\n🌐 Cette rencontre est déjà publique et ne sera pas republiée."
+    : publicAt
+      ? `\n\n🌐 La rencontre sera proposée aux autres joueurs ` +
+        `<t:${Math.floor(publicAt.getTime() / 1000)}:R>.`
+      : "";
   const embed = new EmbedBuilder()
     .setColor(succeeded ? 0x2ecc71 : 0xe74c3c)
     .setTitle(succeeded ? "🎉 Capture réussie !" : "💨 La carte s'est échappée")
@@ -1686,8 +1740,7 @@ async function handleAnswerSelect(
               `(source : ${result.rewards.bossOffering.sourceLabel})`
             : "")
         : "\n\nAucune récompense : retente ta chance lors d'une prochaine rencontre.") +
-      `\n\n🌐 La rencontre sera proposée aux autres joueurs ` +
-      `<t:${Math.floor(publicAt.getTime() / 1000)}:R>.`
+      publicationNotice
     );
   const files = await attachCardImage(
     embed,
@@ -1699,26 +1752,6 @@ async function handleAnswerSelect(
     components: interaction.guildId ? hubComponents(interaction.guildId) : [],
     files
   });
-  try {
-    const publication = await exploreService.scheduleEncounterPublication(
-      encounterId,
-      user.id,
-      publicAt
-    );
-    if (publication) {
-      queueEncounterPublication(
-        interaction.client,
-        encounterId,
-        publication.publishAfter
-      );
-    }
-  } catch (error) {
-    console.error("Unable to schedule encounter after the initiator capture", {
-      encounterId,
-      userId: user.id,
-      error
-    });
-  }
   if (succeeded && result.attempt.variant) {
     await announceHallOfFameCapture({
       client: interaction.client,
@@ -1763,6 +1796,17 @@ export async function handleRtaButton(interaction: ButtonInteraction) {
     }
     return;
   }
+  if (token.action === "U") {
+    requireBoundUser(token.parts[0]!, interaction.user.id);
+    await interaction.deferUpdate();
+    const user = await usersService.getOrCreateDiscordUser(
+      interaction.user.id,
+      interaction.user.username,
+      interaction.user.displayAvatarURL()
+    );
+    await handleBoosterInventory(interaction, user);
+    return;
+  }
   if (token.action === "P" || token.action === "Q" || token.action === "R") {
     requireBoundUser(token.parts[0]!, interaction.user.id);
     await interaction.deferUpdate();
@@ -1777,7 +1821,7 @@ export async function handleRtaButton(interaction: ButtonInteraction) {
         user,
         token.parts[1]!,
         Number(token.parts[2]),
-        Number(token.parts[3])
+        [Number(token.parts[3])]
       );
     } else if (token.action === "Q") {
       await handleConquerorBoosterConfirm(
@@ -1785,7 +1829,7 @@ export async function handleRtaButton(interaction: ButtonInteraction) {
         user,
         token.parts[1]!,
         Number(token.parts[2]),
-        Number(token.parts[3])
+        token.parts.slice(3).map(Number)
       );
     } else {
       await handleConquerorBoosterBack(
@@ -2026,6 +2070,23 @@ export async function handleRtaSelect(interaction: StringSelectMenuInteraction) 
       interaction.user.displayAvatarURL()
     );
     await handleConquerorRewardSelect(interaction, user, interaction.values[0]!);
+    return;
+  }
+  if (token.action === "Y") {
+    requireBoundUser(token.parts[0]!, interaction.user.id);
+    await interaction.deferUpdate();
+    const user = await usersService.getOrCreateDiscordUser(
+      interaction.user.id,
+      interaction.user.username,
+      interaction.user.displayAvatarURL()
+    );
+    await handleConquerorBoosterPreview(
+      interaction,
+      user,
+      token.parts[1]!,
+      Number(token.parts[2]),
+      interaction.values.map(Number)
+    );
     return;
   }
   if (token.action === "d") {

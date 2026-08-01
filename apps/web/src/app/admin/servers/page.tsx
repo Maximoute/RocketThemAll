@@ -46,7 +46,7 @@ export default async function AdminServersPage() {
 
   async function updateGuildConfig(formData: FormData) {
     "use server";
-    await requireAdmin();
+    const currentAdmin = await requireAdmin();
     const discordId = String(formData.get("guildId") ?? "").trim();
     const gameChannelId = String(formData.get("gameChannelId") ?? "").trim() || null;
     const hallOfFameChannelId =
@@ -81,7 +81,7 @@ export default async function AdminServersPage() {
       });
       await tx.adminLog.create({
         data: {
-          adminId: admin.id,
+          adminId: currentAdmin.id,
           action: "CONFIG_GUILD_UPDATED",
           target: discordId,
           metadata: {

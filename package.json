@@ -25,7 +25,8 @@
     "import:vault": "npm run -w @rta/database prisma:import-vault",
     "audit:vault": "node scripts/audit-vault.mjs",
     "validate:context": "node scripts/validate-context.mjs",
-    "check": "npm run lint && npm test && npm run prisma:validate && npm run validate:context && npm run build && npm audit --audit-level=high",
+    "security:secrets": "node scripts/scan-secrets.mjs",
+    "check": "npm run security:secrets && npm run lint && npm test && npm run prisma:validate && npm run validate:context && npm run build && npm audit --audit-level=high",
     "make-admin": "tsx scripts/make-admin.ts"
   },
   "devDependencies": {

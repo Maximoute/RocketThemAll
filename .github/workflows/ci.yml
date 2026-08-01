@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - develop
+      - RTAV2
       - "codex/**"
 
 permissions:
@@ -21,7 +22,7 @@ jobs:
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:16.9-bookworm
+        image: postgres:16-bookworm@sha256:92620daddcd947f8d5ab5ba66e848702fe443d87fed30c4cea8e389fd78dfc55
         env:
           POSTGRES_USER: rta
           POSTGRES_PASSWORD: rta-ci-password
@@ -42,12 +43,13 @@ jobs:
       DISCORD_CLIENT_ID: ci-client
       DISCORD_CLIENT_SECRET: ci-secret
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22.17.1
+          node-version: 22.23.2
           cache: npm
       - run: npm ci
+      - run: npm run security:secrets
       - run: npm run prisma:generate
       - run: npm run prisma:validate
       - run: npm run prisma:migrate:deploy
@@ -63,13 +65,33 @@ jobs:
           POSTGRES_PASSWORD: ci-compose-password
           MINIO_ROOT_USER: ci-minio
           MINIO_ROOT_PASSWORD: ci-minio-secret
+          S3_ACCESS_KEY: ci-rta-app
+          S3_SECRET_KEY: ci-rta-app-secret
           DISCORD_TOKEN: ci-token
           DISCORD_CLIENT_ID: ci-client
           DISCORD_CLIENT_SECRET: ci-secret
           NEXTAUTH_SECRET: ci-nextauth-secret
           NEXTAUTH_URL: https://rta.example.invalid
           PUBLIC_BASE_URL: https://rta.example.invalid
-        run: docker compose -f docker-compose.production.yml config --quiet
+          RTA_IMAGE_PREFIX: ghcr.io/maximoute/rocketthemall
+          RTA_IMAGE_TAG: 0000000000000000000000000000000000000000
+        run: |
+          docker compose -f docker-compose.production.yml config --quiet
+          docker compose \
+            -f docker-compose.production.yml \
+            -f docker-compose.registry.yml \
+            config --quiet
+          bash -n scripts/deploy-vps.sh
+      - name: Validate edge proxy configurations
+        run: |
+          docker run --rm \
+            -v "$PWD/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker run --rm \
+            -v "$PWD/docker/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:stable-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46 \
+            nginx -t
 
   container:
     runs-on: ubuntu-24.04
@@ -80,13 +102,61 @@ jobs:
       matrix:
         target: [api, bot, worker, web, migrate]
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           target: ${{ matrix.target }}
           push: false
+          load: true
           tags: rta/${{ matrix.target }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Reject vulnerable runtime images
+        run: >-
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+          image --quiet --scanners vuln
+          --exit-code 1 --severity HIGH,CRITICAL
+          rta/${{ matrix.target }}:${{ github.sha }}
+
+  database-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: validate
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: docker/postgres/Dockerfile
+          push: false
+          load: true
+          tags: rta/postgres:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Reject vulnerable database image
+        run: >-
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+          image --quiet --scanners vuln
+          --exit-code 1 --severity HIGH,CRITICAL
+          rta/postgres:${{ github.sha }}
+      - name: Reject vulnerable proxy and object-storage images
+        run: |
+          for image in \
+            "nginx:stable-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46" \
+            "caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648" \
+            "cgr.dev/chainguard/minio:latest@sha256:d386393960d3126c034d6597b752bc33a02a2c237069788aabcf6d035c166b27"
+          do
+            docker pull "$image"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f \
+              image --quiet --scanners vuln \
+              --exit-code 1 --severity HIGH,CRITICAL "$image"
+          done

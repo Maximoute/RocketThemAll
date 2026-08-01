@@ -4,7 +4,8 @@ import {
   calculateCaptureChance,
   createSeededRandom,
   applyRarityWeightMultiplier,
-  rarityWeightsForDanger,
+  PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT,
+  rarityWeightsForRoute,
   rollLimitedRarity,
   rollVariant,
   rollVariantWithIncense,
@@ -29,6 +30,8 @@ const CAPTURE_DECISION_DURATION_MS = 30_000;
 const TIER_INCENSE_USES = 3;
 const AFFINITY_INCENSE_USES = 3;
 const explorationEnergyService = new ExplorationEnergyService();
+
+export { PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT };
 
 const ARCHIVE_TIER_MULTIPLIER: Partial<Record<CoreRarity, number>> = {
   Common: 1.4,
@@ -57,6 +60,38 @@ export type ExplorationEvent = {
   xpMultiplier: number;
   creditMultiplier: number;
 };
+
+export type EncounterPublicationState = {
+  phase: "PRIVATE" | "SCHEDULED" | "PUBLIC";
+  publishAfter: Date | null;
+  shouldSchedule: boolean;
+};
+
+export function encounterPublicationState(
+  encounter: {
+    initiatorUserId: string | null;
+    messageId: string | null;
+    publishedAt: Date | null;
+    publishAfter: Date | null;
+  },
+  userId: string
+): EncounterPublicationState {
+  if (encounter.messageId || encounter.publishedAt) {
+    return { phase: "PUBLIC", publishAfter: null, shouldSchedule: false };
+  }
+  if (encounter.publishAfter) {
+    return {
+      phase: "SCHEDULED",
+      publishAfter: encounter.publishAfter,
+      shouldSchedule: false
+    };
+  }
+  return {
+    phase: "PRIVATE",
+    publishAfter: null,
+    shouldSchedule: encounter.initiatorUserId === userId
+  };
+}
 
 export function explorationEventFromRoll(roll: number): ExplorationEvent | null {
   const bounded = Math.min(0.999999, Math.max(0, roll));
@@ -204,6 +239,25 @@ function dangerProfile(value: string): DangerProfile {
     throw new AppError("Cette zone utilise un profil de danger événementiel indisponible.", 409);
   }
   return profile;
+}
+
+function roundedRarityPercentages(
+  weights: readonly { value: CoreRarity; weight: number }[]
+): Record<string, number> {
+  const totalWeight = weights.reduce((sum, entry) => sum + entry.weight, 0);
+  const allocations = weights.map((entry, index) => {
+    const exact = entry.weight / totalWeight * 100;
+    return { index, value: entry.value, percentage: Math.floor(exact), remainder: exact % 1 };
+  });
+  let remaining = 100 - allocations.reduce((sum, entry) => sum + entry.percentage, 0);
+  for (const entry of [...allocations].sort((left, right) =>
+    right.remainder - left.remainder || left.index - right.index
+  )) {
+    if (remaining <= 0) break;
+    entry.percentage += 1;
+    remaining -= 1;
+  }
+  return Object.fromEntries(allocations.map((entry) => [entry.value, entry.percentage]));
 }
 
 export const PREMIUM_ZONE_PASS_SURCHARGE_CREDITS = 50;
@@ -731,7 +785,10 @@ export class ExploreService {
     const guild = await this.getGuild(discordGuildId);
     const unlockedWorldCount = Math.max(1, guild.progress?.unlockedWorldCount ?? 1);
     if (worldPosition > unlockedWorldCount) {
-      throw new AppError("Ce monde n'est pas encore débloqué par ton serveur.", 403);
+      throw new AppError(
+        "Ce monde n’est pas encore débloqué. Réussis davantage d’explorations dans les mondes précédents pour remplir leur progression, puis affronte et bats leurs gardiens afin de débloquer ce monde.",
+        403
+      );
     }
 
     const world = await prisma.worldDefinition.findUnique({
@@ -971,11 +1028,11 @@ export class ExploreService {
     return {
       world,
       proposals: selectedRoutes.map((entry) => {
-        const weights = rarityWeightsForDanger(dangerProfile(entry.zone.danger));
-        const totalWeight = weights.reduce((sum, weight) => sum + weight.weight, 0);
-        const percentages = Object.fromEntries(
-          weights.map((weight) => [weight.value, Math.round(weight.weight / totalWeight * 100)])
+        const weights = rarityWeightsForRoute(
+          dangerProfile(entry.zone.danger),
+          entry.zone.access === "PREMIUM"
         );
+        const percentages = roundedRarityPercentages(weights);
         const totalCards = deckTotals.find((row) => row.deckId === entry.deck.id)?._count.id ?? 0;
         const ownedCards = ownedByDeck.get(entry.deck.id) ?? 0;
         const noveltyRatio = totalCards > 0 ? 1 - ownedCards / totalCards : 0;
@@ -1299,14 +1356,12 @@ export class ExploreService {
       (!activeTierEffect.expiresAt || activeTierEffect.expiresAt > new Date())
         ? activeTierEffect.targetKey as CoreRarity | null
         : null;
-    const weights = rarityWeightsForDanger(
+    const weights = rarityWeightsForRoute(
       dangerProfile(selected.zone.danger),
+      selected.zone.access === "PREMIUM",
       validTierTarget
     );
-    const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
-    const percentages = Object.fromEntries(
-      weights.map((entry) => [entry.value, Math.round(entry.weight / total * 100)])
-    );
+    const percentages = roundedRarityPercentages(weights);
     const standard = (percentages.Common ?? 0) + (percentages.Uncommon ?? 0);
     const rare = (percentages.Rare ?? 0) + (percentages["Very Rare"] ?? 0);
     const exceptional =
@@ -1755,8 +1810,9 @@ export class ExploreService {
       ? "Extreme"
       : dangerProfile(selection.zone.danger);
     const rarityWeights = applyRarityWeightMultiplier(
-      rarityWeightsForDanger(
+      rarityWeightsForRoute(
         encounterDanger,
+        selection.zone.access === "PREMIUM",
         validTierEffect?.targetKey as CoreRarity | null | undefined
       ),
       archiveTier,
@@ -1820,8 +1876,9 @@ export class ExploreService {
             ? null
             : archiveProfile.resonantTier;
         const alternativeWeights = applyRarityWeightMultiplier(
-          rarityWeightsForDanger(
+          rarityWeightsForRoute(
             alternativeDanger,
+            selection.zone.access === "PREMIUM",
             validTierEffect?.targetKey as CoreRarity | null | undefined
           ),
           alternativeArchiveTier,
@@ -2304,9 +2361,15 @@ export class ExploreService {
     };
   }
 
-  attachEncounterMessage(encounterId: string, messageId: string) {
-    return prisma.encounter.update({
-      where: { id: encounterId },
+  async attachEncounterMessage(encounterId: string, messageId: string) {
+    const attached = await prisma.encounter.updateMany({
+      where: {
+        id: encounterId,
+        publicationClaimedAt: { not: null },
+        publishedAt: null,
+        messageId: null,
+        status: "ACTIVE"
+      },
       data: {
         messageId,
         publishedAt: new Date(),
@@ -2314,6 +2377,13 @@ export class ExploreService {
         version: { increment: 1 }
       }
     });
+    if (attached.count === 1) return true;
+
+    const existing = await prisma.encounter.findFirst({
+      where: { id: encounterId, messageId, publishedAt: { not: null } },
+      select: { id: true }
+    });
+    return Boolean(existing);
   }
 
   async scheduleEncounterPublication(
@@ -2330,6 +2400,7 @@ export class ExploreService {
           id: encounterId,
           initiatorUserId,
           initiatorResolvedAt: { not: null },
+          publishAfter: null,
           publishedAt: null,
           messageId: null,
           status: "ACTIVE"
@@ -2959,6 +3030,7 @@ export class ExploreService {
             bossOffering
           },
           gameplay: null,
+          publication: encounterPublicationState(encounter, input.userId),
           alreadySubmitted: true
         };
       }
@@ -3644,6 +3716,7 @@ export class ExploreService {
           chainReady,
           secretRouteUnlocked
         },
+        publication: encounterPublicationState(encounter, input.userId),
         alreadySubmitted: false
       };
         }, {
@@ -3707,6 +3780,7 @@ export class ExploreService {
               bossOffering
             },
             gameplay: null,
+            publication: encounterPublicationState(previous.encounter, input.userId),
             alreadySubmitted: true
           };
         }

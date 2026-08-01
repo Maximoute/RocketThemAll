@@ -23,5 +23,5 @@ export const DEFAULT_XP_BY_RARITY: Record<RarityName, number> = {
 };
 
 export const BOOSTER_SLOTS = {
-  cards: 1
+  cards: 3
 } as const;

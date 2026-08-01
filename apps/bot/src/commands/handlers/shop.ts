@@ -9,7 +9,6 @@ import {
   type StringSelectMenuInteraction
 } from "discord.js";
 import {
-  configService,
   boosterService,
   itemShopService,
   AppError,
@@ -81,7 +80,6 @@ export async function handleShop(
   user: any,
   selectedItem?: string
 ) {
-  const cfg = await configService.getConfig();
   const requestedItem = selectedItem?.trim() || (
     interaction.isChatInputCommand()
       ? interaction.options.getString("objet")?.trim()
@@ -133,6 +131,18 @@ export async function handleShop(
     const price = Number((item.metadata as Record<string, unknown>).creditPrice);
     return Number.isSafeInteger(price) && price > 0;
   });
+  const boosterOrder = [
+    "booster.basic",
+    "booster.rare",
+    "booster.epic",
+    "booster.legendary"
+  ];
+  buyable.sort((left, right) => {
+    if (left.type === "BOOSTER" && right.type === "BOOSTER") {
+      return boosterOrder.indexOf(left.contentKey) - boosterOrder.indexOf(right.contentKey);
+    }
+    return left.type.localeCompare(right.type) || left.name.localeCompare(right.name, "fr");
+  });
   const embed = new EmbedBuilder()
     .setColor(0xff9800)
     .setTitle("🛒 Boutique RTA")
@@ -154,11 +164,6 @@ export async function handleShop(
   for (const [category, rows] of groups) {
     embed.addFields({ name: category, value: rows.join("\n"), inline: false });
   }
-  embed.addFields({
-    name: "Craft booster",
-    value: `${cfg.craftBoosterFragmentCost} fragments`,
-    inline: false
-  });
   const premiumRow = monetizationComponents();
   if (premiumRow) {
     embed.addFields({

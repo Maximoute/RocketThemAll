@@ -6,6 +6,21 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 const adminEconomyService = new AdminEconomyService();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CARD_VARIANTS = new Set(["normal", "shiny", "holo"] as const);
+const MAX_ADMIN_QUANTITY = 1_000_000;
+
+function validUserId(value: FormDataEntryValue | null) {
+  const id = String(value ?? "").trim();
+  return UUID.test(id) ? id : null;
+}
+
+function boundedQuantity(value: FormDataEntryValue | null, fallback = 0) {
+  const parsed = Number(value ?? fallback);
+  return Number.isSafeInteger(parsed)
+    ? Math.min(MAX_ADMIN_QUANTITY, Math.max(0, parsed))
+    : fallback;
+}
 
 export default async function AdminUsersPage({
   searchParams: searchParamsPromise
@@ -14,26 +29,34 @@ export default async function AdminUsersPage({
 }) {
   const searchParams = await searchParamsPromise;
   const currentAdmin = await requireAdmin();
-  const q = (searchParams.q ?? "").trim();
-  const roleFilter = searchParams.role ?? "all";
+  const q = (searchParams.q ?? "").trim().slice(0, 64);
+  const roleFilter = ["all", "admin", "user"].includes(searchParams.role ?? "")
+    ? searchParams.role!
+    : "all";
 
   async function toggleAdmin(formData: FormData) {
     "use server";
-    await requireAdmin();
-    const userId = String(formData.get("userId") ?? "");
+    const admin = await requireAdmin();
+    const userId = validUserId(formData.get("userId"));
     const nextValue = String(formData.get("nextValue") ?? "false") === "true";
+    if (!userId || (userId === admin.id && !nextValue)) return;
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { isAdmin: nextValue }
-    });
-
-    await prisma.adminLog.create({
-      data: {
-        adminId: currentAdmin.id,
-        action: nextValue ? "USER_PROMOTED_ADMIN" : "USER_DEMOTED_ADMIN",
-        target: userId
-      }
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(9842072702)`;
+      const target = await tx.user.findUnique({
+        where: { id: userId },
+        select: { isAdmin: true }
+      });
+      if (!target || target.isAdmin === nextValue) return;
+      if (!nextValue && await tx.user.count({ where: { isAdmin: true } }) <= 1) return;
+      await tx.user.update({ where: { id: userId }, data: { isAdmin: nextValue } });
+      await tx.adminLog.create({
+        data: {
+          adminId: admin.id,
+          action: nextValue ? "USER_PROMOTED_ADMIN" : "USER_DEMOTED_ADMIN",
+          target: userId
+        }
+      });
     });
 
     revalidatePath("/admin/users");
@@ -41,9 +64,10 @@ export default async function AdminUsersPage({
 
   async function toggleUnlimitedExplorations(formData: FormData) {
     "use server";
-    await requireAdmin();
-    const userId = String(formData.get("userId") ?? "");
+    const admin = await requireAdmin();
+    const userId = validUserId(formData.get("userId"));
     const nextValue = String(formData.get("nextValue") ?? "false") === "true";
+    if (!userId) return;
 
     await prisma.user.update({
       where: { id: userId },
@@ -52,7 +76,7 @@ export default async function AdminUsersPage({
 
     await prisma.adminLog.create({
       data: {
-        adminId: currentAdmin.id,
+        adminId: admin.id,
         action: nextValue
           ? "USER_UNLIMITED_EXPLORATIONS_GRANTED"
           : "USER_UNLIMITED_EXPLORATIONS_REVOKED",
@@ -65,16 +89,13 @@ export default async function AdminUsersPage({
 
   async function setBooster(formData: FormData) {
     "use server";
-    await requireAdmin();
-    const userId = String(formData.get("userId") ?? "");
-    const basicQuantity = Number(formData.get("basicQuantity") ?? 0);
-    const rareQuantity = Number(formData.get("rareQuantity") ?? 0);
-    const epicQuantity = Number(formData.get("epicQuantity") ?? 0);
-    const legendaryQuantity = Number(formData.get("legendaryQuantity") ?? 0);
-    const safeBasic = Number.isFinite(basicQuantity) ? Math.max(0, Math.floor(basicQuantity)) : 0;
-    const safeRare = Number.isFinite(rareQuantity) ? Math.max(0, Math.floor(rareQuantity)) : 0;
-    const safeEpic = Number.isFinite(epicQuantity) ? Math.max(0, Math.floor(epicQuantity)) : 0;
-    const safeLegendary = Number.isFinite(legendaryQuantity) ? Math.max(0, Math.floor(legendaryQuantity)) : 0;
+    const admin = await requireAdmin();
+    const userId = validUserId(formData.get("userId"));
+    if (!userId) return;
+    const safeBasic = boundedQuantity(formData.get("basicQuantity"));
+    const safeRare = boundedQuantity(formData.get("rareQuantity"));
+    const safeEpic = boundedQuantity(formData.get("epicQuantity"));
+    const safeLegendary = boundedQuantity(formData.get("legendaryQuantity"));
 
     await prisma.$transaction(async (tx) => {
       await tx.userBooster.upsert({
@@ -108,7 +129,7 @@ export default async function AdminUsersPage({
 
     await prisma.adminLog.create({
       data: {
-        adminId: currentAdmin.id,
+        adminId: admin.id,
         action: "BOOSTER_QUANTITY_UPDATED",
         target: userId,
         metadata: { basicQuantity: safeBasic, rareQuantity: safeRare, epicQuantity: safeEpic, legendaryQuantity: safeLegendary }
@@ -121,10 +142,11 @@ export default async function AdminUsersPage({
   async function adjustEconomy(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
-    const userId = String(formData.get("userId") ?? "");
+    const userId = validUserId(formData.get("userId"));
     const creditDelta = Math.trunc(Number(formData.get("creditDelta") ?? 0));
     const fragmentDelta = Math.trunc(Number(formData.get("fragmentDelta") ?? 0));
     const reason = String(formData.get("reason") ?? "");
+    if (!userId) redirect("/admin/users?error=Identifiant joueur invalide.");
     try {
       await adminEconomyService.adjustBalance({
         adminId: admin.id,
@@ -146,9 +168,10 @@ export default async function AdminUsersPage({
   async function grantXp(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
-    const userId = String(formData.get("userId") ?? "");
+    const userId = validUserId(formData.get("userId"));
     const xp = Math.trunc(Number(formData.get("xp") ?? 0));
     const reason = String(formData.get("reason") ?? "");
+    if (!userId) redirect("/admin/users?error=Identifiant joueur invalide.");
     try {
       await adminEconomyService.grantXp({
         adminId: admin.id,
@@ -168,10 +191,11 @@ export default async function AdminUsersPage({
   async function grantItem(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
-    const userId = String(formData.get("userId") ?? "");
+    const userId = validUserId(formData.get("userId"));
     const itemKey = String(formData.get("itemKey") ?? "");
     const quantity = Math.trunc(Number(formData.get("quantity") ?? 1));
     const reason = String(formData.get("reason") ?? "");
+    if (!userId) redirect("/admin/users?error=Identifiant joueur invalide.");
     try {
       await adminEconomyService.grantItem({
         adminId: admin.id,
@@ -192,14 +216,16 @@ export default async function AdminUsersPage({
 
   async function giveCard(formData: FormData) {
     "use server";
-    await requireAdmin();
-    const userId = String(formData.get("userId") ?? "").trim();
+    const admin = await requireAdmin();
+    const userId = validUserId(formData.get("userId"));
     const cardName = String(formData.get("cardName") ?? "").trim();
-    const variant = String(formData.get("variant") ?? "normal") as "normal" | "shiny" | "holo";
-    const quantityRaw = Number(formData.get("quantity") ?? 1);
-    const quantity = Number.isFinite(quantityRaw) ? Math.max(1, Math.floor(quantityRaw)) : 1;
+    const rawVariant = String(formData.get("variant") ?? "normal");
+    const variant = CARD_VARIANTS.has(rawVariant as "normal" | "shiny" | "holo")
+      ? rawVariant as "normal" | "shiny" | "holo"
+      : null;
+    const quantity = Math.max(1, boundedQuantity(formData.get("quantity"), 1));
 
-    if (!userId || !cardName) return;
+    if (!userId || !cardName || cardName.length > 120 || !variant) return;
 
     const card = await prisma.card.findFirst({
       where: { name: { contains: cardName, mode: "insensitive" as const } }
@@ -214,7 +240,7 @@ export default async function AdminUsersPage({
 
     await prisma.adminLog.create({
       data: {
-        adminId: currentAdmin.id,
+        adminId: admin.id,
         action: "CARD_GIVEN",
         target: userId,
         metadata: { cardId: card.id, cardName: card.name, variant, quantity }
@@ -307,7 +333,15 @@ export default async function AdminUsersPage({
             <form action={toggleAdmin} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
               <input type="hidden" name="userId" value={user.id} />
               <input type="hidden" name="nextValue" value={String(!user.isAdmin)} />
-              <button type="submit">{user.isAdmin ? "Retirer admin" : "Rendre admin"}</button>
+              <button
+                type="submit"
+                disabled={user.id === currentAdmin.id && user.isAdmin}
+                title={user.id === currentAdmin.id && user.isAdmin
+                  ? "Tu ne peux pas retirer tes propres droits admin."
+                  : undefined}
+              >
+                {user.isAdmin ? "Retirer admin" : "Rendre admin"}
+              </button>
             </form>
 
             <form action={toggleUnlimitedExplorations} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>

@@ -23,7 +23,7 @@ function parseArgs() {
 }
 
 function printUsage() {
-  console.log(`Usage: npm run make-admin -- --id <userId> | --discordId <discordId> | --username <username>`);
+  console.log(`Usage: npm run make-admin -- --id <userId> | --discordId <discordId>`);
   console.log(`Example: npm run make-admin -- --discordId 123456789012345678`);
 }
 
@@ -32,8 +32,7 @@ async function main() {
   const options = parseArgs();
   const id = typeof options.id === "string" ? options.id : undefined;
   const discordId = typeof options.discordId === "string" ? options.discordId : undefined;
-  const username = typeof options.username === "string" ? options.username : undefined;
-  const identifiers = [id, discordId, username].filter(Boolean);
+  const identifiers = [id, discordId].filter(Boolean);
 
   if (identifiers.length !== 1) {
     console.error("Error: exactly one identifier is required.");
@@ -47,8 +46,6 @@ async function main() {
     user = await prisma.user.findUnique({ where: { id } });
   } else if (discordId) {
     user = await prisma.user.findUnique({ where: { discordId } });
-  } else if (username) {
-    user = await prisma.user.findFirst({ where: { username } });
   }
 
   if (!user) {

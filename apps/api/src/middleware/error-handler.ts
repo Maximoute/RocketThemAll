@@ -4,6 +4,19 @@ import { ZodError } from "zod";
 import { logError } from "../utils/logger.js";
 
 export function errorHandler(error: unknown, req: Request, res: Response, _next: NextFunction) {
+  const bodyParserType = error && typeof error === "object" && "type" in error
+    ? String((error as { type?: unknown }).type)
+    : "";
+  if (bodyParserType === "entity.parse.failed") {
+    return res.status(400).json({ error: "Malformed JSON body" });
+  }
+  if (bodyParserType === "entity.too.large") {
+    return res.status(413).json({ error: "Request body is too large" });
+  }
+  if (bodyParserType === "encoding.unsupported" || bodyParserType === "charset.unsupported") {
+    return res.status(415).json({ error: "Request body encoding is not supported" });
+  }
+
   if (error instanceof ZodError) {
     return res.status(400).json({
       error: "Validation failed",

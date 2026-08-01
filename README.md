@@ -112,7 +112,9 @@ La composition:
 - exécute les migrations une seule fois;
 - démarre API, worker, bot et web sans installation au démarrage;
 - utilise des conteneurs applicatifs non-root et en lecture seule;
-- expose Nginx sur `HTTP_PORT`, 8080 par défaut;
+- exécute PostgreSQL sans root et sans l'utilitaire `gosu`;
+- crée pour RTA un compte MinIO limité au bucket `card-images`, distinct du compte root;
+- expose Nginx sur `HTTP_PORT`, 3000 par défaut;
 - ne contient ni WordPress ni MySQL.
 
 Le fichier `docker-compose.yml` historique reste réservé au développement.
@@ -130,11 +132,13 @@ L’outbox est durable. Son adaptateur actuel publie dans les logs structurés; 
 
 ## Sécurité
 
-- l’identité web utilise l’UUID interne, distinct du Discord ID et du nom;
+- l’identité web exige la concordance entre le Snowflake Discord signé et l’UUID interne; le pseudo n’accorde jamais de droit;
 - les droits admin sont rechargés depuis PostgreSQL;
 - les mutations économiques critiques sont conditionnelles, journalisées et idempotentes;
-- les médias proviennent uniquement du Vault et sont synchronisés vers le stockage S3 dédié;
+- les médias proviennent uniquement du Vault, sans import serveur depuis une URL distante, et l’optimiseur Next.js refuse les URL distantes;
+- le Compose de développement lit ses identifiants depuis l’environnement et n’expose PostgreSQL, MinIO et MySQL que sur la boucle locale;
 - l’API borne les corps, le débit, les proxys de confiance et les logs sensibles;
+- les images applicatives et PostgreSQL sont refusées par la CI si Trivy trouve une vulnérabilité haute ou critique corrigeable;
 - aucun secret réel ne doit être versionné.
 
 ## Documentation de référence

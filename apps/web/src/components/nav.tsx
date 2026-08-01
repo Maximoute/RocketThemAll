@@ -37,7 +37,7 @@ export default function Nav() {
     <header className="sticky top-0 z-20 bg-rta-surface border-b border-rta-border px-4 sm:px-6 py-2 flex items-center justify-between gap-3 flex-wrap">
       <Link href="/" className="order-1 flex items-center gap-2.5 font-extrabold text-rta-ink tracking-tight shrink-0">
         <div className="w-10 h-10 rounded-full overflow-hidden shadow-[0_0_14px_rgba(72,28,166,0.7)] shrink-0">
-          <Image src="/logo.webp" alt="Rocket Them All" width={40} height={40} className="object-cover object-[center_15%]" />
+          <Image src="/favicon.png" alt="Rocket Them All" width={40} height={40} className="h-full w-full object-cover object-center" />
         </div>
         Rocket <span className="text-rta-cta ml-1">Them All</span>
       </Link>

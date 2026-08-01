@@ -6,6 +6,19 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 const adminEconomyService = new AdminEconomyService();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function formNumber(
+  formData: FormData,
+  name: string,
+  fallback: number,
+  options: { max: number; integer?: boolean }
+) {
+  const parsed = Number(formData.get(name) ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  const normalized = options.integer ? Math.trunc(parsed) : parsed;
+  return Math.min(options.max, Math.max(0, normalized));
+}
 
 export default async function AdminEconomyPage({
   searchParams: searchParamsPromise
@@ -16,9 +29,10 @@ export default async function AdminEconomyPage({
   async function adjustUserCredits(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
-    const userId = String(formData.get("userId") ?? "");
+    const userId = String(formData.get("userId") ?? "").trim();
     const creditDelta = Math.trunc(Number(formData.get("creditDelta") ?? 0));
     const reason = String(formData.get("reason") ?? "");
+    if (!UUID.test(userId)) redirect("/admin/economy?error=Identifiant joueur invalide.");
     try {
       await adminEconomyService.adjustBalance({
         adminId: admin.id,
@@ -39,8 +53,10 @@ export default async function AdminEconomyPage({
   async function updateEconomyConfig(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
-    const readInt = (name: string, fallback: number) => Math.max(0, Number(formData.get(name) ?? fallback));
-    const readFloat = (name: string, fallback: number) => Math.max(0, Number(formData.get(name) ?? fallback));
+    const readInt = (name: string, fallback: number) =>
+      formNumber(formData, name, fallback, { max: 100_000_000, integer: true });
+    const readRate = (name: string, fallback: number) =>
+      formNumber(formData, name, fallback, { max: 1 });
 
     const payload = {
       commonSellPrice: readInt("commonSellPrice", 10),
@@ -54,22 +70,30 @@ export default async function AdminEconomyPage({
       rareBoosterPrice: readInt("rareBoosterPrice", 300),
       epicBoosterPrice: readInt("epicBoosterPrice", 1000),
       legendaryBoosterPrice: readInt("legendaryBoosterPrice", 3000),
-      normalVariantRate: readFloat("normalVariantRate", 0.989),
-      shinyVariantRate: readFloat("shinyVariantRate", 0.01),
-      holoVariantRate: readFloat("holoVariantRate", 0.001),
-      captureConsumableDropRate: Math.min(1, readFloat("captureConsumableDropRate", 0.1)),
+      normalVariantRate: readRate("normalVariantRate", 0.989),
+      shinyVariantRate: readRate("shinyVariantRate", 0.01),
+      holoVariantRate: readRate("holoVariantRate", 0.001),
+      captureConsumableDropRate: readRate("captureConsumableDropRate", 0.1),
       captureConsumableCommonWeight: readInt("captureConsumableCommonWeight", 50),
       captureConsumableUncommonWeight: readInt("captureConsumableUncommonWeight", 30),
       captureConsumableRareWeight: readInt("captureConsumableRareWeight", 15),
       captureConsumableEpicWeight: readInt("captureConsumableEpicWeight", 4),
       captureConsumableLegendaryWeight: readInt("captureConsumableLegendaryWeight", 1),
-      scarcityFloor: readFloat("scarcityFloor", 0.5),
-      scarcityCap: readFloat("scarcityCap", 3),
+      scarcityFloor: formNumber(formData, "scarcityFloor", 0.5, { max: 100 }),
+      scarcityCap: formNumber(formData, "scarcityCap", 3, { max: 100 }),
       fusionEnabled: String(formData.get("fusionEnabled") ?? "") === "on"
     };
 
     await prisma.appConfig.upsert({ where: { id: "default" }, update: payload, create: { id: "default", ...payload } });
     await prisma.economyLog.create({ data: { userId: admin.id, type: "admin_update", metadata: { action: "update_config", payload } } });
+    await prisma.adminLog.create({
+      data: {
+        adminId: admin.id,
+        action: "ECONOMY_CONFIG_UPDATED",
+        target: "default",
+        metadata: payload
+      }
+    });
 
     revalidatePath("/admin/economy");
   }

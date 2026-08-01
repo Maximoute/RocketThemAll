@@ -58,6 +58,11 @@ function boosterType(contentKey: string): BoosterType | null {
   return BOOSTER_TYPES.includes(value) ? value : null;
 }
 
+function boosterCatalogRank(contentKey: string) {
+  const type = boosterType(contentKey);
+  return type ? BOOSTER_TYPES.indexOf(type) : Number.MAX_SAFE_INTEGER;
+}
+
 function categoryLabel(type: string, metadata: ShopMetadata) {
   return metadata.category || ({
     ARTIFACT: "Artefacts",
@@ -144,6 +149,15 @@ export default async function ShopPage({
   const grouped = new Map<string, typeof catalog>();
   for (const entry of catalog) {
     grouped.set(entry.category, [...(grouped.get(entry.category) ?? []), entry]);
+  }
+  for (const entries of grouped.values()) {
+    entries.sort((left, right) => {
+      if (left.definition.type === "BOOSTER" && right.definition.type === "BOOSTER") {
+        return boosterCatalogRank(left.definition.contentKey) -
+          boosterCatalogRank(right.definition.contentKey);
+      }
+      return left.definition.name.localeCompare(right.definition.name, "fr");
+    });
   }
 
   return (
@@ -462,9 +476,10 @@ export default async function ShopPage({
       {section === "credits" && (
       <>
       <p className="text-sm text-rta-muted mb-7">
-        Les boosters s’ouvrent avec <code className="bg-rta-surface2 px-1.5 py-0.5 rounded text-rta-ink text-xs">/booster open</code>.
-        Chaque booster donne une carte aléatoire parmi tous les decks : Basic → Common, Rare → Rare,
-        Epic → Very Rare et Legendary → Black Market.
+        Les boosters s’ouvrent depuis <code className="bg-rta-surface2 px-1.5 py-0.5 rounded text-rta-ink text-xs">/items</code>
+        avec le bouton « Ouvrir un booster ». Basic propose 3 cartes et tu en gardes 1,
+        Rare 4 et tu en gardes 2, Epic 5 et tu en gardes 3, Legendary 6 et tu en gardes 4.
+        Deux cartes sont toujours rejetées.
         Les autres achats sont ajoutés directement à tes objets.
       </p>
 

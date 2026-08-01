@@ -15,6 +15,29 @@ export class CardsService {
     });
   }
 
+  async getCardsPage(page: number, pageSize: number) {
+    const [items, total] = await Promise.all([
+      prisma.card.findMany({
+        where: canonicalCardWhere,
+        include: { deck: true, rarity: true },
+        orderBy: [{ deck: { name: "asc" } }, { name: "asc" }, { id: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      }),
+      prisma.card.count({ where: canonicalCardWhere })
+    ]);
+
+    return {
+      items,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize)
+      }
+    };
+  }
+
   listDecks() {
     return prisma.deck.findMany({
       where: {

@@ -2,17 +2,32 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const configuredImageOrigin = (() => {
-  try {
-    return new URL(process.env.RTA_PUBLIC_BASE_URL ?? "http://localhost:3000");
-  } catch {
-    throw new Error("RTA_PUBLIC_BASE_URL must be an absolute http(s) URL");
-  }
-})();
+const isDevelopment = process.env.NODE_ENV !== "production";
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  `img-src 'self' data: blob: https://cdn.discordapp.com https://media.discordapp.net${isDevelopment ? " http://localhost:* http://127.0.0.1:*" : ""}`,
+  `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
+  "media-src 'self'",
+  "worker-src 'self' blob:"
+].join("; ");
 
-if (!["http:", "https:"].includes(configuredImageOrigin.protocol)) {
-  throw new Error("RTA_PUBLIC_BASE_URL must use http or https");
-}
+const browserSecurityHeaders = [
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+  { key: "Origin-Agent-Cluster", value: "?1" }
+];
 
 const nextConfig = {
   // Next's standalone tracer creates symlinks. Windows workspaces hosted by
@@ -27,6 +42,9 @@ const nextConfig = {
   typedRoutes: false,
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
   transpilePackages: ["@rta/auth", "@rta/database", "@rta/services", "@rta/shared"],
+  async headers() {
+    return [{ source: "/:path*", headers: browserSecurityHeaders }];
+  },
   webpack(config) {
     config.resolve.extensionAlias = {
       ...(config.resolve.extensionAlias ?? {}),
@@ -37,27 +55,10 @@ const nextConfig = {
     return config;
   },
   images: {
-    // Keep remote sources explicit to limit image optimizer abuse surface.
-    remotePatterns: [
-      {
-        protocol: "http",
-        hostname: "localhost",
-        port: "9000",
-        pathname: "/card-images/**"
-      },
-      {
-        protocol: "http",
-        hostname: "minio",
-        port: "9000",
-        pathname: "/card-images/**"
-      },
-      {
-        protocol: configuredImageOrigin.protocol.slice(0, -1),
-        hostname: configuredImageOrigin.hostname,
-        port: configuredImageOrigin.port,
-        pathname: "/media/**"
-      }
-    ],
+    // Game media is rendered with plain <img> elements from our public media
+    // origin. Keeping the Next.js optimizer local-only prevents its endpoint
+    // from ever becoming a server-side URL fetcher (SSRF).
+    remotePatterns: [],
     dangerouslyAllowSVG: false,
     contentDispositionType: "attachment"
   }

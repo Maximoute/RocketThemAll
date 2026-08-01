@@ -10,6 +10,7 @@ import {
   type StringSelectMenuInteraction
 } from "discord.js";
 import {
+  boosterSelectionRule,
   MAX_SELECTED_ACHIEVEMENT_BADGES,
   nextDailyBossSlot
 } from "@rta/services";
@@ -17,6 +18,7 @@ import {
   achievementService,
   archiveService,
   AppError,
+  boosterService,
   bossService,
   collectionContractService,
   conquerorRewardService,
@@ -29,6 +31,8 @@ import {
 } from "../service-instances.js";
 import { createInteractionToken } from "../interaction-token.js";
 import { attachCardImage } from "../card-media.js";
+import { bossProgressBar } from "../boss-progress.js";
+import { bossVictoryRewardDescription } from "../boss-victory.js";
 import { equipmentComponents, equipmentDescription } from "./profile.js";
 
 function objectRecord(value: unknown): Record<string, unknown> {
@@ -350,8 +354,11 @@ export async function handleItems(
   user: any,
   notice?: string
 ) {
+  await boosterService.getUserBoosters(user.id);
   const [
     items,
+    legacyBoosters,
+    currentBoosterCount,
     equipmentState,
     catalogCount,
     archiveState,
@@ -366,6 +373,21 @@ export async function handleItems(
       include: { item: true },
       orderBy: { acquiredAt: "desc" },
       take: 25
+    }),
+    prisma.userBooster.findMany({
+      where: { userId: user.id, quantity: { gt: 0 } },
+      orderBy: { boosterType: "asc" }
+    }),
+    prisma.userItem.count({
+      where: {
+        userId: user.id,
+        quantity: { gt: 0 },
+        item: {
+          status: "PUBLISHED",
+          type: "BOOSTER",
+          contentKey: { startsWith: "booster.boss_choice." }
+        }
+      }
     }),
     equipmentService.getEquipment(user.id),
     prisma.itemDefinition.count({ where: { status: "PUBLISHED" } }),
@@ -418,8 +440,22 @@ export async function handleItems(
           take: 24
         })
       : [];
-  const inventory = items.length
-    ? items.map((entry) => `**${entry.item.name}** ×${entry.quantity} — ${entry.item.type}`).join("\n")
+  const legacyBoosterNames = {
+    basic: "Booster Basic",
+    rare: "Booster Rare",
+    epic: "Booster Epic",
+    legendary: "Booster Legendary"
+  } as const;
+  const inventoryLines = [
+    ...items.map((entry) =>
+      `**${entry.item.name}** ×${entry.quantity} — ${entry.item.type}`
+    ),
+    ...legacyBoosters.map((entry) =>
+      `**${legacyBoosterNames[entry.boosterType]}** ×${entry.quantity} — BOOSTER`
+    )
+  ];
+  const inventory = inventoryLines.length
+    ? inventoryLines.join("\n")
     : "Aucun objet possédé.";
   const embed = new EmbedBuilder()
     .setColor(0x3498db)
@@ -470,23 +506,35 @@ export async function handleItems(
       }
     }
   }
-  const components = equipmentComponents(interaction.user.id, equipmentState, "items");
-  const conquerorRewards = items.filter((entry) =>
-    entry.item.effectKey === "BOSS_CHOICE_BOOSTER" ||
-    entry.item.effectKey === "BOSS_REWARD_CHEST"
+  const components: Array<
+    ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>
+  > = equipmentComponents(interaction.user.id, equipmentState, "items");
+  if ((currentBoosterCount > 0 || legacyBoosters.length > 0) && components.length < 5) {
+    components.push(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(createInteractionToken("U", interaction.user.id))
+          .setLabel("Ouvrir un booster")
+          .setEmoji("🎁")
+          .setStyle(ButtonStyle.Primary)
+      )
+    );
+  }
+  const conquerorChests = items.filter((entry) =>
+    entry.item.effectKey === "BOSS_REWARD_CHEST" ||
+    entry.item.contentKey.startsWith("chest.boss_reward.")
   );
-  if (conquerorRewards.length > 0 && components.length < 5) {
+  if (conquerorChests.length > 0 && components.length < 5) {
     components.push(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(createInteractionToken("E", interaction.user.id))
-          .setPlaceholder("Ouvrir une récompense du Conquérant")
-          .addOptions(conquerorRewards.map((entry) => ({
+          .setPlaceholder("Ouvrir un coffre du Conquérant")
+          .addOptions(conquerorChests.map((entry) => ({
             label: entry.item.name.slice(0, 100),
             value: entry.item.contentKey,
             description:
-              `${entry.item.type === "BOOSTER" ? "Choisir 1 carte parmi 3" : "Consommable + XP + crédits"} · ` +
-              `${entry.quantity} disponible(s)`
+              `Consommable + XP + crédits · ${entry.quantity} disponible(s)`.slice(0, 100)
           })))
       )
     );
@@ -616,27 +664,119 @@ function conquerorTierLabel(tier: string) {
   return labels[tier] ?? tier;
 }
 
+const shopBoosterNames = {
+  basic: "Booster Basic",
+  rare: "Booster Rare",
+  epic: "Booster Epic",
+  legendary: "Booster Legendary"
+} as const;
+
+function boosterKeyFromToken(value: string) {
+  return value.startsWith("booster.")
+    ? value
+    : `booster.boss_choice.${value}`;
+}
+
+export async function handleBoosterInventory(
+  interaction: ButtonInteraction,
+  user: any
+) {
+  const [current, legacy] = await Promise.all([
+    prisma.userItem.findMany({
+      where: {
+        userId: user.id,
+        quantity: { gt: 0 },
+        item: {
+          status: "PUBLISHED",
+          type: "BOOSTER",
+          contentKey: { startsWith: "booster.boss_choice." }
+        }
+      },
+      include: { item: true },
+      orderBy: { item: { contentKey: "asc" } }
+    }),
+    prisma.userBooster.findMany({
+      where: { userId: user.id, quantity: { gt: 0 } },
+      orderBy: { boosterType: "asc" }
+    })
+  ]);
+  const options = [
+    ...legacy.map((entry) => {
+      const itemKey = `booster.${entry.boosterType}`;
+      const rule = boosterSelectionRule(itemKey);
+      return {
+        label: shopBoosterNames[entry.boosterType],
+        value: itemKey,
+        description:
+          `${rule.offered} proposées · ${rule.kept} gardée(s) · ×${entry.quantity}`.slice(0, 100)
+      };
+    }),
+    ...current.map((entry) => {
+      const rule = boosterSelectionRule(entry.item.contentKey);
+      return {
+        label: entry.item.name.slice(0, 100),
+        value: entry.item.contentKey,
+        description:
+          `${rule.offered} proposées · ${rule.kept} gardée(s) · ×${entry.quantity}`.slice(0, 100)
+      };
+    })
+  ];
+  if (options.length === 0) {
+    await handleItems(interaction, user, "Tu ne possèdes actuellement aucun booster à ouvrir.");
+    return;
+  }
+  await interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xe67e22)
+        .setTitle("🎁 Ouvrir un booster")
+        .setDescription(
+          "Choisis le booster à ouvrir. Son tier détermine le nombre de cartes proposées. " +
+          "Tu conserves toutes les cartes sélectionnées et **exactement deux cartes sont rejetées**.\n\n" +
+          "Le booster n’est consommé qu’après ta confirmation finale."
+        )
+    ],
+    components: [
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(createInteractionToken("E", interaction.user.id))
+          .setPlaceholder("Choisir un booster possédé")
+          .addOptions(options)
+      ),
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(createInteractionToken("g", "items"))
+          .setLabel("Retour à l’inventaire")
+          .setStyle(ButtonStyle.Secondary)
+      )
+    ]
+  });
+}
+
 async function showConquerorBoosterChoices(
   interaction: StringSelectMenuInteraction | ButtonInteraction,
   user: any,
-  tier: string,
+  requestedItemKey: string,
   openingNumber?: number
 ) {
-  const itemKey = `booster.boss_choice.${tier}`;
+  const itemKey = boosterKeyFromToken(requestedItemKey);
   const prepared = await conquerorRewardService.prepareBoosterChoices(
     user.id,
     itemKey,
     openingNumber
   );
   if (prepared.claimed) {
-    throw new AppError("Ce Booster du Conquérant a déjà été ouvert.", 409);
+    throw new AppError("Ce booster a déjà été ouvert.", 409);
   }
+  const choiceLetters = prepared.choices.map((_, index) =>
+    String.fromCharCode("A".charCodeAt(0) + index)
+  );
   const embeds: EmbedBuilder[] = [];
   const files: AttachmentBuilder[] = [];
   for (const [index, choice] of prepared.choices.entries()) {
     const embed = new EmbedBuilder()
       .setColor(0xe67e22)
-      .setTitle(`${["A", "B", "C"][index]} · ${choice.card.name}`)
+      .setTitle(`${choiceLetters[index]} · ${choice.card.name}`)
       .setDescription(
         `**${choice.card.rarity.name}** · ${choice.card.deck.name}\n` +
         `Variante visible : **${choice.variant.toUpperCase()}**`
@@ -646,24 +786,35 @@ async function showConquerorBoosterChoices(
   }
   await interaction.editReply({
     content:
-      `🎁 **${prepared.itemName}** — choisis une carte. ` +
+      `🎁 **${prepared.itemName}** — sélectionne exactement **${prepared.keepCount} carte(s)** ` +
+      `parmi les **${prepared.choices.length}** propositions. Deux cartes seront rejetées. ` +
       "Le booster ne sera consommé qu'après ta confirmation.",
     embeds,
     files,
     components: [
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(createInteractionToken(
+            "Y",
+            interaction.user.id,
+            prepared.itemKey,
+            prepared.openingNumber
+          ))
+          .setPlaceholder(`Garder ${prepared.keepCount} carte(s) · 2 seront rejetées`)
+          .setMinValues(prepared.keepCount)
+          .setMaxValues(prepared.keepCount)
+          .addOptions(prepared.choices.map((choice, index) => ({
+            label: `${choiceLetters[index]} · ${choice.card.name}`.slice(0, 100),
+            value: String(index),
+            description:
+              `${choice.card.rarity.name} · ${choice.card.deck.name} · ${choice.variant}`.slice(0, 100)
+          })))
+      ),
       new ActionRowBuilder<ButtonBuilder>().addComponents(
-        ...prepared.choices.map((choice, index) =>
-          new ButtonBuilder()
-            .setCustomId(createInteractionToken(
-              "P",
-              interaction.user.id,
-              prepared.tier,
-              prepared.openingNumber,
-              index
-            ))
-            .setLabel(`Choisir ${["A", "B", "C"][index]} · ${choice.card.name}`.slice(0, 80))
-            .setStyle(ButtonStyle.Primary)
-        )
+        new ButtonBuilder()
+          .setCustomId(createInteractionToken("g", "items"))
+          .setLabel("Annuler et revenir à l’inventaire")
+          .setStyle(ButtonStyle.Secondary)
       )
     ]
   });
@@ -674,12 +825,8 @@ export async function handleConquerorRewardSelect(
   user: any,
   itemKey: string
 ) {
-  if (itemKey.startsWith("booster.boss_choice.")) {
-    await showConquerorBoosterChoices(
-      interaction,
-      user,
-      itemKey.slice("booster.boss_choice.".length)
-    );
+  if (itemKey.startsWith("booster.")) {
+    await showConquerorBoosterChoices(interaction, user, itemKey);
     return;
   }
   if (itemKey.startsWith("chest.boss_reward.")) {
@@ -705,31 +852,47 @@ export async function handleConquerorRewardSelect(
 }
 
 export async function handleConquerorBoosterPreview(
-  interaction: ButtonInteraction,
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
   user: any,
-  tier: string,
+  requestedItemKey: string,
   openingNumber: number,
-  selectedIndex: number
+  selectedIndexes: number[]
 ) {
+  const itemKey = boosterKeyFromToken(requestedItemKey);
   const prepared = await conquerorRewardService.prepareBoosterChoices(
     user.id,
-    `booster.boss_choice.${tier}`,
+    itemKey,
     openingNumber
   );
-  const choice = prepared.choices[selectedIndex];
-  if (!choice) throw new AppError("Choix de carte invalide.", 400);
-  const embed = new EmbedBuilder()
-    .setColor(0xe67e22)
-    .setTitle(`Confirmer ${choice.card.name} ?`)
-    .setDescription(
-      `**${choice.card.rarity.name}** · ${choice.card.deck.name}\n` +
-      `Variante : **${choice.variant.toUpperCase()}**\n\n` +
-      "Les deux autres propositions disparaîtront et le booster sera consommé."
+  const normalizedIndexes = [...new Set(selectedIndexes)].sort((left, right) => left - right);
+  if (
+    normalizedIndexes.length !== prepared.keepCount ||
+    normalizedIndexes.some((index) => !prepared.choices[index])
+  ) {
+    throw new AppError(
+      `Sélectionne exactement ${prepared.keepCount} carte(s).`,
+      400
     );
-  const files = await attachCardImage(embed, choice.card, choice.variant);
+  }
+  const selectedChoices = normalizedIndexes.map((index) => prepared.choices[index]!);
+  const embeds: EmbedBuilder[] = [];
+  const files: AttachmentBuilder[] = [];
+  for (const [index, choice] of selectedChoices.entries()) {
+    const embed = new EmbedBuilder()
+      .setColor(0xe67e22)
+      .setTitle(`Carte conservée ${index + 1}/${selectedChoices.length} · ${choice.card.name}`)
+      .setDescription(
+        `**${choice.card.rarity.name}** · ${choice.card.deck.name}\n` +
+        `Variante : **${choice.variant.toUpperCase()}**`
+      );
+    files.push(...await attachCardImage(embed, choice.card, choice.variant));
+    embeds.push(embed);
+  }
   await interaction.editReply({
-    content: "Une fois confirmée, cette sélection est définitive.",
-    embeds: [embed],
+    content:
+      `Confirme pour recevoir ces **${selectedChoices.length} carte(s)**. ` +
+      "Les deux cartes non sélectionnées seront rejetées et le booster sera consommé.",
+    embeds,
     files,
     components: [
       new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -737,21 +900,21 @@ export async function handleConquerorBoosterPreview(
           .setCustomId(createInteractionToken(
             "Q",
             interaction.user.id,
-            tier,
+            itemKey,
             openingNumber,
-            selectedIndex
+            ...normalizedIndexes
           ))
-          .setLabel("Confirmer cette carte")
+          .setLabel(`Confirmer les ${selectedChoices.length} cartes`)
           .setEmoji("✅")
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(createInteractionToken(
             "R",
             interaction.user.id,
-            tier,
+            itemKey,
             openingNumber
           ))
-          .setLabel("Retour aux 3 choix")
+          .setLabel("Modifier ma sélection")
           .setStyle(ButtonStyle.Secondary)
       )
     ]
@@ -761,29 +924,36 @@ export async function handleConquerorBoosterPreview(
 export async function handleConquerorBoosterConfirm(
   interaction: ButtonInteraction,
   user: any,
-  tier: string,
+  requestedItemKey: string,
   openingNumber: number,
-  selectedIndex: number
+  selectedIndexes: number[]
 ) {
+  const itemKey = boosterKeyFromToken(requestedItemKey);
   const reward = await conquerorRewardService.claimBoosterChoice(
     user.id,
-    `booster.boss_choice.${tier}`,
+    itemKey,
     openingNumber,
-    selectedIndex
+    selectedIndexes
   );
-  const embed = new EmbedBuilder()
-    .setColor(0x2ecc71)
-    .setTitle("✅ Carte du Conquérant obtenue")
-    .setDescription(
-      `**${reward.card.name}** rejoint ta collection.\n` +
-      `**${reward.card.rarity.name}** · ${reward.card.deck.name} · ` +
-      `**${reward.variant.toUpperCase()}**`
-    )
-    .setFooter({ text: `Booster du Conquérant ${conquerorTierLabel(tier)} consommé` });
-  const files = await attachCardImage(embed, reward.card, reward.variant);
+  const embeds: EmbedBuilder[] = [];
+  const files: AttachmentBuilder[] = [];
+  for (const [index, entry] of reward.cards.entries()) {
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle(`✅ Carte obtenue ${index + 1}/${reward.cards.length} · ${entry.card.name}`)
+      .setDescription(
+        `**${entry.card.rarity.name}** · ${entry.card.deck.name} · ` +
+        `**${entry.variant.toUpperCase()}**`
+      );
+    if (index === reward.cards.length - 1) {
+      embed.setFooter({ text: `${reward.itemName} consommé · 2 cartes rejetées` });
+    }
+    files.push(...await attachCardImage(embed, entry.card, entry.variant));
+    embeds.push(embed);
+  }
   await interaction.editReply({
-    content: "",
-    embeds: [embed],
+    content: `🎉 **${reward.cards.length} carte(s)** rejoignent ta collection.`,
+    embeds,
     files,
     components: [
       new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -804,10 +974,10 @@ export async function handleConquerorBoosterConfirm(
 export async function handleConquerorBoosterBack(
   interaction: ButtonInteraction,
   user: any,
-  tier: string,
+  itemKey: string,
   openingNumber: number
 ) {
-  await showConquerorBoosterChoices(interaction, user, tier, openingNumber);
+  await showConquerorBoosterChoices(interaction, user, itemKey, openingNumber);
 }
 
 type ContractInteraction =
@@ -1185,12 +1355,6 @@ export async function handleContractOptIn(
   );
 }
 
-function bossProgressBar(progress: number, target: number) {
-  const ratio = Math.max(0, Math.min(1, progress / Math.max(1, target)));
-  const filled = Math.round(ratio * 12);
-  return `${"█".repeat(filled)}${"░".repeat(12 - filled)} ${Math.round(ratio * 100)} %`;
-}
-
 function bossMechanicDescription(mechanic: string) {
   const descriptions: Record<string, string> = {
     OFFERING: "Offrez des crédits. Les offrandes sont définitivement consommées.",
@@ -1245,16 +1409,116 @@ async function attachBossImage(embed: EmbedBuilder, definition: {
 export async function handleBoss(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   user?: any,
-  notice?: string
+  notice?: string,
+  completedBossRunId?: string
 ) {
   if (!interaction.guildId) {
     await interaction.editReply("Cette commande doit être utilisée dans un serveur.");
     return;
   }
-  const [{ guild, run }, catalogCount] = await Promise.all([
-    bossService.getGuildBoss(interaction.guildId),
-    prisma.bossDefinition.count({ where: { status: "PUBLISHED" } })
-  ]);
+  const { guild, run } = await bossService.getGuildBoss(interaction.guildId);
+  const completedRun = completedBossRunId && user
+    ? await prisma.bossRun.findFirst({
+        where: {
+          id: completedBossRunId,
+          guildId: guild.id,
+          status: "DEFEATED"
+        },
+        include: {
+          definition: { include: { world: true } },
+          contributions: { where: { userId: user.id } },
+          rewardGrants: { where: { userId: user.id } },
+          _count: { select: { rewardGrants: true } }
+        }
+      })
+    : null;
+  const embed = new EmbedBuilder().setColor(0xc0392b).setTitle("🐲 Boss communautaire");
+
+  if (completedRun) {
+    const contribution = completedRun.contributions.reduce(
+      (total, entry) => total + entry.amount,
+      0
+    );
+    const grant = completedRun.rewardGrants[0];
+    const defeatedTimestamp = completedRun.defeatedAt
+      ? Math.floor(completedRun.defeatedAt.getTime() / 1_000)
+      : null;
+    const collectionVictory = ["HARMONIZATION", "COLLECTIVE_COLLECTION"]
+      .includes(completedRun.mechanic);
+    const nextWorld = completedRun.definition.kind === "GUARDIAN" &&
+      guild.progress?.frontierWorldId !== completedRun.definition.worldId
+      ? guild.progress?.frontierWorld?.name
+      : null;
+
+    embed
+      .setColor(0x2ecc71)
+      .setTitle(`🏆 ${completedRun.definition.name} vaincu !`)
+      .setDescription(
+        `${notice ? `**${notice}**\n\n` : ""}` +
+        `✅ **Le boss a bien été détruit.**\n` +
+        `${bossProgressBar(completedRun.progress, completedRun.targetSnapshot)}\n` +
+        `**${completedRun.targetSnapshot}/${completedRun.targetSnapshot}** points communautaires` +
+        (collectionVictory
+          ? "\n\n🃏 Ta collection a seulement été présentée : **aucune carte n’a été consommée**."
+          : "")
+      )
+      .addFields(
+        {
+          name: "Ta contribution finale",
+          value:
+            `**${contribution}** point(s) · ` +
+            `**${completedRun.contributions.length}** action(s)`,
+          inline: true
+        },
+        {
+          name: "Participants récompensés",
+          value: `**${completedRun._count.rewardGrants}**`,
+          inline: true
+        },
+        {
+          name: "Victoire enregistrée",
+          value: defeatedTimestamp
+            ? `<t:${defeatedTimestamp}:R>\n<t:${defeatedTimestamp}:F>`
+            : "À l’instant",
+          inline: true
+        },
+        {
+          name: "Tes récompenses",
+          value: grant
+            ? bossVictoryRewardDescription(grant.reward)
+            : "Aucune récompense individuelle : le seuil minimal de participation n’a pas été atteint."
+        }
+      )
+      .setFooter({
+        text: "Les récompenses ont été versées automatiquement · utilise le bouton pour voir la suite"
+      });
+
+    if (nextWorld) {
+      embed.addFields({
+        name: "🌍 Monde suivant débloqué",
+        value: `**${nextWorld}** est maintenant le monde en cours de progression.`
+      });
+    }
+
+    const files = await attachBossImage(embed, completedRun.definition);
+    await interaction.editReply({
+      embeds: [embed],
+      files,
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(createInteractionToken(
+              "j", "next", completedRun.id, interaction.user.id
+            ))
+            .setLabel("Voir la suite")
+            .setEmoji("🌍")
+            .setStyle(ButtonStyle.Primary)
+        )
+      ]
+    });
+    return;
+  }
+
   const guardian = !run && guild.progress?.frontierWorldId
     ? await prisma.bossDefinition.findFirst({
         where: {
@@ -1265,11 +1529,12 @@ export async function handleBoss(
         orderBy: { contentKey: "asc" }
       })
     : null;
-  const embed = new EmbedBuilder().setColor(0xc0392b).setTitle("🐲 Boss communautaire");
   if (!run) {
-    const mastery = guild.progress
-      ? `${guild.progress.mastery}/${guild.progress.masteryTarget}`
-      : "0/0";
+    const mastery = Math.max(0, guild.progress?.mastery ?? 0);
+    const masteryTarget = Math.max(0, guild.progress?.masteryTarget ?? 0);
+    const masteryRemaining = Math.max(0, masteryTarget - mastery);
+    const currentWorld = guild.progress?.frontierWorld?.name ?? "Monde actuel";
+    const unlockedWorldCount = Math.max(0, guild.progress?.unlockedWorldCount ?? 0);
     const progressionEnabled = guild.config?.progressionBossEnabled !== false;
     const guardianReady =
       guardian &&
@@ -1295,14 +1560,27 @@ export async function handleBoss(
       .setDescription(
         `Aucun boss actif.\n\n` +
         (guardianReady
-          ? `Le prochain boss sera le gardien **${guardian.name}**.`
+          ? `✅ Le seuil est atteint : le prochain boss sera le gardien **${guardian.name}**.`
           : guardian
-            ? `Progression vers **${guardian.name}** : **${mastery}**. ` +
+            ? `Le gardien **${guardian.name}** apparaîtra lorsque ce monde aura atteint 100 %. ` +
               "En attendant, le prochain cycle choisira un boss standard."
             : "Le prochain cycle choisira un boss standard.") +
         `\n\nChaque boss apparaît à minuit et reste actif pendant 24 heures.${countdown}`
       )
-      .setFooter({ text: `${catalogCount} boss Vault importés · 9 standards + 8 gardiens` });
+      .addFields({
+        name: `🌍 Progression du monde · ${currentWorld}`,
+        value: masteryTarget > 0
+          ? `${bossProgressBar(mastery, masteryTarget)}\n` +
+            `**${mastery}/${masteryTarget}** points de maîtrise` +
+            (masteryRemaining > 0
+              ? ` · encore **${masteryRemaining}** avant le gardien`
+              : " · **gardien prêt**") +
+            `\nMondes débloqués : **${unlockedWorldCount}/9**` +
+            (progressionEnabled
+              ? ""
+              : "\n⏸️ Les gardiens de progression sont désactivés sur ce serveur.")
+          : "La progression de ce monde n’est pas encore initialisée."
+      });
     await interaction.editReply({ embeds: [embed], components: [] });
     return;
   }
@@ -2005,7 +2283,7 @@ export async function handleBossButton(
       });
       notice = `${result.cardName} (${result.variant}) sacrifiée · +${result.progressAdded} points.`;
     }
-    await handleBoss(interaction, user, notice);
+    await handleBoss(interaction, user, notice, bossRunId);
     return;
   }
   if (/^pi-(?:candle|tear|mask|flower)$/.test(action)) {
@@ -2017,6 +2295,10 @@ export async function handleBossButton(
     return;
   }
   if (action === "back") {
+    await handleBoss(interaction, user, undefined, bossRunId);
+    return;
+  }
+  if (action === "next") {
     await handleBoss(interaction, user);
     return;
   }
@@ -2075,5 +2357,5 @@ export async function handleBossButton(
   } else if (action !== "mine") {
     throw new AppError("Action de boss inconnue.", 400);
   }
-  await handleBoss(interaction, user, notice);
+  await handleBoss(interaction, user, notice, bossRunId);
 }

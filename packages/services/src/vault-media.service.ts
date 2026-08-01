@@ -11,6 +11,23 @@ import { AppError } from "./errors.js";
 
 type CsvRecord = Record<string, string>;
 
+export function resolveWithinVault(vaultRoot: string, ...segments: string[]) {
+  if (segments.some((segment) =>
+    segment.includes("\0") ||
+    path.posix.isAbsolute(segment) ||
+    path.win32.isAbsolute(segment)
+  )) {
+    throw new AppError("Chemin mÃ©dia interdit hors du Vault.", 400);
+  }
+  const root = path.resolve(vaultRoot);
+  const candidate = path.resolve(root, ...segments);
+  const relative = path.relative(root, candidate);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new AppError("Chemin média interdit hors du Vault.", 400);
+  }
+  return candidate;
+}
+
 function parseCsv(input: string): CsvRecord[] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -96,9 +113,9 @@ export async function syncVaultMedia() {
     throw new AppError("Configuration MinIO/S3 incomplète.", 500);
   }
 
-  const cardsCsvPath = path.join(vaultRoot, "_data", "cards.csv");
-  const itemsCsvPath = path.join(vaultRoot, "_data", "notion_bdd", "BDD - Items.csv");
-  const bossesCsvPath = path.join(vaultRoot, "_data", "notion_bdd", "BDD - Bosses.csv");
+  const cardsCsvPath = resolveWithinVault(vaultRoot, "_data", "cards.csv");
+  const itemsCsvPath = resolveWithinVault(vaultRoot, "_data", "notion_bdd", "BDD - Items.csv");
+  const bossesCsvPath = resolveWithinVault(vaultRoot, "_data", "notion_bdd", "BDD - Bosses.csv");
   const [cardRows, itemRows, bossRows] = await Promise.all([
     fs.readFile(cardsCsvPath, "utf8").then(parseCsv),
     fs.readFile(itemsCsvPath, "utf8").then(parseCsv),
@@ -188,7 +205,7 @@ export async function syncVaultMedia() {
     } as const;
     const uploaded = await Promise.all(
       Object.entries(variants).map(async ([variant, suffix]) => {
-        const filePath = path.join(
+        const filePath = resolveWithinVault(
           vaultRoot,
           "20-Cards",
           deckDirectory,
@@ -234,7 +251,7 @@ export async function syncVaultMedia() {
     if (!itemDefinition) {
       throw new AppError(`Définition d'objet absente : ${contentKey}`, 500);
     }
-    const filePath = path.resolve(vaultRoot, item.Image.replaceAll("/", path.sep));
+    const filePath = resolveWithinVault(vaultRoot, item.Image.replaceAll("/", path.sep));
     const key = `vault/items/${contentKey}.png`;
     const url = await upload(filePath, key);
     await prisma.itemDefinition.update({
@@ -260,7 +277,7 @@ export async function syncVaultMedia() {
     if (!definition) {
       throw new AppError(`Définition de boss absente : ${contentKey}`, 500);
     }
-    const filePath = path.resolve(vaultRoot, boss.Image.replaceAll("/", path.sep));
+    const filePath = resolveWithinVault(vaultRoot, boss.Image.replaceAll("/", path.sep));
     const key = `vault/bosses/${contentKey}.png`;
     const url = await upload(filePath, key);
     await prisma.bossDefinition.update({

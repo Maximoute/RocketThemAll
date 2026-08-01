@@ -3,6 +3,20 @@ import { requireAdmin } from "../../../lib/guard";
 import { revalidatePath } from "next/cache";
 import { fetchGuildGameChannels } from "../../../lib/discord-admin";
 
+const DISCORD_SNOWFLAKE = /^\d{17,20}$/;
+
+function formNumber(
+  formData: FormData,
+  name: string,
+  fallback: number,
+  options: { max: number; integer?: boolean }
+) {
+  const parsed = Number(formData.get(name) ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  const normalized = options.integer ? Math.trunc(parsed) : parsed;
+  return Math.min(options.max, Math.max(0, normalized));
+}
+
 export default async function AdminConfigPage() {
   async function updateGameChannel(formData: FormData) {
     "use server";
@@ -17,7 +31,13 @@ export default async function AdminConfigPage() {
       String(formData.get("hallOfFameEnabled") ?? "") === "on" &&
       Boolean(hallOfFameChannelId);
 
-    if (!guildId || !guildName) {
+    if (
+      !DISCORD_SNOWFLAKE.test(guildId) ||
+      !guildName ||
+      guildName.length > 100 ||
+      (channelId && !DISCORD_SNOWFLAKE.test(channelId)) ||
+      (hallOfFameChannelId && !DISCORD_SNOWFLAKE.test(hallOfFameChannelId))
+    ) {
       return;
     }
 
@@ -65,8 +85,10 @@ export default async function AdminConfigPage() {
     "use server";
     const admin = await requireAdmin();
 
-    const readInt = (name: string, fallback: number) => Math.max(0, Number(formData.get(name) ?? fallback));
-    const readFloat = (name: string, fallback: number) => Math.max(0, Number(formData.get(name) ?? fallback));
+    const readInt = (name: string, fallback: number) =>
+      formNumber(formData, name, fallback, { max: 100_000_000, integer: true });
+    const readRate = (name: string, fallback: number) =>
+      formNumber(formData, name, fallback, { max: 1 });
 
     const payload = {
       commonSellPrice: readInt("commonSellPrice", 5),
@@ -90,16 +112,16 @@ export default async function AdminConfigPage() {
       importFragmentReward: readInt("importFragmentReward", 16),
       exoticFragmentReward: readInt("exoticFragmentReward", 32),
       blackMarketFragmentReward: readInt("blackMarketFragmentReward", 64),
-      normalVariantRate: readFloat("normalVariantRate", 0.9),
-      shinyVariantRate: readFloat("shinyVariantRate", 0.09),
-      holoVariantRate: readFloat("holoVariantRate", 0.01),
-      scarcityFloor: readFloat("scarcityFloor", 0.5),
-      scarcityCap: readFloat("scarcityCap", 3),
+      normalVariantRate: readRate("normalVariantRate", 0.9),
+      shinyVariantRate: readRate("shinyVariantRate", 0.09),
+      holoVariantRate: readRate("holoVariantRate", 0.01),
+      scarcityFloor: formNumber(formData, "scarcityFloor", 0.5, { max: 100 }),
+      scarcityCap: formNumber(formData, "scarcityCap", 3, { max: 100 }),
       fusionEnabled: String(formData.get("fusionEnabled") ?? "") === "on",
       craftBoosterFragmentCost: readInt("craftBoosterFragmentCost", 50),
       dailyCreditMin: readInt("dailyCreditMin", 50),
       dailyCreditMax: readInt("dailyCreditMax", 150),
-      dailyBoosterChance: readFloat("dailyBoosterChance", 0.15)
+      dailyBoosterChance: readRate("dailyBoosterChance", 0.15)
     };
 
     await prisma.appConfig.upsert({ where: { id: "default" }, update: payload, create: { id: "default", ...payload } });

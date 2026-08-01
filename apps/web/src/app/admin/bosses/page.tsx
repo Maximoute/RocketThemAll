@@ -10,6 +10,8 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "../../../lib/guard";
 
 const bossService = new BossService();
+const DISCORD_SNOWFLAKE = /^\d{17,20}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const mechanics: Array<{ value: BossMechanic; label: string }> = [
   { value: "OFFERING", label: "Offrande de crédits" },
   { value: "HARMONIZATION", label: "Harmonisation de cartes" },
@@ -45,6 +47,9 @@ export default async function AdminBossesPage({
     const admin = await requireAdmin();
     const guildDiscordId = String(formData.get("guildDiscordId") ?? "");
     const timezone = String(formData.get("timezone") ?? "Europe/Paris").trim();
+    if (!DISCORD_SNOWFLAKE.test(guildDiscordId) || timezone.length > 64) {
+      redirect("/admin/bosses?error=Configuration de serveur invalide.");
+    }
     try {
       new Intl.DateTimeFormat("fr-FR", { timeZone: timezone }).format(new Date());
     } catch {
@@ -98,10 +103,22 @@ export default async function AdminBossesPage({
     const guildDiscordId = String(formData.get("guildDiscordId") ?? "");
     const definitionKey = String(formData.get("definitionKey") ?? "");
     const mechanicRaw = String(formData.get("mechanic") ?? "");
-    const mechanic = mechanicRaw ? mechanicRaw as BossMechanic : undefined;
-    const category = String(
-      formData.get("category") ?? "TREASURE_GUARDIAN"
-    ) as BossCategory;
+    const mechanic = mechanics.some((entry) => entry.value === mechanicRaw)
+      ? mechanicRaw as BossMechanic
+      : undefined;
+    const categoryRaw = String(formData.get("category") ?? "TREASURE_GUARDIAN");
+    const category = categories.some((entry) => entry.value === categoryRaw)
+      ? categoryRaw as BossCategory
+      : null;
+    if (
+      !DISCORD_SNOWFLAKE.test(guildDiscordId) ||
+      !definitionKey ||
+      definitionKey.length > 120 ||
+      (mechanicRaw && !mechanic) ||
+      !category
+    ) {
+      redirect("/admin/bosses?error=Paramètres de boss invalides.");
+    }
     const target = optionalPositiveInteger(formData.get("target"));
     const durationHours = optionalPositiveInteger(formData.get("durationHours"));
     const run = await bossService.scheduleBoss({
@@ -129,6 +146,9 @@ export default async function AdminBossesPage({
     "use server";
     const admin = await requireAdmin();
     const guildDiscordId = String(formData.get("guildDiscordId") ?? "");
+    if (!DISCORD_SNOWFLAKE.test(guildDiscordId)) {
+      redirect("/admin/bosses?error=Serveur Discord invalide.");
+    }
     const guild = await prisma.guild.findUniqueOrThrow({
       where: { discordId: guildDiscordId },
       include: { progress: true }
@@ -165,6 +185,7 @@ export default async function AdminBossesPage({
     "use server";
     const admin = await requireAdmin();
     const bossRunId = String(formData.get("bossRunId") ?? "");
+    if (!UUID.test(bossRunId)) redirect("/admin/bosses?error=Boss invalide.");
     const run = await bossService.cancelRun(bossRunId).catch(redirectBossError);
     await prisma.adminLog.create({
       data: {

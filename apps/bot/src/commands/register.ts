@@ -79,13 +79,6 @@ export const commandBuilders = [
         .setDescription("Clé de l'objet à acheter")
         .setRequired(false)
     ),
-  new SlashCommandBuilder().setName("boosters").setDescription("Voir les boosters possédés"),
-  new SlashCommandBuilder()
-    .setName("craft")
-    .setDescription("Fabriquer avec des fragments")
-    .addSubcommand((subcommand) =>
-      subcommand.setName("booster").setDescription("Fabriquer un booster basic")
-    ),
   new SlashCommandBuilder()
     .setName("cardinfo")
     .setDescription("Voir les informations d'une carte")
@@ -103,15 +96,6 @@ export const commandBuilders = [
         .setRequired(false)
     ),
   new SlashCommandBuilder().setName("leaderboard").setDescription("Voir le classement"),
-  new SlashCommandBuilder()
-    .setName("booster")
-    .setDescription("Acheter ou ouvrir un booster")
-    .addSubcommand((subcommand) =>
-      subcommand.setName("buy").setDescription("Acheter un booster").addStringOption(boosterTypeOption)
-    )
-    .addSubcommand((subcommand) =>
-      subcommand.setName("open").setDescription("Ouvrir un booster").addStringOption(boosterTypeOption)
-    ),
   new SlashCommandBuilder()
     .setName("trade")
     .setDescription("Gérer un échange")
@@ -177,7 +161,7 @@ export async function registerCommands() {
   console.log(`Registered ${commandBuilders.length} global slash commands`);
 }
 
-export async function registerGuildCommands(guildIds: string[]) {
+export async function clearGuildCommands(guildIds: string[]) {
   const token = process.env.DISCORD_TOKEN;
   const clientId = process.env.DISCORD_CLIENT_ID;
   if (!token || !clientId || guildIds.length === 0) {
@@ -185,7 +169,7 @@ export async function registerGuildCommands(guildIds: string[]) {
   }
   const rest = new REST({ version: "10" }).setToken(token);
   for (const guildId of guildIds) {
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commandBuilders });
+    await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] });
   }
-  console.log(`Registered ${commandBuilders.length} guild slash commands for ${guildIds.length} guild(s)`);
+  console.log(`Cleared legacy guild slash commands for ${guildIds.length} guild(s)`);
 }

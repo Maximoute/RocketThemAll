@@ -10,6 +10,11 @@ import configRoutes from "./routes/config.routes.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { globalRateLimit } from "./middleware/rate-limit.js";
 import { requestContext } from "./middleware/request-context.js";
+import {
+  browserMutationGuard,
+  resolveFrontendOrigin,
+  securityHeaders
+} from "./middleware/security.js";
 import { logError, logInfo } from "./utils/logger.js";
 
 const app = express();
@@ -18,11 +23,16 @@ if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHop
   throw new Error("TRUST_PROXY_HOPS must be an integer between 0 and 3");
 }
 app.set("trust proxy", trustProxyHops);
-const allowedOrigin = process.env.FRONTEND_ORIGIN ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-app.use(cors({ origin: allowedOrigin, credentials: true }));
-app.use(express.json({ limit: "5mb" }));
+app.disable("x-powered-by");
+const allowedOrigin = resolveFrontendOrigin(
+  process.env.FRONTEND_ORIGIN ?? process.env.NEXTAUTH_URL
+);
+app.use(securityHeaders);
 app.use(requestContext);
 app.use(globalRateLimit);
+app.use(cors({ origin: allowedOrigin, credentials: true }));
+app.use(browserMutationGuard(allowedOrigin));
+app.use(express.json({ limit: "1mb", strict: true }));
 
 app.get(["/health", "/health/live"], (_req, res) => {
   res.json({

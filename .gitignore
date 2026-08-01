@@ -1,9 +1,12 @@
 node_modules/
 .next/
+.next-dev/
 dist/
 coverage/
 .env
-.env.local
+.env.*
+!.env.example
+!.env.production.example
 *.log
 *.tsbuildinfo
 .superpowers/

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@rta/database";
+import { isDiscordSnowflake } from "./identity.js";
 
 export type RequestUser = {
   id: string;
@@ -27,11 +28,11 @@ export async function resolveRequestUser(req: Request): Promise<RequestUser | nu
   }
 
   const token = await getToken({ req: req as any, secret });
-  if (!token?.sub) {
+  if (!isDiscordSnowflake(token?.sub)) {
     return null;
   }
 
-  const discordId = String(token.sub);
+  const discordId = token.sub;
   const user = await prisma.user.findUnique({
     where: { discordId },
     select: { id: true, discordId: true, isAdmin: true }
