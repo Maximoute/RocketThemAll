@@ -5,6 +5,10 @@ services:
     image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-postgres:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
   migrate:
     image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-migrate:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+  seed:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-migrate:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+  media-sync:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-migrate:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
   api:
     image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-api:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
   worker:

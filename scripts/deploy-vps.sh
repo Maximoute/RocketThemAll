@@ -8,6 +8,7 @@ IMAGE_PREFIX="${2:?Usage: deploy-vps.sh <40-character-image-tag> <image-prefix>}
 DEPLOY_ROOT="${RTA_DEPLOY_ROOT:-/srv/rocketthemall}"
 RELEASE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${DEPLOY_ROOT}/shared/.env.production"
+VAULT_ROOT="${DEPLOY_ROOT}/shared/Vault-RTA"
 
 if [[ ! "${IMAGE_TAG}" =~ ^[0-9a-f]{40}$ ]]; then
   echo "Invalid immutable image tag: expected a full Git commit SHA." >&2
@@ -29,6 +30,19 @@ if grep -Eq '=(replace-me|replace-with-|change-me)' "${ENV_FILE}"; then
   echo "The production environment still contains placeholder values." >&2
   exit 3
 fi
+for catalog in \
+  "_data/cards.csv" \
+  "_data/notion_bdd/BDD - Zones.csv" \
+  "_data/notion_bdd/BDD - Items.csv" \
+  "_data/notion_bdd/BDD - Quetes.csv" \
+  "_data/notion_bdd/BDD - Achievements.csv" \
+  "_data/notion_bdd/BDD - Bosses.csv" \
+  "_data/notion_bdd/BDD - Competences.csv"; do
+  if [[ ! -f "${VAULT_ROOT}/${catalog}" ]]; then
+    echo "Missing production Vault catalog: ${VAULT_ROOT}/${catalog}" >&2
+    exit 3
+  fi
+done
 
 chmod 0600 "${ENV_FILE}"
 export RTA_IMAGE_PREFIX="${IMAGE_PREFIX}"
