@@ -53,6 +53,48 @@ const RARITY_ORDER: CoreRarity[] = [
   "Black Market"
 ];
 
+export function worldMasteryProgressBar(
+  mastery: number,
+  masteryTarget: number,
+  segments = 12
+) {
+  const safeMastery = Number.isFinite(mastery) ? Math.max(0, mastery) : 0;
+  const safeTarget = Number.isFinite(masteryTarget) ? Math.max(0, masteryTarget) : 0;
+  const safeSegments = Math.max(1, Math.floor(segments));
+  const percent = safeTarget > 0
+    ? Math.round(Math.min(1, safeMastery / safeTarget) * 100)
+    : 0;
+  const filled = Math.round((percent / 100) * safeSegments);
+
+  return `${"█".repeat(filled)}${"░".repeat(safeSegments - filled)} ${percent} %`;
+}
+
+export function lockedWorldAccessMessage(input: {
+  currentWorldName: string;
+  mastery: number;
+  masteryTarget: number;
+}) {
+  const mastery = Number.isFinite(input.mastery) ? Math.max(0, input.mastery) : 0;
+  const masteryTarget = Number.isFinite(input.masteryTarget)
+    ? Math.max(0, input.masteryTarget)
+    : 0;
+  const progressDetails = masteryTarget > 0
+    ? `**${mastery}/${masteryTarget}** points de maîtrise` +
+      (mastery >= masteryTarget
+        ? " · **gardien prêt à être affronté**"
+        : ` · encore **${masteryTarget - mastery}** avant le gardien`)
+    : "La progression de ce monde n’est pas encore initialisée.";
+
+  return (
+    "Ce monde n’est pas encore débloqué. Réussis davantage d’explorations dans les mondes " +
+    "précédents pour remplir leur progression, puis affronte et bats leurs gardiens afin de " +
+    "débloquer ce monde.\n\n" +
+    `🌍 **Progression du monde actuel · ${input.currentWorldName}**\n` +
+    `${worldMasteryProgressBar(mastery, masteryTarget)}\n` +
+    progressDetails
+  );
+}
+
 export type ExplorationEvent = {
   key: string;
   label: string;
@@ -785,8 +827,18 @@ export class ExploreService {
     const guild = await this.getGuild(discordGuildId);
     const unlockedWorldCount = Math.max(1, guild.progress?.unlockedWorldCount ?? 1);
     if (worldPosition > unlockedWorldCount) {
+      const currentWorld = await prisma.worldDefinition.findFirst({
+        where: guild.progress?.frontierWorldId
+          ? { id: guild.progress.frontierWorldId }
+          : { position: unlockedWorldCount },
+        select: { name: true }
+      });
       throw new AppError(
-        "Ce monde n’est pas encore débloqué. Réussis davantage d’explorations dans les mondes précédents pour remplir leur progression, puis affronte et bats leurs gardiens afin de débloquer ce monde.",
+        lockedWorldAccessMessage({
+          currentWorldName: currentWorld?.name ?? `Monde ${unlockedWorldCount}`,
+          mastery: guild.progress?.mastery ?? 0,
+          masteryTarget: guild.progress?.masteryTarget ?? 0
+        }),
         403
       );
     }
