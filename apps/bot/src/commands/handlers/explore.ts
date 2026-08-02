@@ -7,6 +7,8 @@ import {
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
+  type InteractionReplyOptions,
+  type Message,
   type StringSelectMenuInteraction
 } from "discord.js";
 import { PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT } from "@rta/services";
@@ -25,7 +27,10 @@ import {
   createInteractionToken,
   parseInteractionToken
 } from "../interaction-token.js";
-import { encounterPublicationNonce } from "../encounter-publication.js";
+import {
+  canFallbackToInteractionPublication,
+  encounterPublicationNonce
+} from "../encounter-publication.js";
 import { attachCardImage } from "../card-media.js";
 import { announceHallOfFameCapture } from "../hall-of-fame.js";
 import {
@@ -65,6 +70,10 @@ const HUB_COLOR = 0x6c5ce7;
 const ENCOUNTER_COLOR = 0x00b894;
 const PUBLICATION_DELAY_MS = 60_000;
 const publicationTimers = new Map<string, NodeJS.Timeout>();
+
+type EncounterInteractionPublisher = (
+  options: InteractionReplyOptions
+) => Promise<Message>;
 
 type ExplorationEnergy = Awaited<
   ReturnType<typeof explorationEnergyService.getSnapshot>
@@ -305,7 +314,8 @@ function targetChoiceComponents(encounterId: string, cardIds: [string, string]) 
 
 async function publishEncounterAfterPrivateCapture(
   client: Client,
-  encounterId: string
+  encounterId: string,
+  interactionPublisher?: EncounterInteractionPublisher
 ) {
   const claimed = await exploreService.claimEncounterPublication(encounterId);
   if (claimed.count !== 1) return false;
@@ -338,15 +348,31 @@ async function publishEncounterAfterPrivateCapture(
       phase: "PUBLIC"
     });
     const files = await attachCardImage(embed, encounter.card);
-    const message = await channel.send({
+    const publicPayload = {
       content: "🌐 La rencontre est maintenant ouverte aux autres joueurs !",
-      nonce: encounterPublicationNonce(encounter.id),
-      enforceNonce: true,
       allowedMentions: { parse: [] },
       embeds: [embed],
       files,
       components: encounterComponents(encounter.id)
-    });
+    } satisfies InteractionReplyOptions;
+    let message: Message;
+    try {
+      message = await channel.send({
+        ...publicPayload,
+        nonce: encounterPublicationNonce(encounter.id),
+        enforceNonce: true
+      });
+    } catch (error) {
+      if (!interactionPublisher || !canFallbackToInteractionPublication(error)) {
+        throw error;
+      }
+      console.warn("Direct encounter publication denied; using interaction relay", {
+        encounterId,
+        guildId: encounter.guildId,
+        channelId: encounter.channelId
+      });
+      message = await interactionPublisher(publicPayload);
+    }
     const attached = await exploreService.attachEncounterMessage(encounter.id, message.id);
     if (!attached) {
       await message.delete().catch((error) => {
@@ -369,7 +395,8 @@ async function publishEncounterAfterPrivateCapture(
 function queueEncounterPublication(
   client: Client,
   encounterId: string,
-  publishAfter: Date
+  publishAfter: Date,
+  interactionPublisher?: EncounterInteractionPublisher
 ) {
   const existing = publicationTimers.get(encounterId);
   if (existing) clearTimeout(existing);
@@ -377,13 +404,18 @@ function queueEncounterPublication(
   const timer = setTimeout(async () => {
     publicationTimers.delete(encounterId);
     try {
-      await publishEncounterAfterPrivateCapture(client, encounterId);
+      await publishEncounterAfterPrivateCapture(
+        client,
+        encounterId,
+        interactionPublisher
+      );
     } catch (error) {
       console.error("Unable to publish delayed encounter", { encounterId, error });
       queueEncounterPublication(
         client,
         encounterId,
-        new Date(Date.now() + 5_000)
+        new Date(Date.now() + 5_000),
+        interactionPublisher
       );
     }
   }, delay);
@@ -1683,7 +1715,8 @@ async function handleAnswerSelect(
         queueEncounterPublication(
           interaction.client,
           encounterId,
-          publication.publishAfter
+          publication.publishAfter,
+          (options) => interaction.followUp(options)
         );
       }
     } catch (error) {

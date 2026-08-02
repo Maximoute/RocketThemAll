@@ -167,6 +167,15 @@ export default async function AdminServersPage() {
           const currentGameChannelId = guild.config?.gameChannelId ?? "";
           const currentHallChannelId = guild.config?.hallOfFameChannelId ?? "";
           const currentBossChannelId = guild.config?.bossAnnouncementChannelId ?? "";
+          const currentGameChannel = channels.find(
+            (channel) => channel.id === currentGameChannelId
+          );
+          const currentHallChannel = channels.find(
+            (channel) => channel.id === currentHallChannelId
+          );
+          const currentBossChannel = channels.find(
+            (channel) => channel.id === currentBossChannelId
+          );
           const gameChannelIsListed = channels.some(
             (channel) => channel.id === currentGameChannelId
           );
@@ -283,11 +292,23 @@ export default async function AdminServersPage() {
                         </option>
                       )}
                       {channels.map((channel) => (
-                        <option key={channel.id} value={channel.id}>
+                        <option
+                          key={channel.id}
+                          value={channel.id}
+                          disabled={!channel.botCanPublish && channel.id !== currentGameChannelId}
+                        >
                           #{channel.name}
+                          {!channel.botCanPublish
+                            ? ` — bot bloqué : ${channel.missingPermissions.join(", ")}`
+                            : ""}
                         </option>
                       ))}
                     </select>
+                    {currentGameChannel && !currentGameChannel.botCanPublish && (
+                      <small style={{ display: "block", color: "#b91c1c", marginTop: "6px" }}>
+                        Publication impossible directement : autorise le bot à {currentGameChannel.missingPermissions.join(", ")}.
+                      </small>
+                    )}
                   </div>
 
                   {guild.isPrimary ? (
@@ -309,9 +330,23 @@ export default async function AdminServersPage() {
                           <option value={currentHallChannelId}>Salon actuel ({currentHallChannelId})</option>
                         )}
                         {channels.map((channel) => (
-                          <option key={channel.id} value={channel.id}>#{channel.name}</option>
+                          <option
+                            key={channel.id}
+                            value={channel.id}
+                            disabled={!channel.botCanPublish && channel.id !== currentHallChannelId}
+                          >
+                            #{channel.name}
+                            {!channel.botCanPublish
+                              ? ` — bot bloqué : ${channel.missingPermissions.join(", ")}`
+                              : ""}
+                          </option>
                         ))}
                       </select>
+                      {currentHallChannel && !currentHallChannel.botCanPublish && (
+                        <small style={{ display: "block", color: "#b91c1c", marginTop: "6px" }}>
+                          Annonce impossible : autorise le bot à {currentHallChannel.missingPermissions.join(", ")}.
+                        </small>
+                      )}
                       <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", cursor: "pointer" }}>
                         <input type="checkbox" name="hallOfFameEnabled" defaultChecked={guild.config?.hallOfFameEnabled ?? false} />
                         <span style={{ fontSize: "13px" }}>Hall of Fame actif</span>
@@ -345,9 +380,23 @@ export default async function AdminServersPage() {
                         <option value={currentBossChannelId}>Salon actuel ({currentBossChannelId})</option>
                       )}
                       {channels.map((channel) => (
-                        <option key={channel.id} value={channel.id}>#{channel.name}</option>
+                        <option
+                          key={channel.id}
+                          value={channel.id}
+                          disabled={!channel.botCanPublish && channel.id !== currentBossChannelId}
+                        >
+                          #{channel.name}
+                          {!channel.botCanPublish
+                            ? ` — bot bloqué : ${channel.missingPermissions.join(", ")}`
+                            : ""}
+                        </option>
                       ))}
                     </select>
+                    {currentBossChannel && !currentBossChannel.botCanPublish && (
+                      <small style={{ display: "block", color: "#b91c1c", marginTop: "6px" }}>
+                        Annonce impossible : autorise le bot à {currentBossChannel.missingPermissions.join(", ")}.
+                      </small>
+                    )}
                     <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", cursor: "pointer" }}>
                       <input type="checkbox" name="bossAnnouncementEnabled" defaultChecked={guild.config?.bossAnnouncementEnabled ?? false} />
                       <span style={{ fontSize: "13px" }}>Annonces de boss actives</span>

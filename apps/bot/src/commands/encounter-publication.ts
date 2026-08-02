@@ -13,3 +13,9 @@ export function encounterPublicationNonce(encounterId: string) {
   const compact = encounterId.replaceAll("-", "");
   return BigInt(`0x${compact}`).toString(36);
 }
+
+export function canFallbackToInteractionPublication(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = Reflect.get(error, "code");
+  return code === 50_001 || code === 50_013 || code === "50001" || code === "50013";
+}
