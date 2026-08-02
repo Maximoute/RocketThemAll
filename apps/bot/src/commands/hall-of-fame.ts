@@ -1,4 +1,4 @@
-import { EmbedBuilder, type Client } from "discord.js";
+import { EmbedBuilder, escapeMarkdown, type Client } from "discord.js";
 import { prisma } from "./service-instances.js";
 import { attachCardImage, type CardImageVariant } from "./card-media.js";
 
@@ -12,6 +12,31 @@ export function isHallOfFameVariant(
   variant: CardImageVariant | null
 ): variant is "shiny" | "holo" {
   return variant === "shiny" || variant === "holo";
+}
+
+export function hallOfFameAnnouncementCopy(input: {
+  playerDiscordId: string;
+  playerDisplayName: string;
+  cardName: string;
+  sourceGuildName: string;
+  variant: "shiny" | "holo";
+}) {
+  const playerName = escapeMarkdown(input.playerDisplayName);
+  const cardName = escapeMarkdown(input.cardName);
+  const sourceGuildName = escapeMarkdown(input.sourceGuildName);
+  const playerLabel = `**${playerName}** (<@${input.playerDiscordId}>)`;
+  const variantLabel = input.variant === "holo" ? "HOLO" : "SHINY";
+  return {
+    content:
+      `🏆 ${playerName} vient de faire une découverte exceptionnelle ` +
+      `sur **${sourceGuildName}** !`,
+    description:
+      `${playerLabel} entre au **Hall of Fame** en capturant ` +
+      `**${cardName}** dans sa variante **${variantLabel}** ` +
+      `sur le serveur partenaire **${sourceGuildName}** !`,
+    sourceGuildName,
+    footer: `Découverte sur ${sourceGuildName} • Rocket Them All • Hall of Fame`
+  };
 }
 
 export async function announceHallOfFameCapture(input: {
@@ -32,7 +57,7 @@ export async function announceHallOfFameCapture(input: {
   const [sourceGuild, targetGuild] = await Promise.all([
     prisma.guild.findUnique({
       where: { discordId: input.sourceGuildId },
-      select: { isActive: true }
+      select: { name: true, isActive: true }
     }),
     prisma.guild.findFirst({
       where: { isPrimary: true, isActive: true },
@@ -96,12 +121,13 @@ export async function announceHallOfFameCapture(input: {
   }
 
   try {
-    const [channel, card] = await Promise.all([
+    const [channel, card, player] = await Promise.all([
       input.client.channels.fetch(channelId),
       prisma.card.findUnique({
         where: { id: input.cardId },
         include: { deck: true, rarity: true }
-      })
+      }),
+      input.client.users.fetch(input.playerDiscordId).catch(() => null)
     ]);
     if (!channel || !channel.isTextBased() || channel.isDMBased()) {
       throw new Error("Le salon Hall of Fame configuré n'est pas un salon texte.");
@@ -113,7 +139,13 @@ export async function announceHallOfFameCapture(input: {
       throw new Error("Carte introuvable pour l'annonce Hall of Fame.");
     }
 
-    const variantLabel = input.variant === "holo" ? "HOLO" : "SHINY";
+    const copy = hallOfFameAnnouncementCopy({
+      playerDiscordId: input.playerDiscordId,
+      playerDisplayName: player?.globalName ?? player?.username ?? `Joueur ${input.playerDiscordId}`,
+      cardName: card.name,
+      sourceGuildName: sourceGuild.name,
+      variant: input.variant
+    });
     const embed = new EmbedBuilder()
       .setColor(input.variant === "holo" ? 0xffd700 : 0x43e8d8)
       .setTitle(
@@ -121,20 +153,18 @@ export async function announceHallOfFameCapture(input: {
           ? "🌌 Capture légendaire — HOLO !"
           : "✨ Découverte exceptionnelle — SHINY !"
       )
-      .setDescription(
-        `<@${input.playerDiscordId}> entre au **Hall of Fame** en capturant ` +
-        `**${card.name}** dans sa variante **${variantLabel}** !`
-      )
+      .setDescription(copy.description)
       .addFields(
         { name: "Rareté", value: card.rarity.name, inline: true },
         { name: "Deck", value: card.deck.name, inline: true },
-        { name: "Identifiant", value: `\`${card.contentKey ?? card.id}\``, inline: true }
+        { name: "Identifiant", value: `\`${card.contentKey ?? card.id}\``, inline: true },
+        { name: "Serveur d'origine", value: `**${copy.sourceGuildName}**`, inline: false }
       )
-      .setFooter({ text: "Rocket Them All • Hall of Fame" })
+      .setFooter({ text: copy.footer })
       .setTimestamp();
     const files = await attachCardImage(embed, card, input.variant);
     const message = await channel.send({
-      content: `🏆 Bravo <@${input.playerDiscordId}> !`,
+      content: copy.content,
       embeds: [embed],
       files,
       allowedMentions: { users: [input.playerDiscordId] }
