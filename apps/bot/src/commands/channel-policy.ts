@@ -33,7 +33,7 @@ export function decideCommandChannel(input: {
     input.config?.hallOfFameEnabled && hallOfFameChannelId
   );
   const insideHallOfFame = Boolean(
-    hallOfFameChannelId && input.channelId === hallOfFameChannelId
+    hallOfFameConfigured && input.channelId === hallOfFameChannelId
   );
 
   if (insideHallOfFame && input.commandName !== "showcard") {

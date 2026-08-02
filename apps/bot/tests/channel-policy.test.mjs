@@ -40,3 +40,19 @@ test("showcard cannot be used outside the configured Hall of Fame", () => {
   assert.equal(denied.allowed, false);
   assert.match(denied.message, /<#hall>/);
 });
+
+test("a selected but disabled Hall channel behaves like a normal channel", () => {
+  const disabledConfig = { ...config, hallOfFameEnabled: false };
+  assert.equal(decideCommandChannel({
+    commandName: "profile",
+    channelId: "hall",
+    guildId: "guild",
+    config: disabledConfig
+  }).allowed, true);
+  assert.equal(decideCommandChannel({
+    commandName: "showcard",
+    channelId: "hall",
+    guildId: "guild",
+    config: disabledConfig
+  }).allowed, false);
+});
