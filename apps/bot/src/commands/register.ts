@@ -97,6 +97,16 @@ export const commandBuilders = [
         .setRequired(false)
         .setAutocomplete(true)
     ),
+  new SlashCommandBuilder()
+    .setName("showcard")
+    .setDescription("Exposer publiquement une carte que tu possèdes")
+    .addStringOption((option) =>
+      option
+        .setName("carte")
+        .setDescription("Une carte certifiée dans ton inventaire")
+        .setRequired(true)
+        .setAutocomplete(true)
+    ),
   new SlashCommandBuilder().setName("leaderboard").setDescription("Voir le classement"),
   new SlashCommandBuilder()
     .setName("trade")

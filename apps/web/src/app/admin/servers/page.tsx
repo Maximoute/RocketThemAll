@@ -49,19 +49,44 @@ export default async function AdminServersPage() {
     const currentAdmin = await requireAdmin();
     const discordId = String(formData.get("guildId") ?? "").trim();
     const gameChannelId = String(formData.get("gameChannelId") ?? "").trim() || null;
-    const hallOfFameChannelId =
+    const requestedHallOfFameChannelId =
       String(formData.get("hallOfFameChannelId") ?? "").trim() || null;
-    const hallOfFameEnabled =
-      String(formData.get("hallOfFameEnabled") ?? "") === "on" &&
-      Boolean(hallOfFameChannelId);
+    const requestedHallOfFameEnabled =
+      String(formData.get("hallOfFameEnabled") ?? "") === "on";
+    const bossAnnouncementChannelId =
+      String(formData.get("bossAnnouncementChannelId") ?? "").trim() || null;
+    const bossAnnouncementEnabled =
+      String(formData.get("bossAnnouncementEnabled") ?? "") === "on" &&
+      Boolean(bossAnnouncementChannelId);
     const isActive = String(formData.get("isActive") ?? "") === "on";
     if (!DISCORD_SNOWFLAKE.test(discordId)) return;
     if (gameChannelId && !DISCORD_SNOWFLAKE.test(gameChannelId)) return;
-    if (hallOfFameChannelId && !DISCORD_SNOWFLAKE.test(hallOfFameChannelId)) return;
+    if (
+      requestedHallOfFameChannelId &&
+      !DISCORD_SNOWFLAKE.test(requestedHallOfFameChannelId)
+    ) return;
+    if (bossAnnouncementChannelId && !DISCORD_SNOWFLAKE.test(bossAnnouncementChannelId)) return;
 
     await prisma.$transaction(async (tx) => {
-      const guild = await tx.guild.update({
+      const guild = await tx.guild.findUnique({
         where: { discordId },
+        select: { id: true, isPrimary: true }
+      });
+      if (!guild) return;
+      const hallOfFameChannelId = guild.isPrimary
+        ? requestedHallOfFameChannelId
+        : null;
+      const hallOfFameEnabled = Boolean(
+        guild.isPrimary && requestedHallOfFameEnabled && hallOfFameChannelId
+      );
+      const selectedChannels = [
+        gameChannelId,
+        hallOfFameChannelId,
+        bossAnnouncementChannelId
+      ].filter((channelId): channelId is string => Boolean(channelId));
+      if (new Set(selectedChannels).size !== selectedChannels.length) return;
+      await tx.guild.update({
+        where: { id: guild.id },
         data: { isActive }
       });
       await tx.guildConfiguration.upsert({
@@ -70,13 +95,17 @@ export default async function AdminServersPage() {
           gameChannelId,
           hallOfFameChannelId,
           hallOfFameEnabled,
+          bossAnnouncementChannelId,
+          bossAnnouncementEnabled,
           version: { increment: 1 }
         },
         create: {
           guildId: guild.id,
           gameChannelId,
           hallOfFameChannelId,
-          hallOfFameEnabled
+          hallOfFameEnabled,
+          bossAnnouncementChannelId,
+          bossAnnouncementEnabled
         }
       });
       await tx.adminLog.create({
@@ -88,6 +117,8 @@ export default async function AdminServersPage() {
             gameChannelId,
             hallOfFameChannelId,
             hallOfFameEnabled,
+            bossAnnouncementChannelId,
+            bossAnnouncementEnabled,
             isActive
           }
         }
@@ -115,7 +146,7 @@ export default async function AdminServersPage() {
       <h1 style={{ marginTop: 0, marginBottom: "4px" }}>Gestion des serveurs</h1>
       <p style={{ color: "#6b5f4f", marginBottom: "20px" }}>
         Choisis le serveur principal, configure le centre <strong>/explore</strong> et active le
-        Hall of Fame séparément sur chaque serveur.
+        Hall of Fame central du serveur principal et le salon d’annonce des boss.
       </p>
 
       {!guilds.some((guild) => guild.isPrimary) && (
@@ -135,11 +166,15 @@ export default async function AdminServersPage() {
           const channels = channelMap.get(guild.discordId) ?? [];
           const currentGameChannelId = guild.config?.gameChannelId ?? "";
           const currentHallChannelId = guild.config?.hallOfFameChannelId ?? "";
+          const currentBossChannelId = guild.config?.bossAnnouncementChannelId ?? "";
           const gameChannelIsListed = channels.some(
             (channel) => channel.id === currentGameChannelId
           );
           const hallChannelIsListed = channels.some(
             (channel) => channel.id === currentHallChannelId
+          );
+          const bossChannelIsListed = channels.some(
+            (channel) => channel.id === currentBossChannelId
           );
 
           return (
@@ -255,46 +290,68 @@ export default async function AdminServersPage() {
                     </select>
                   </div>
 
+                  {guild.isPrimary ? (
+                    <div>
+                      <label htmlFor={`hallOfFameChannelId-${guild.id}`} style={{
+                        display: "block", fontSize: "12px", fontWeight: 600,
+                        color: "#6b5f4f", marginBottom: "4px"
+                      }}>
+                        Hall of Fame central
+                      </label>
+                      <select
+                        id={`hallOfFameChannelId-${guild.id}`}
+                        name="hallOfFameChannelId"
+                        defaultValue={currentHallChannelId}
+                        style={{ width: "100%", padding: "7px 10px", border: "1px solid #e4d8c6", borderRadius: "8px", fontSize: "13px" }}
+                      >
+                        <option value="">Aucun salon configuré</option>
+                        {currentHallChannelId && !hallChannelIsListed && (
+                          <option value={currentHallChannelId}>Salon actuel ({currentHallChannelId})</option>
+                        )}
+                        {channels.map((channel) => (
+                          <option key={channel.id} value={channel.id}>#{channel.name}</option>
+                        ))}
+                      </select>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", cursor: "pointer" }}>
+                        <input type="checkbox" name="hallOfFameEnabled" defaultChecked={guild.config?.hallOfFameEnabled ?? false} />
+                        <span style={{ fontSize: "13px" }}>Hall of Fame actif</span>
+                      </label>
+                      <small style={{ color: "#6b5f4f" }}>
+                        Reçoit les Shiny/Holo de tous les serveurs RTA. Seul <code>/showcard</code> y est autorisé.
+                      </small>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "12px", color: "#6b5f4f" }}>
+                      <strong>Hall of Fame centralisé</strong><br />
+                      Les découvertes de ce serveur sont publiées dans le Hall du serveur principal.
+                    </div>
+                  )}
+
                   <div>
-                    <label
-                      htmlFor={`hallOfFameChannelId-${guild.id}`}
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: "#6b5f4f",
-                        marginBottom: "4px"
-                      }}
-                    >
-                      Salon Hall of Fame
+                    <label htmlFor={`bossAnnouncementChannelId-${guild.id}`} style={{
+                      display: "block", fontSize: "12px", fontWeight: 600,
+                      color: "#6b5f4f", marginBottom: "4px"
+                    }}>
+                      Salon d’annonce des boss
                     </label>
                     <select
-                      id={`hallOfFameChannelId-${guild.id}`}
-                      name="hallOfFameChannelId"
-                      defaultValue={currentHallChannelId}
-                      style={{
-                        width: "100%",
-                        padding: "7px 10px",
-                        border: "1px solid #e4d8c6",
-                        borderRadius: "8px",
-                        fontSize: "13px"
-                      }}
+                      id={`bossAnnouncementChannelId-${guild.id}`}
+                      name="bossAnnouncementChannelId"
+                      defaultValue={currentBossChannelId}
+                      style={{ width: "100%", padding: "7px 10px", border: "1px solid #e4d8c6", borderRadius: "8px", fontSize: "13px" }}
                     >
                       <option value="">Aucun salon configuré</option>
-                      {currentHallChannelId && !hallChannelIsListed && (
-                        <option value={currentHallChannelId}>
-                          Salon actuel ({currentHallChannelId})
-                        </option>
+                      {currentBossChannelId && !bossChannelIsListed && (
+                        <option value={currentBossChannelId}>Salon actuel ({currentBossChannelId})</option>
                       )}
                       {channels.map((channel) => (
-                        <option key={channel.id} value={channel.id}>
-                          #{channel.name}
-                        </option>
+                        <option key={channel.id} value={channel.id}>#{channel.name}</option>
                       ))}
                     </select>
-                    <small style={{ color: "#6b5f4f" }}>
-                      Reçoit les captures Shiny et Holo de ce serveur.
-                    </small>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", cursor: "pointer" }}>
+                      <input type="checkbox" name="bossAnnouncementEnabled" defaultChecked={guild.config?.bossAnnouncementEnabled ?? false} />
+                      <span style={{ fontSize: "13px" }}>Annonces de boss actives</span>
+                    </label>
                   </div>
 
                   <div style={{ display: "grid", alignContent: "start", gap: "10px" }}>
@@ -306,29 +363,17 @@ export default async function AdminServersPage() {
                         cursor: "pointer"
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        name="hallOfFameEnabled"
-                        defaultChecked={guild.config?.hallOfFameEnabled ?? false}
-                      />
-                      <span style={{ fontSize: "13px" }}>
-                        Hall of Fame actif sur ce serveur
-                      </span>
-                    </label>
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        cursor: "pointer"
-                      }}
-                    >
                       <input type="checkbox" name="isActive" defaultChecked={guild.isActive} />
                       <span style={{ fontSize: "13px" }}>RTA actif sur ce serveur</span>
                     </label>
-                    {!currentHallChannelId && (
+                    {guild.isPrimary && !currentHallChannelId && (
                       <small style={{ color: "#9a3412" }}>
                         Sélectionne un salon pour pouvoir activer le Hall of Fame.
+                      </small>
+                    )}
+                    {!currentBossChannelId && (
+                      <small style={{ color: "#9a3412" }}>
+                        Sélectionne un salon pour annoncer l’apparition des boss.
                       </small>
                     )}
                   </div>

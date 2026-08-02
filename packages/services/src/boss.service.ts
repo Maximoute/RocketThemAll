@@ -1364,7 +1364,9 @@ export class BossService {
             category,
             bossTier
           ),
-          channelId: guild.config?.gameChannelId ?? null,
+          channelId: guild.config?.bossAnnouncementEnabled
+            ? guild.config.bossAnnouncementChannelId
+            : null,
           scheduledAt: now,
           startsAt,
           endsAt

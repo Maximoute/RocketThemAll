@@ -706,6 +706,8 @@ model GuildConfiguration {
   gameChannelId            String?
   hallOfFameChannelId      String?
   hallOfFameEnabled        Boolean  @default(false)
+  bossAnnouncementChannelId String?
+  bossAnnouncementEnabled  Boolean  @default(false)
   progressionBossEnabled   Boolean  @default(true)
   progressionBossWeekday   Int      @default(0)
   progressionBossLocalTime String   @default("18:00")

@@ -3,6 +3,10 @@ import { prisma } from "./service-instances.js";
 import { attachCardImage, type CardImageVariant } from "./card-media.js";
 
 const ANNOUNCEMENT_RECLAIM_MS = 2 * 60 * 1_000;
+const RECENT_CAPTURE_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const SYNCHRONIZATION_INTERVAL_MS = 60 * 1_000;
+
+let synchronizationRunning = false;
 
 export function isHallOfFameVariant(
   variant: CardImageVariant | null
@@ -25,14 +29,23 @@ export async function announceHallOfFameCapture(input: {
     return { status: "IGNORED_VARIANT" as const };
   }
 
-  const guild = await prisma.guild.findUnique({
-    where: { discordId: input.sourceGuildId },
-    include: { config: true }
-  });
-  if (!guild?.config?.hallOfFameEnabled) {
+  const [sourceGuild, targetGuild] = await Promise.all([
+    prisma.guild.findUnique({
+      where: { discordId: input.sourceGuildId },
+      select: { isActive: true }
+    }),
+    prisma.guild.findFirst({
+      where: { isPrimary: true, isActive: true },
+      include: { config: true }
+    })
+  ]);
+  if (!sourceGuild?.isActive) {
+    return { status: "IGNORED_GUILD" as const };
+  }
+  if (!targetGuild?.config?.hallOfFameEnabled) {
     return { status: "DISABLED" as const };
   }
-  const channelId = guild?.config?.hallOfFameChannelId;
+  const channelId = targetGuild.config.hallOfFameChannelId;
   if (!channelId) {
     return { status: "NOT_CONFIGURED" as const };
   }
@@ -93,8 +106,8 @@ export async function announceHallOfFameCapture(input: {
     if (!channel || !channel.isTextBased() || channel.isDMBased()) {
       throw new Error("Le salon Hall of Fame configuré n'est pas un salon texte.");
     }
-    if (channel.guildId !== input.sourceGuildId) {
-      throw new Error("Le salon Hall of Fame n'appartient pas au serveur configuré.");
+    if (channel.guildId !== targetGuild.discordId) {
+      throw new Error("Le salon Hall of Fame n'appartient pas au serveur principal.");
     }
     if (!card) {
       throw new Error("Carte introuvable pour l'annonce Hall of Fame.");
@@ -152,4 +165,81 @@ export async function announceHallOfFameCapture(input: {
     });
     return { status: "FAILED" as const, error: message };
   }
+}
+
+export async function syncRecentHallOfFameCaptures(client: Client) {
+  if (synchronizationRunning) return;
+  synchronizationRunning = true;
+
+  try {
+    const primaryGuild = await prisma.guild.findFirst({
+      where: { isPrimary: true, isActive: true },
+      include: { config: true }
+    });
+    if (
+      !primaryGuild?.config?.hallOfFameEnabled ||
+      !primaryGuild.config.hallOfFameChannelId
+    ) {
+      return;
+    }
+
+    const captures = await prisma.captureAttempt.findMany({
+      where: {
+        status: "SUCCEEDED",
+        variant: { in: ["shiny", "holo"] },
+        submittedAt: { gte: new Date(Date.now() - RECENT_CAPTURE_WINDOW_MS) },
+        encounter: { guild: { isActive: true } },
+        OR: [
+          { hallOfFameAnnouncement: { is: null } },
+          {
+            hallOfFameAnnouncement: {
+              is: { status: { in: ["PENDING", "FAILED"] } }
+            }
+          },
+          {
+            hallOfFameAnnouncement: {
+              is: {
+                status: "PROCESSING",
+                updatedAt: { lt: new Date(Date.now() - ANNOUNCEMENT_RECLAIM_MS) }
+              }
+            }
+          }
+        ]
+      },
+      include: {
+        user: { select: { discordId: true } },
+        encounter: {
+          select: {
+            cardId: true,
+            guild: { select: { discordId: true } }
+          }
+        }
+      },
+      orderBy: { submittedAt: "asc" },
+      take: 20
+    });
+
+    for (const capture of captures) {
+      await announceHallOfFameCapture({
+        client,
+        sourceGuildId: capture.encounter.guild.discordId,
+        playerDiscordId: capture.user.discordId,
+        captureAttemptId: capture.id,
+        cardId: capture.encounter.cardId,
+        variant: capture.variant as CardImageVariant | null
+      });
+    }
+  } catch (error) {
+    console.error("Hall of Fame synchronization failed", error);
+  } finally {
+    synchronizationRunning = false;
+  }
+}
+
+export function registerHallOfFameSynchronization(client: Client) {
+  void syncRecentHallOfFameCaptures(client);
+  const timer = setInterval(() => {
+    void syncRecentHallOfFameCaptures(client);
+  }, SYNCHRONIZATION_INTERVAL_MS);
+  timer.unref();
 }

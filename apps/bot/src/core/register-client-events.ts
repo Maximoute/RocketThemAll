@@ -1,4 +1,4 @@
-import { Client, Events } from "discord.js";
+import { Client, Events, MessageFlags } from "discord.js";
 import { AppError, ConfigService } from "@rta/services";
 import {
   handleAutocomplete,
@@ -16,6 +16,9 @@ import {
   syncDiscordMonetization
 } from "../monetization-events.js";
 import { registerLevelRoleSynchronization } from "../level-role-sync.js";
+import { resolveCommandChannelDecision } from "../commands/channel-policy.js";
+import { registerHallOfFameSynchronization } from "../commands/hall-of-fame.js";
+import { registerBossAnnouncementSynchronization } from "../boss-announcements.js";
 
 const privateCommands = new Set([
   "explore",
@@ -41,6 +44,8 @@ export function registerClientEvents(client: Client, configService: ConfigServic
     await syncClientGuilds(readyClient, configService);
     await retireLegacyPublicExplorationHubs(readyClient);
     await resumePendingEncounterPublications(readyClient);
+    registerHallOfFameSynchronization(readyClient);
+    registerBossAnnouncementSynchronization(readyClient);
     await syncDiscordMonetization(readyClient).catch((error) => {
       console.error("Discord monetization synchronization failed", error);
     });
@@ -60,6 +65,15 @@ export function registerClientEvents(client: Client, configService: ConfigServic
   client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isAutocomplete()) {
       try {
+        const channelDecision = await resolveCommandChannelDecision({
+          commandName: interaction.commandName,
+          channelId: interaction.channelId,
+          guildId: interaction.guildId
+        });
+        if (!channelDecision.allowed) {
+          await interaction.respond([]);
+          return;
+        }
         await handleAutocomplete(interaction);
       } catch (error) {
         console.error("Unable to answer command autocomplete", error);
@@ -72,9 +86,23 @@ export function registerClientEvents(client: Client, configService: ConfigServic
 
     if (interaction.isChatInputCommand()) {
       try {
-        await interaction.deferReply({
-          ephemeral: commandIsPrivate(interaction.commandName)
+        const channelDecision = await resolveCommandChannelDecision({
+          commandName: interaction.commandName,
+          channelId: interaction.channelId,
+          guildId: interaction.guildId
         });
+        if (!channelDecision.allowed) {
+          await interaction.reply({
+            content: channelDecision.message ?? "Cette commande n’est pas autorisée dans ce salon.",
+            flags: MessageFlags.Ephemeral
+          });
+          return;
+        }
+        await interaction.deferReply(
+          commandIsPrivate(interaction.commandName)
+            ? { flags: MessageFlags.Ephemeral }
+            : {}
+        );
         await handleCommand(interaction);
       } catch (error) {
         console.error(error);
@@ -83,7 +111,7 @@ export function registerClientEvents(client: Client, configService: ConfigServic
           if (interaction.deferred || interaction.replied) {
             await interaction.editReply(message);
           } else {
-            await interaction.reply(message);
+            await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
           }
         } catch (replyError) {
           console.error("Failed to send interaction error reply", replyError);

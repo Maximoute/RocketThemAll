@@ -21,6 +21,10 @@ import {
   handleCardinfo,
   handleCardinfoAutocomplete
 } from "./handlers/cardinfo.js";
+import {
+  handleShowcard,
+  handleShowcardAutocomplete
+} from "./handlers/showcard.js";
 import { handleLeaderboard } from "./handlers/leaderboard.js";
 import { handleTrade } from "./handlers/trade.js";
 import {
@@ -53,6 +57,7 @@ const commandHandlers: Record<string, (interaction: ChatInputCommandInteraction,
   items: handleItems,
   boss: handleBoss,
   cardinfo: handleCardinfo,
+  showcard: handleShowcard,
   leaderboard: handleLeaderboard,
   trade: handleTrade
 };
@@ -89,6 +94,10 @@ export async function handleButton(interaction: ButtonInteraction) {
 }
 
 export async function handleAutocomplete(interaction: AutocompleteInteraction) {
+  if (interaction.commandName === "showcard") {
+    await handleShowcardAutocomplete(interaction);
+    return;
+  }
   if (interaction.commandName === "cardinfo") {
     await handleCardinfoAutocomplete(interaction);
     return;

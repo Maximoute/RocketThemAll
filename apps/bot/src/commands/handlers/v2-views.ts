@@ -1375,7 +1375,7 @@ function bossCategoryLabel(category: string) {
   }[category] ?? category;
 }
 
-async function attachBossImage(embed: EmbedBuilder, definition: {
+export async function attachBossImage(embed: EmbedBuilder, definition: {
   contentKey: string;
   name: string;
   metadata: unknown;

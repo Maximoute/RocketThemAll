@@ -424,14 +424,12 @@ async function resolveGameChannel(
   discordGuildId: string
 ) {
   const guild = await exploreService.getGuild(discordGuildId);
-  const channelId = guild.config?.gameChannelId || interaction.channelId;
-
-  if (!guild.config?.gameChannelId) {
-    await prisma.guildConfiguration.upsert({
-      where: { guildId: guild.id },
-      update: { gameChannelId: channelId, version: { increment: 1 } },
-      create: { guildId: guild.id, gameChannelId: channelId }
-    });
+  const channelId = guild.config?.gameChannelId;
+  if (!channelId) {
+    throw new AppError(
+      "Aucun salon de jeu n’est configuré. Un administrateur doit le sélectionner dans le panel RTA.",
+      409
+    );
   }
 
   const channel = await interaction.client.channels.fetch(channelId);
