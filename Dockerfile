@@ -6,12 +6,12 @@ ENV CI=true
 
 RUN apk add --no-cache ca-certificates openssl \
     && npm install --global npm@12.0.2 \
-    && npm pack --silent --pack-destination /tmp brace-expansion@5.0.8 \
+    && npm pack --silent --pack-destination /tmp brace-expansion@5.0.9 \
     && rm -rf /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
     && mkdir -p /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
-    && tar -xzf /tmp/brace-expansion-5.0.8.tgz --strip-components=1 \
+    && tar -xzf /tmp/brace-expansion-5.0.9.tgz --strip-components=1 \
         -C /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
-    && rm /tmp/brace-expansion-5.0.8.tgz
+    && rm /tmp/brace-expansion-5.0.9.tgz
 
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
