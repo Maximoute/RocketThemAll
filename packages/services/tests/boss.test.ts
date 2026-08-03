@@ -4,6 +4,7 @@ import {
   BOSS_FRAGMENT_POINT_VALUE,
   BOSS_TIER_BALANCE,
   REGULAR_BOSS_TIER_WEIGHTS,
+  bossMechanicCandidates,
   bossCollectionRequirementLabel,
   bossRewardForTier,
   bossTierForAppearance,
@@ -16,6 +17,7 @@ import {
   nextDailyBossSlot,
   nextWeeklyBossSlot,
   preferredBossMechanic,
+  selectDailyRegularBoss,
   scaleBossTarget
 } from "../src/boss.service.js";
 
@@ -168,6 +170,24 @@ describe("daily boss slot", () => {
       "Europe/Paris"
     ).toISOString()).toBe("2026-07-28T22:00:00.000Z");
   });
+
+  it("ends at the next Paris midnight across the spring clock change", () => {
+    const window = dailyBossWindow(
+      new Date("2026-03-29T12:00:00.000Z"),
+      "Europe/Paris"
+    );
+    expect(window.startsAt.toISOString()).toBe("2026-03-28T23:00:00.000Z");
+    expect(window.endsAt.toISOString()).toBe("2026-03-29T22:00:00.000Z");
+  });
+
+  it("ends at the next Paris midnight across the autumn clock change", () => {
+    const window = dailyBossWindow(
+      new Date("2026-10-25T12:00:00.000Z"),
+      "Europe/Paris"
+    );
+    expect(window.startsAt.toISOString()).toBe("2026-10-24T22:00:00.000Z");
+    expect(window.endsAt.toISOString()).toBe("2026-10-25T23:00:00.000Z");
+  });
 });
 
 describe("weekly progression guardian slot", () => {
@@ -200,6 +220,55 @@ describe("boss mechanic selection", () => {
 
   it("falls back to capture hunting", () => {
     expect(preferredBossMechanic(null)).toBe("HUNT");
+  });
+
+  it("keeps every supported mechanic declared by a regular boss", () => {
+    expect(bossMechanicCandidates({
+      primaryMechanics: ["COLLECTIVE_COLLECTION"],
+      allowedMechanics: ["COLLECTIVE_COLLECTION", "HUNT", "OFFERING", "UNKNOWN"]
+    })).toEqual(["COLLECTIVE_COLLECTION", "HUNT", "OFFERING"]);
+  });
+
+  it("selects the unlocked world before the boss and its mechanic", () => {
+    const definitions = [
+      {
+        contentKey: "boss.world_01",
+        worldId: "world-1",
+        metadata: {
+          primaryMechanics: ["COLLECTIVE_COLLECTION"],
+          allowedMechanics: ["COLLECTIVE_COLLECTION", "HUNT", "OFFERING"]
+        }
+      },
+      {
+        contentKey: "boss.world_02",
+        worldId: "world-2",
+        metadata: {
+          primaryMechanics: ["EXPEDITION_MINION"],
+          allowedMechanics: ["EXPEDITION_MINION", "HUNT"]
+        }
+      },
+      {
+        contentKey: "boss.locked",
+        worldId: "world-9",
+        metadata: { allowedMechanics: ["OFFERING"] }
+      }
+    ];
+    const selections = Array.from({ length: 500 }, (_, index) =>
+      selectDailyRegularBoss({
+        definitions,
+        unlockedWorldIds: ["world-1", "world-2"],
+        seed: `guild:2026-08-${index}`
+      })
+    );
+    expect(new Set(selections.map((selection) => selection?.definition.worldId)))
+      .toEqual(new Set(["world-1", "world-2"]));
+    expect(selections.some((selection) => selection?.definition.worldId === "world-9"))
+      .toBe(false);
+    expect(new Set(
+      selections
+        .filter((selection) => selection?.definition.worldId === "world-1")
+        .map((selection) => selection?.mechanic)
+    )).toEqual(new Set(["COLLECTIVE_COLLECTION", "HUNT", "OFFERING"]));
   });
 });
 

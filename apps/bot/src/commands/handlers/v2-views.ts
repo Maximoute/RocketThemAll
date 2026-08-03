@@ -10,9 +10,11 @@ import {
   type StringSelectMenuInteraction
 } from "discord.js";
 import {
+  BOSS_TIER_BALANCE,
   boosterSelectionRule,
   MAX_SELECTED_ACHIEVEMENT_BADGES,
-  nextDailyBossSlot
+  nextDailyBossSlot,
+  REGULAR_BOSS_TIER_WEIGHTS
 } from "@rta/services";
 import {
   achievementService,
@@ -654,12 +656,12 @@ export async function handleItems(
 
 function conquerorTierLabel(tier: string) {
   const labels: Record<string, string> = {
-    common: "Common",
-    uncommon: "Uncommon",
+    common: "Commun",
+    uncommon: "Peu commun",
     rare: "Rare",
-    very_rare: "Very Rare",
+    very_rare: "Très rare",
     import: "Import",
-    exotic: "Exotic"
+    exotic: "Exotique"
   };
   return labels[tier] ?? tier;
 }
@@ -1366,6 +1368,29 @@ function bossMechanicDescription(mechanic: string) {
   return descriptions[mechanic] ?? "Contribuez collectivement pour vaincre ce boss.";
 }
 
+function bossMechanicLabel(mechanic: string) {
+  return {
+    OFFERING: "Offrandes",
+    HARMONIZATION: "Harmonisation",
+    COLLECTIVE_COLLECTION: "Collection collective",
+    HUNT: "Chasse par captures",
+    EXPEDITION_MINION: "Serviteurs d’expédition"
+  }[mechanic] ?? mechanic;
+}
+
+function bossTierDescription(tierValue: unknown, kind: string) {
+  const tier = String(tierValue ?? "common") as keyof typeof BOSS_TIER_BALANCE;
+  const balance = BOSS_TIER_BALANCE[tier] ?? BOSS_TIER_BALANCE.common;
+  const multiplier = balance.difficultyMultiplier.toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  const origin = kind === "GUARDIAN"
+    ? "tier fixé par le monde à débloquer"
+    : `${REGULAR_BOSS_TIER_WEIGHTS[tier] ?? 0} % de chance quotidienne`;
+  return `${conquerorTierLabel(tier)} · difficulté ×${multiplier}\n${origin}`;
+}
+
 function bossCategoryLabel(category: string) {
   return {
     WORLD_GUARDIAN: "Gardien de monde",
@@ -1627,9 +1652,10 @@ export async function handleBoss(
       { name: "État", value: run.status === "ACTIVE" ? "Actif" : "Planifié", inline: true },
       { name: "Monde", value: run.definition.world?.name ?? "Inconnu", inline: true },
       { name: "Catégorie", value: bossCategoryLabel(run.category), inline: true },
+      { name: "Mécanique", value: bossMechanicLabel(run.mechanic), inline: true },
       {
-        name: "Tier de l’apparition",
-        value: conquerorTierLabel(String(reward.conquerorTier ?? "common")),
+        name: "Tier du boss",
+        value: bossTierDescription(reward.conquerorTier, run.definition.kind),
         inline: true
       },
       { name: "Participants", value: String(participantCount), inline: true },

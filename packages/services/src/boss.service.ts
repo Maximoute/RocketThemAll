@@ -494,7 +494,7 @@ export function dailyBossWindow(now: Date, requestedTimeZone: string) {
       `${localNow.year}-${String(localNow.month).padStart(2, "0")}-` +
       String(localNow.day).padStart(2, "0"),
     startsAt,
-    endsAt: new Date(startsAt.getTime() + 24 * 60 * 60_000),
+    endsAt: nextDailyBossSlot(now, timeZone),
     timeZone
   };
 }
@@ -560,6 +560,65 @@ export function preferredBossMechanic(metadata: Prisma.JsonValue | null): BossMe
   return values.find((value): value is BossMechanic =>
     SUPPORTED_MECHANICS.has(value as BossMechanic)
   ) ?? "HUNT";
+}
+
+export function bossMechanicCandidates(
+  metadata: Prisma.JsonValue | null
+): BossMechanic[] {
+  const values = [
+    ...stringList(record(metadata).primaryMechanics),
+    ...stringList(record(metadata).allowedMechanics)
+  ].filter((value): value is BossMechanic =>
+    SUPPORTED_MECHANICS.has(value as BossMechanic)
+  );
+  const unique = [...new Set(values)];
+  return unique.length > 0 ? unique : ["HUNT"];
+}
+
+function deterministicIndex(seed: string, scope: string, length: number) {
+  if (length <= 0) return 0;
+  const value = createHash("sha256")
+    .update(`${scope}:${seed}`)
+    .digest()
+    .readUInt32BE(0);
+  return value % length;
+}
+
+export function selectDailyRegularBoss<
+  T extends { contentKey: string; worldId: string | null; metadata: Prisma.JsonValue | null }
+>(input: {
+  definitions: T[];
+  unlockedWorldIds: string[];
+  seed: string;
+}): { definition: T; mechanic: BossMechanic } | null {
+  const unlocked = new Set(input.unlockedWorldIds);
+  const definitionsByWorld = new Map<string, T[]>();
+  for (const definition of [...input.definitions].sort((left, right) =>
+    left.contentKey.localeCompare(right.contentKey)
+  )) {
+    if (!definition.worldId || !unlocked.has(definition.worldId)) continue;
+    const definitions = definitionsByWorld.get(definition.worldId) ?? [];
+    definitions.push(definition);
+    definitionsByWorld.set(definition.worldId, definitions);
+  }
+  const worldIds = [...definitionsByWorld.keys()].sort();
+  if (worldIds.length === 0) return null;
+  const worldId = worldIds[
+    deterministicIndex(input.seed, "daily-boss-world", worldIds.length)
+  ]!;
+  const definitions = definitionsByWorld.get(worldId)!;
+  const definition = definitions[
+    deterministicIndex(input.seed, `daily-boss-definition:${worldId}`, definitions.length)
+  ]!;
+  const mechanics = bossMechanicCandidates(definition.metadata);
+  const mechanic = mechanics[
+    deterministicIndex(
+      input.seed,
+      `daily-boss-mechanic:${definition.contentKey}`,
+      mechanics.length
+    )
+  ]!;
+  return { definition, mechanic };
 }
 
 export function bossObjectiveTarget(
@@ -1146,6 +1205,7 @@ export class BossService {
     category?: BossCategory;
     target?: number;
     durationHours?: number;
+    endsAt?: Date;
     slotKey?: string;
   }) {
     const now = new Date();
@@ -1202,8 +1262,9 @@ export class BossService {
         }
       }));
       const mechanic = input.mechanic ?? preferredBossMechanic(definition.metadata);
-      const appearanceSeed =
-        input.slotKey ?? `${definition.contentKey}:${startsAt.toISOString()}`;
+      const appearanceSeed = `${guild.id}:` + (
+        input.slotKey ?? `${definition.contentKey}:${startsAt.toISOString()}`
+      );
       const category = definition.kind === "GUARDIAN"
         ? "WORLD_GUARDIAN"
         : input.category ?? deterministicBossCategory(
@@ -1245,7 +1306,10 @@ export class BossService {
       const durationHours = input.durationHours
         ?? definition.durationHours
         ?? DEFAULT_GUARDIAN_DURATION_HOURS;
-      const endsAt = new Date(startsAt.getTime() + durationHours * 60 * 60_000);
+      const requestedEndsAt = input.endsAt;
+      const endsAt = requestedEndsAt && requestedEndsAt > startsAt
+        ? requestedEndsAt
+        : new Date(startsAt.getTime() + durationHours * 60 * 60_000);
       const progressionKey = definition.kind === "GUARDIAN"
         ? `guardian:${guild.id}:${definition.id}`
         : null;
@@ -1452,6 +1516,26 @@ export class BossService {
         guild.config?.timezone ?? "Europe/Paris"
       );
       const slotKey = `daily:${window.dayKey}`;
+
+      const staleRuns = await prisma.bossRun.findMany({
+        where: {
+          guildId: guild.id,
+          status: { in: [...OPEN_BOSS_STATUSES] },
+          endsAt: { lte: now }
+        },
+        select: {
+          id: true,
+          definition: { select: { kind: true } }
+        }
+      });
+      let expiredGuardian = false;
+      for (const staleRun of staleRuns) {
+        const expired = await this.expireRun(staleRun.id, now);
+        expiredGuardian ||= Boolean(
+          expired && staleRun.definition.kind === "GUARDIAN"
+        );
+      }
+
       const existingSlot = await prisma.bossRun.findUnique({
         where: {
           guildId_slotKey: {
@@ -1466,23 +1550,29 @@ export class BossService {
       const open = await prisma.bossRun.findFirst({
         where: {
           guildId: guild.id,
-          status: { in: [...OPEN_BOSS_STATUSES] }
+          status: { in: [...OPEN_BOSS_STATUSES] },
+          endsAt: { gt: now }
         },
         select: { id: true }
       });
       if (open) continue;
 
-      let definition = guild.progress?.state === "BOSS_READY"
-        && guild.config?.progressionBossEnabled !== false
-        && guild.progress.frontierWorldId
+      const guardianWorldId = guild.progress?.frontierWorldId ?? null;
+      const guardianReady = Boolean(
+        (guild.progress?.state === "BOSS_READY" || expiredGuardian) &&
+        guild.config?.progressionBossEnabled !== false &&
+        guardianWorldId
+      );
+      let definition = guardianReady
         ? await prisma.bossDefinition.findFirst({
             where: {
               status: "PUBLISHED",
               kind: "GUARDIAN",
-              worldId: guild.progress.frontierWorldId
+              worldId: guardianWorldId!
             }
           })
         : null;
+      let mechanic: BossMechanic | undefined;
 
       if (!definition && guild.config?.regularBossEnabled !== false) {
         const unlockedWorldIds = guild.worldProgress.map((entry) => entry.worldId);
@@ -1493,16 +1583,17 @@ export class BossService {
                 kind: "REGULAR",
                 worldId: { in: unlockedWorldIds }
               },
-              orderBy: { contentKey: "asc" }
+              orderBy: [{ worldId: "asc" }, { contentKey: "asc" }]
             })
           : [];
-        if (candidates.length > 0) {
-          let hash = 2_166_136_261;
-          for (const character of `${guild.id}:${window.dayKey}`) {
-            hash ^= character.charCodeAt(0);
-            hash = Math.imul(hash, 16_777_619);
-          }
-          definition = candidates[(hash >>> 0) % candidates.length] ?? null;
+        const selection = selectDailyRegularBoss({
+          definitions: candidates,
+          unlockedWorldIds,
+          seed: `${guild.id}:${window.dayKey}`
+        });
+        if (selection) {
+          definition = selection.definition;
+          mechanic = selection.mechanic;
         }
       }
       if (!definition) continue;
@@ -1512,7 +1603,8 @@ export class BossService {
           guildDiscordId: guild.discordId,
           definitionKey: definition.contentKey,
           startsAt: window.startsAt,
-          durationHours: 24,
+          mechanic,
+          endsAt: window.endsAt,
           slotKey
         });
         results.push(run.id);
@@ -1551,7 +1643,7 @@ export class BossService {
     });
   }
 
-  async expireRun(bossRunId: string) {
+  async expireRun(bossRunId: string, now = new Date()) {
     return prisma.$transaction(async (tx) => {
       const run = await tx.bossRun.findUnique({
         where: { id: bossRunId },
@@ -1560,7 +1652,7 @@ export class BossService {
       if (
         !run ||
         !OPEN_BOSS_STATUSES.includes(run.status as typeof OPEN_BOSS_STATUSES[number]) ||
-        run.endsAt > new Date()
+        run.endsAt > now
       ) {
         return null;
       }
