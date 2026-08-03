@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  dailyQuestWindow,
   questTargetForDifficulty,
-  utcQuestWindow
 } from "../src/daily-quest.service.js";
 
-describe("daily quest UTC rotation", () => {
-  it("ends at the next 00:00 UTC", () => {
-    const window = utcQuestWindow(new Date("2026-07-27T22:42:12.000Z"));
-    expect(window.dayKey).toBe("2026-07-27");
-    expect(window.expiresAt.toISOString()).toBe("2026-07-28T00:00:00.000Z");
+describe("daily quest Paris rotation", () => {
+  it("ends at the next local midnight in summer", () => {
+    const window = dailyQuestWindow(new Date("2026-07-27T22:42:12.000Z"));
+    expect(window.dayKey).toBe("2026-07-28");
+    expect(window.expiresAt.toISOString()).toBe("2026-07-28T22:00:00.000Z");
+  });
+
+  it("handles the winter UTC offset", () => {
+    const window = dailyQuestWindow(new Date("2026-01-27T22:42:12.000Z"));
+    expect(window.dayKey).toBe("2026-01-27");
+    expect(window.expiresAt.toISOString()).toBe("2026-01-27T23:00:00.000Z");
   });
 });
 

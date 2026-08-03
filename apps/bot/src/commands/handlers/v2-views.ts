@@ -73,7 +73,7 @@ export async function handleQuests(
         .setTitle("📜 Quêtes quotidiennes")
         .setDescription(description)
         .setFooter({
-          text: "Progression et récompenses automatiques · renouvellement à 00:00 UTC"
+          text: "Progression et récompenses automatiques · renouvellement à 00:00 (Paris/Belgique)"
         })
     ]
   });
@@ -1407,7 +1407,7 @@ export async function attachBossImage(embed: EmbedBuilder, definition: {
 }
 
 export async function handleBoss(
-  interaction: ChatInputCommandInteraction | ButtonInteraction,
+  interaction: ChatInputCommandInteraction | ButtonInteraction | StringSelectMenuInteraction,
   user?: any,
   notice?: string,
   completedBossRunId?: string
@@ -1749,15 +1749,8 @@ export async function handleBoss(
           .setCustomId(createInteractionToken(
             "j", "cards", run.id, interaction.user.id, 0
           ))
-          .setLabel("Voir les cartes acceptées")
+          .setLabel("Choisir mes cartes")
           .setEmoji("🔎")
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId(createInteractionToken(
-            "j", "collection", run.id, interaction.user.id
-          ))
-          .setLabel("Présenter ma collection")
-          .setEmoji("🃏")
           .setStyle(ButtonStyle.Primary)
       );
     }
@@ -2173,7 +2166,33 @@ async function handleBossCollectionRequirement(
       text: "🟢 possédée et disponible · ✅ déjà comptée · ⚫ non possédée"
     });
 
-  const components: ActionRowBuilder<ButtonBuilder>[] = [];
+  const components: Array<
+    ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>
+  > = [];
+  const presentableCards = requirement.cards.filter((card) => card.owned && !card.presented);
+  if (
+    requirement.status === "ACTIVE" &&
+    requirement.remaining > 0 &&
+    presentableCards.length > 0
+  ) {
+    components.push(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(createInteractionToken(
+            "K", interaction.user.id, bossRunId, requirement.page
+          ))
+          .setPlaceholder("Choisir précisément les cartes à présenter")
+          .setMinValues(1)
+          .setMaxValues(Math.min(5, requirement.remaining, presentableCards.length))
+          .addOptions(presentableCards.map((card) => ({
+            label: card.name.slice(0, 100),
+            value: card.id,
+            description: `${card.deck.name} · ${card.rarity.name}`.slice(0, 100),
+            emoji: "🃏"
+          })))
+      )
+    );
+  }
   if (requirement.totalPages > 1) {
     components.push(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -2200,18 +2219,6 @@ async function handleBossCollectionRequirement(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(createInteractionToken(
-          "j", "collection", bossRunId, interaction.user.id
-        ))
-        .setLabel("Présenter mes cartes")
-        .setEmoji("🃏")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(
-          requirement.status !== "ACTIVE" ||
-          requirement.remaining <= 0 ||
-          requirement.presentableCount <= 0
-        ),
-      new ButtonBuilder()
-        .setCustomId(createInteractionToken(
           "j", "back", bossRunId, interaction.user.id
         ))
         .setLabel("Retour au boss")
@@ -2219,6 +2226,33 @@ async function handleBossCollectionRequirement(
     )
   );
   await interaction.editReply({ embeds: [embed], components });
+}
+
+export async function handleBossCardSelect(
+  interaction: StringSelectMenuInteraction,
+  parts: string[]
+) {
+  const [boundUserId, bossRunId] = parts;
+  if (!boundUserId || !bossRunId || boundUserId !== interaction.user.id) {
+    throw new AppError("Cette sélection de boss appartient à un autre joueur.", 403);
+  }
+  await interaction.deferUpdate();
+  const user = await usersService.getOrCreateDiscordUser(
+    interaction.user.id,
+    interaction.user.username,
+    interaction.user.displayAvatarURL()
+  );
+  const result = await bossService.presentCollection({
+    bossRunId,
+    userId: user.id,
+    operationKey: `discord:${interaction.id}:boss-collection`,
+    cardIds: interaction.values
+  });
+  const cardNames = result.cards.join(", ");
+  const notice =
+    `${result.amount} carte(s) choisie(s) présentée(s) : ${cardNames}. ` +
+    `Aucune carte n'a été consommée.`;
+  await handleBoss(interaction, user, notice, bossRunId);
 }
 
 export async function handleBossButton(
@@ -2345,15 +2379,8 @@ export async function handleBossButton(
     });
     notice = `${result.amount} crédits offerts au boss.`;
   } else if (action === "collection") {
-    const result = await bossService.presentCollection({
-      bossRunId,
-      userId: user.id,
-      operationKey: `discord:${interaction.id}:boss-collection`
-    });
-    const cardNames = result.cards.slice(0, 5).join(", ");
-    const overflow = result.cards.length > 5 ? ` et ${result.cards.length - 5} autre(s)` : "";
-    notice = `${result.amount} nouvelle(s) carte(s) présentée(s)` +
-      (cardNames ? ` : ${cardNames}${overflow}.` : ".");
+    await handleBossCollectionRequirement(interaction, bossRunId, user, 0);
+    return;
   } else if (action !== "mine") {
     throw new AppError("Action de boss inconnue.", 400);
   }

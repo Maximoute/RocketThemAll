@@ -93,14 +93,88 @@ function positiveInteger(value: unknown, fallback = 0) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export function utcQuestWindow(now = new Date()) {
-  const dayKey = now.toISOString().slice(0, 10);
-  const expiresAt = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate() + 1
+export const DAILY_QUEST_TIME_ZONE = "Europe/Paris";
+
+function questZonedDateParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+    second: Number(get("second"))
+  };
+}
+
+function questLocalDateToUtc(
+  year: number,
+  month: number,
+  day: number,
+  timeZone: string
+) {
+  const localEpoch = Date.UTC(year, month - 1, day, 0, 0, 0);
+  let candidate = new Date(localEpoch);
+  for (let pass = 0; pass < 3; pass += 1) {
+    const parts = questZonedDateParts(candidate, timeZone);
+    const representedLocalEpoch = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second
+    );
+    candidate = new Date(candidate.getTime() + (localEpoch - representedLocalEpoch));
+  }
+  return candidate;
+}
+
+export function dailyQuestWindow(
+  now = new Date(),
+  timeZone = DAILY_QUEST_TIME_ZONE
+) {
+  const localNow = questZonedDateParts(now, timeZone);
+  const currentDate = new Date(Date.UTC(
+    localNow.year,
+    localNow.month - 1,
+    localNow.day
   ));
-  return { dayKey, expiresAt };
+  const nextDate = new Date(currentDate.getTime() + 24 * 60 * 60_000);
+  const dayKey =
+    `${localNow.year}-${String(localNow.month).padStart(2, "0")}-` +
+    String(localNow.day).padStart(2, "0");
+  const nextDayKey =
+    `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, "0")}-` +
+    String(nextDate.getUTCDate()).padStart(2, "0");
+  return {
+    dayKey,
+    nextDayKey,
+    startsAt: questLocalDateToUtc(
+      localNow.year,
+      localNow.month,
+      localNow.day,
+      timeZone
+    ),
+    expiresAt: questLocalDateToUtc(
+      nextDate.getUTCFullYear(),
+      nextDate.getUTCMonth() + 1,
+      nextDate.getUTCDate(),
+      timeZone
+    ),
+    timeZone
+  };
 }
 
 export function questTargetForDifficulty(
@@ -362,7 +436,7 @@ function rewardFor(definition: QuestDefinition, difficulty: QuestDifficulty, lev
 export class DailyQuestService {
   async getDailyQuests(userId: string, now = new Date()) {
     await this.ensureDailyQuestsForUser(userId, now);
-    const { dayKey } = utcQuestWindow(now);
+    const { dayKey } = dailyQuestWindow(now);
     return prisma.userDailyQuest.findMany({
       where: { userId, dayKey },
       include: { definition: true },
@@ -371,14 +445,26 @@ export class DailyQuestService {
   }
 
   async ensureDailyQuestsForUser(userId: string, now = new Date()) {
-    const { dayKey, expiresAt } = utcQuestWindow(now);
+    const { dayKey, expiresAt } = dailyQuestWindow(now);
     await prisma.userDailyQuest.updateMany({
       where: {
         userId,
         status: { in: ["ACTIVE", "COMPLETED"] },
-        expiresAt: { lte: now }
+        OR: [
+          { expiresAt: { lte: now } },
+          { dayKey: { not: dayKey } }
+        ]
       },
       data: { status: "EXPIRED", version: { increment: 1 } }
+    });
+    await prisma.userDailyQuest.updateMany({
+      where: {
+        userId,
+        dayKey,
+        status: { in: ["ACTIVE", "COMPLETED"] },
+        expiresAt: { not: expiresAt }
+      },
+      data: { expiresAt, version: { increment: 1 } }
     });
 
     const [user, existing, definitions, boosters, inventory, worldRows] = await Promise.all([
@@ -537,8 +623,7 @@ export class DailyQuestService {
   }
 
   async ensureNextRotation(now = new Date()) {
-    const { expiresAt } = utcQuestWindow(now);
-    const nextDayKey = expiresAt.toISOString().slice(0, 10);
+    const { expiresAt, nextDayKey } = dailyQuestWindow(now);
     await prisma.scheduledJob.upsert({
       where: { dedupeKey: `quest.rotate:${nextDayKey}` },
       update: {},
@@ -587,11 +672,7 @@ export class DailyQuestService {
       if (!attempt) throw new AppError("Tentative de capture introuvable.", 404);
       const succeeded = input.eventType === "capture.succeeded";
       const rewards = record(payload.rewards);
-      const submittedDay = new Date(Date.UTC(
-        attempt.submittedAt.getUTCFullYear(),
-        attempt.submittedAt.getUTCMonth(),
-        attempt.submittedAt.getUTCDate()
-      ));
+      const submittedDay = dailyQuestWindow(attempt.submittedAt).startsAt;
       const [successfulToday, priorZoneVisits, priorZoneVisitsToday, firstDiscoveryToday] =
         await Promise.all([
           prisma.captureAttempt.count({

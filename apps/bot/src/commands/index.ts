@@ -9,6 +9,7 @@ import {
   handleSell,
   handleRecycle,
   handleFusion,
+  handleFusionAutocomplete,
   handleValue,
   handleDaily
 } from "./handlers/economy.js";
@@ -94,6 +95,10 @@ export async function handleButton(interaction: ButtonInteraction) {
 }
 
 export async function handleAutocomplete(interaction: AutocompleteInteraction) {
+  if (interaction.commandName === "fusion") {
+    await handleFusionAutocomplete(interaction);
+    return;
+  }
   if (interaction.commandName === "showcard") {
     await handleShowcardAutocomplete(interaction);
     return;

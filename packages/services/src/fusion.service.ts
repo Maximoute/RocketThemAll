@@ -1,4 +1,5 @@
 import { Prisma, prisma } from "@rta/database";
+import { createHash } from "node:crypto";
 import { createSeededRandom, randomValue } from "@rta/game-engine";
 import { AppError } from "./errors.js";
 
@@ -26,7 +27,174 @@ export function fusionCostForSkills(rarity: string, effectKeys: string[]) {
   return discounted ? 5 : 6;
 }
 
+type FusionConsumedCard = {
+  inventoryItemId: string;
+  cardId: string;
+  name: string;
+  deckName: string;
+  variant: string;
+  quantity: number;
+};
+
+function jsonRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function consumedCardsFromMetadata(value: unknown): FusionConsumedCard[] {
+  const rows = jsonRecord(value).consumedCards;
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((entry) => {
+    const row = jsonRecord(entry);
+    return typeof row.inventoryItemId === "string" &&
+      typeof row.cardId === "string" &&
+      typeof row.name === "string" &&
+      typeof row.deckName === "string" &&
+      typeof row.variant === "string" &&
+      Number.isSafeInteger(Number(row.quantity))
+      ? [{
+          inventoryItemId: row.inventoryItemId,
+          cardId: row.cardId,
+          name: row.name,
+          deckName: row.deckName,
+          variant: row.variant,
+          quantity: Number(row.quantity)
+        }]
+      : [];
+  });
+}
+
 export class FusionService {
+  async getSacrificeOptions(
+    userId: string,
+    rarity: string,
+    query = "",
+    limit = 25
+  ) {
+    const [items, skills] = await Promise.all([
+      prisma.inventoryItem.findMany({
+        where: {
+          userId,
+          quantity: { gt: 0 },
+          archive: null,
+          card: { rarity: { name: rarity } }
+        },
+        include: {
+          card: { include: { rarity: true, deck: true } }
+        },
+        orderBy: [
+          { card: { name: "asc" } },
+          { variant: "asc" }
+        ]
+      }),
+      prisma.userSkill.findMany({
+        where: { userId, rank: { gt: 0 } },
+        select: { skill: { select: { effectKey: true } } }
+      })
+    ]);
+    const effectKeys = skills.map((entry) => entry.skill.effectKey);
+    const protectsLastCopy = effectKeys.includes("COL_PROTECT_LAST_COPY");
+    const totalsByCard = new Map<string, number>();
+    for (const item of items) {
+      totalsByCard.set(item.cardId, (totalsByCard.get(item.cardId) ?? 0) + item.quantity);
+    }
+    const remainingByCard = new Map(
+      [...totalsByCard].map(([cardId, quantity]) => [
+        cardId,
+        Math.max(0, quantity - (protectsLastCopy ? 1 : 0))
+      ])
+    );
+    const normalizedQuery = query.trim().toLocaleLowerCase("fr");
+    return items.flatMap((item) => {
+      const remaining = remainingByCard.get(item.cardId) ?? 0;
+      const removableQuantity = Math.min(item.quantity, remaining);
+      remainingByCard.set(item.cardId, Math.max(0, remaining - removableQuantity));
+      if (removableQuantity < 1) return [];
+      if (normalizedQuery && ![
+        item.card.name,
+        item.card.deck.name,
+        item.variant
+      ].some((value) => value.toLocaleLowerCase("fr").includes(normalizedQuery))) {
+        return [];
+      }
+      return [{
+        inventoryItemId: item.id,
+        cardId: item.cardId,
+        name: item.card.name,
+        deckName: item.card.deck.name,
+        rarity: item.card.rarity.name,
+        variant: item.variant,
+        quantity: item.quantity,
+        removableQuantity
+      }];
+    }).slice(0, Math.max(1, Math.min(25, limit)));
+  }
+
+  async prepareFusionDraft(input: {
+    userId: string;
+    rarity: string;
+    inventoryItemIds: string[];
+    draftKey: string;
+  }) {
+    const scopeKey = `fusion-draft:${input.userId}:${input.draftKey}`;
+    const response = {
+      userId: input.userId,
+      rarity: input.rarity,
+      inventoryItemIds: input.inventoryItemIds
+    };
+    const requestHash = createHash("sha256")
+      .update(JSON.stringify(response))
+      .digest("hex");
+    const existing = await prisma.idempotencyRecord.findUnique({ where: { scopeKey } });
+    if (existing) {
+      if (existing.requestHash !== requestHash) {
+        throw new AppError("Cette préparation de fusion est déjà utilisée.", 409);
+      }
+      return input.draftKey;
+    }
+    await prisma.idempotencyRecord.create({
+      data: {
+        scopeKey,
+        scope: "card.fusion.draft",
+        key: input.draftKey,
+        requestHash,
+        status: "COMPLETED",
+        response,
+        responseCode: 200,
+        expiresAt: new Date(Date.now() + 15 * 60_000)
+      }
+    });
+    return input.draftKey;
+  }
+
+  async fusePreparedDraft(
+    userId: string,
+    draftKey: string,
+    selectedRewardCardId: string
+  ) {
+    const draft = await prisma.idempotencyRecord.findUnique({
+      where: { scopeKey: `fusion-draft:${userId}:${draftKey}` }
+    });
+    if (!draft || draft.expiresAt <= new Date()) {
+      throw new AppError("Cette préparation de fusion a expiré. Relance /fusion.", 409);
+    }
+    const response = jsonRecord(draft.response);
+    const inventoryItemIds = Array.isArray(response.inventoryItemIds)
+      ? response.inventoryItemIds.filter((entry): entry is string => typeof entry === "string")
+      : [];
+    if (response.userId !== userId || typeof response.rarity !== "string") {
+      throw new AppError("Préparation de fusion invalide.", 409);
+    }
+    return this.fuse(
+      userId,
+      response.rarity,
+      draftKey,
+      selectedRewardCardId,
+      inventoryItemIds
+    );
+  }
+
   async getFusionChoices(userId: string, rarity: string) {
     const nextRarity = NEXT_RARITY[rarity];
     if (!nextRarity) return { choices: [], checkpoint: null, cost: 6 };
@@ -52,7 +220,7 @@ export class FusionService {
       return {
         choices: [],
         checkpoint: null,
-        cost: 6,
+        cost: fusionCostForSkills(rarity, effectKeys),
         locked: true
       };
     }
@@ -113,7 +281,8 @@ export class FusionService {
     userId: string,
     rarity: string,
     idempotencyKey: string,
-    selectedRewardCardId?: string
+    selectedRewardCardId?: string,
+    selectedInventoryItemIds: string[] = []
   ) {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,199}$/.test(idempotencyKey)) {
       throw new AppError("A valid idempotency key is required", 400);
@@ -145,7 +314,8 @@ export class FusionService {
         });
         if (!priorReward) throw new AppError("Fusion replay reward no longer exists", 409);
         return Object.assign(priorReward, {
-          fusionCost: Number(metadata.consumedQuantity ?? 6)
+          fusionCost: Number(metadata.consumedQuantity ?? 6),
+          consumedCards: consumedCardsFromMetadata(metadata)
         });
       }
 
@@ -173,7 +343,7 @@ export class FusionService {
       const protectsLastCopy = effectKeys.includes("COL_PROTECT_LAST_COPY");
       const items = await tx.inventoryItem.findMany({
         where: { userId, card: { rarity: { name: rarity } }, archive: null },
-        include: { card: true },
+        include: { card: { include: { deck: true } } },
         orderBy: [{ quantity: "desc" }, { id: "asc" }]
       });
       const totalsByCard = new Map<string, number>();
@@ -193,6 +363,45 @@ export class FusionService {
           "(les Archives et derniers exemplaires protégés sont exclus).",
           409
         );
+      }
+      if (selectedInventoryItemIds.length !== cost) {
+        throw new AppError(
+          `Choisis exactement ${cost} cartes à détruire pour cette fusion.`,
+          400
+        );
+      }
+      const itemsById = new Map(items.map((item) => [item.id, item]));
+      const selectedByItem = new Map<string, number>();
+      for (const inventoryItemId of selectedInventoryItemIds) {
+        if (!itemsById.has(inventoryItemId)) {
+          throw new AppError(
+            "Une carte choisie n'est plus disponible, n'a pas la bonne rareté ou est archivée.",
+            409
+          );
+        }
+        selectedByItem.set(
+          inventoryItemId,
+          (selectedByItem.get(inventoryItemId) ?? 0) + 1
+        );
+      }
+      const selectedByCard = new Map<string, number>();
+      for (const [inventoryItemId, quantity] of selectedByItem) {
+        const item = itemsById.get(inventoryItemId)!;
+        if (quantity > item.quantity) {
+          throw new AppError(
+            `Tu ne possèdes plus ${quantity} exemplaires de ${item.card.name} (${item.variant}).`,
+            409
+          );
+        }
+        selectedByCard.set(item.cardId, (selectedByCard.get(item.cardId) ?? 0) + quantity);
+      }
+      for (const [cardId, quantity] of selectedByCard) {
+        if (quantity > (removableByCard.get(cardId) ?? 0)) {
+          throw new AppError(
+            "Cette sélection détruirait un dernier exemplaire protégé. Choisis une autre carte.",
+            409
+          );
+        }
       }
 
       const rewardPool = await tx.card.findMany({
@@ -219,15 +428,10 @@ export class FusionService {
       const reward = selectedChoice ??
         rewardPool[Math.floor(randomValue(random) * rewardPool.length)]!;
 
-      let remaining = cost;
+      const consumedCards: FusionConsumedCard[] = [];
       let consumedIndex = 0;
-      for (const item of items) {
-        if (remaining <= 0) break;
-        const removable = removableByCard.get(item.cardId) ?? 0;
-        const remove = Math.min(remaining, item.quantity, removable);
-        if (remove <= 0) continue;
-        removableByCard.set(item.cardId, removable - remove);
-        remaining -= remove;
+      for (const [inventoryItemId, remove] of selectedByItem) {
+        const item = itemsById.get(inventoryItemId)!;
         const consumed = await tx.inventoryItem.updateMany({
           where: { id: item.id, quantity: { gte: remove } },
           data: { quantity: { decrement: remove }, version: { increment: 1 } }
@@ -246,8 +450,21 @@ export class FusionService {
             referenceType: "Card",
             referenceId: item.cardId,
             operationKey: `${operationKey}:consume:${consumedIndex}`,
-            metadata: { sourceRarity: rarity, variant: item.variant }
+            metadata: {
+              sourceRarity: rarity,
+              variant: item.variant,
+              cardName: item.card.name,
+              quantity: remove
+            }
           }
+        });
+        consumedCards.push({
+          inventoryItemId: item.id,
+          cardId: item.cardId,
+          name: item.card.name,
+          deckName: item.card.deck.name,
+          variant: item.variant,
+          quantity: remove
         });
         consumedIndex += 1;
       }
@@ -267,7 +484,8 @@ export class FusionService {
         sourceRarity: rarity,
         targetRarity: nextRarity,
         rewardCardId: reward.id,
-        consumedQuantity: cost
+        consumedQuantity: cost,
+        consumedCards
       };
       await tx.economicLedgerEntry.create({
         data: {
@@ -318,7 +536,66 @@ export class FusionService {
           ]
         });
       }
-      return Object.assign(reward, { fusionCost: cost });
+      return Object.assign(reward, { fusionCost: cost, consumedCards });
     });
+  }
+
+  async getFusionHistory(userId: string, limit = 5) {
+    const rewards = await prisma.economicLedgerEntry.findMany({
+      where: { userId, reason: "card.fusion.reward" },
+      orderBy: { createdAt: "desc" },
+      take: Math.max(1, Math.min(10, limit))
+    });
+    const rewardCardIds = rewards.map((entry) => entry.referenceId);
+    const cards = await prisma.card.findMany({
+      where: { id: { in: rewardCardIds } },
+      select: { id: true, name: true, rarity: { select: { name: true } } }
+    });
+    const cardsById = new Map(cards.map((card) => [card.id, card]));
+    const history = [];
+    for (const reward of rewards) {
+      const metadata = jsonRecord(reward.metadata);
+      let consumedCards = consumedCardsFromMetadata(metadata);
+      if (consumedCards.length === 0) {
+        const operationPrefix = reward.operationKey.replace(/:reward$/, ":consume:");
+        const consumedEntries = await prisma.economicLedgerEntry.findMany({
+          where: {
+            userId,
+            reason: "card.fusion.consumed",
+            operationKey: { startsWith: operationPrefix }
+          },
+          orderBy: { createdAt: "asc" }
+        });
+        const consumedIds = consumedEntries.map((entry) => entry.referenceId);
+        const consumedDefinitions = await prisma.card.findMany({
+          where: { id: { in: consumedIds } },
+          select: { id: true, name: true, deck: { select: { name: true } } }
+        });
+        const definitionsById = new Map(
+          consumedDefinitions.map((card) => [card.id, card])
+        );
+        consumedCards = consumedEntries.flatMap((entry) => {
+          const card = definitionsById.get(entry.referenceId);
+          const consumedMetadata = jsonRecord(entry.metadata);
+          return card ? [{
+            inventoryItemId: "historical",
+            cardId: card.id,
+            name: card.name,
+            deckName: card.deck.name,
+            variant: String(consumedMetadata.variant ?? "normal"),
+            quantity: Math.abs(entry.delta)
+          }] : [];
+        });
+      }
+      const card = cardsById.get(reward.referenceId);
+      history.push({
+        createdAt: reward.createdAt,
+        rewardName: card?.name ?? "Carte inconnue",
+        rewardRarity: card?.rarity.name ?? String(metadata.targetRarity ?? "Inconnue"),
+        sourceRarity: String(metadata.sourceRarity ?? "Inconnue"),
+        consumedCards
+      });
+    }
+    return history;
   }
 }

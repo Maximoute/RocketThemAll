@@ -587,8 +587,8 @@ export function bossObjectiveTarget(
       : 11;
   } else {
     baseTarget = kind === "GUARDIAN"
-      ? worldPosition >= 8 ? 60 : 10 + worldPosition * 3
-      : 10;
+      ? 30 + worldPosition * 10
+      : 30;
   }
   const tierScaled = Math.max(
     1,
@@ -2017,6 +2017,7 @@ export class BossService {
     bossRunId: string;
     userId: string;
     operationKey: string;
+    cardIds: string[];
   }) {
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw(
@@ -2042,10 +2043,19 @@ export class BossService {
       if (!["HARMONIZATION", "COLLECTIVE_COLLECTION"].includes(run.mechanic)) {
         throw new AppError("Ce boss ne demande pas de présentation de collection.", 409);
       }
+      const selectedCardIds = [...new Set(input.cardIds)];
+      if (
+        selectedCardIds.length < 1 ||
+        selectedCardIds.length > 5 ||
+        selectedCardIds.length !== input.cardIds.length
+      ) {
+        throw new AppError("Choisis entre 1 et 5 cartes différentes à présenter.", 400);
+      }
       const inventory = await tx.inventoryItem.findMany({
         where: {
           userId: input.userId,
           quantity: { gt: 0 },
+          cardId: { in: selectedCardIds },
           card: collectionCardWhere(run.definition)
         },
         select: { cardId: true, card: { select: { name: true } } }
@@ -2061,9 +2071,20 @@ export class BossService {
       });
       const existing = new Set(alreadyPresented.map((entry) => entry.scopeKey));
       const remaining = run.targetSnapshot - run.progress;
-      const candidates = [...uniqueCards.values()]
+      const candidatesById = new Map(
+        [...uniqueCards.values()].map((card) => [card.id, card])
+      );
+      const candidates = selectedCardIds
+        .map((cardId) => candidatesById.get(cardId))
+        .filter((card): card is { id: string; name: string } => Boolean(card))
         .filter((card) => !existing.has(`${scope}:card:${card.id}`))
         .slice(0, Math.max(0, remaining));
+      if (candidates.length !== Math.min(selectedCardIds.length, Math.max(0, remaining))) {
+        throw new AppError(
+          "Une carte choisie n'est pas possédée, n'est pas compatible ou a déjà été présentée.",
+          409
+        );
+      }
       if (candidates.length === 0) {
         throw new AppError("Tu n’as aucune nouvelle carte compatible à présenter.", 409);
       }

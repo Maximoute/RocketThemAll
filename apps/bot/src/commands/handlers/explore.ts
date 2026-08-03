@@ -33,6 +33,7 @@ import {
 } from "../encounter-publication.js";
 import { attachCardImage } from "../card-media.js";
 import { announceHallOfFameCapture } from "../hall-of-fame.js";
+import { captureResultColor } from "../capture-result.js";
 import {
   handleInventory,
   handleRecycleCardCancel,
@@ -40,6 +41,7 @@ import {
   handleRecycleCardSelect
 } from "./inventory.js";
 import { handleShop } from "./shop.js";
+import { fusionReceipt } from "./economy.js";
 import {
   applyEquipmentSelection,
   handleProfile,
@@ -49,6 +51,7 @@ import {
   handleAchievements,
   handleBoss,
   handleBossButton,
+  handleBossCardSelect,
   handleBoosterInventory,
   handleConquerorBoosterBack,
   handleConquerorBoosterConfirm,
@@ -1734,7 +1737,7 @@ async function handleAnswerSelect(
         `<t:${Math.floor(publicAt.getTime() / 1000)}:R>.`
       : "";
   const embed = new EmbedBuilder()
-    .setColor(succeeded ? 0x2ecc71 : 0xe74c3c)
+    .setColor(captureResultColor(succeeded, result.attempt.variant))
     .setTitle(succeeded ? "🎉 Capture réussie !" : "💨 La carte s'est échappée")
     .setDescription(
       `La carte était **${result.card.name}**.\n` +
@@ -2076,6 +2079,10 @@ export async function handleRtaButton(interaction: ButtonInteraction) {
 
 export async function handleRtaSelect(interaction: StringSelectMenuInteraction) {
   const token = parseInteractionToken(interaction.customId);
+  if (token.action === "K") {
+    await handleBossCardSelect(interaction, token.parts);
+    return;
+  }
   if (token.action === "S" || token.action === "N" || token.action === "L") {
     requireBoundUser(token.parts[0]!, interaction.user.id);
     await interaction.deferUpdate();
@@ -2279,11 +2286,10 @@ export async function handleRtaSelect(interaction: StringSelectMenuInteraction) 
       interaction.user.username,
       interaction.user.displayAvatarURL()
     );
-    const rarity = token.parts[1]!;
-    const reward = await fusionService.fuse(
+    const draftKey = token.parts[1]!;
+    const reward = await fusionService.fusePreparedDraft(
       user.id,
-      rarity,
-      interaction.id,
+      draftKey,
       interaction.values[0]!
     );
     await interaction.editReply({
@@ -2291,10 +2297,7 @@ export async function handleRtaSelect(interaction: StringSelectMenuInteraction) 
         new EmbedBuilder()
           .setColor(0xffd700)
           .setTitle("✨ Fusion réussie")
-          .setDescription(
-            `${reward.fusionCost} cartes ${rarity} détruites, ` +
-            `tu obtiens **${reward.name}** (${reward.rarity.name}).`
-          )
+          .setDescription(fusionReceipt(reward))
       ],
       components: []
     });

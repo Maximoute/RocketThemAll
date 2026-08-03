@@ -90,14 +90,22 @@ describe("boss target scaling", () => {
   });
 
   it("keeps mastery thresholds separate from achievable collection objectives", () => {
-    expect(bossObjectiveTarget("GUARDIAN", "HARMONIZATION", 1, 1, 30)).toBe(10);
+    expect(bossObjectiveTarget("GUARDIAN", "HARMONIZATION", 1, 1, 30)).toBe(29);
     expect(bossObjectiveTarget(
       "GUARDIAN",
       "COLLECTIVE_COLLECTION",
       8,
       25,
       240
-    )).toBe(210);
+    )).toBe(240);
+    expect(bossObjectiveTarget(
+      "REGULAR",
+      "COLLECTIVE_COLLECTION",
+      1,
+      1,
+      90,
+      "common"
+    )).toBeGreaterThan(11);
   });
 
   it("never asks for more unique cards than are actually published", () => {

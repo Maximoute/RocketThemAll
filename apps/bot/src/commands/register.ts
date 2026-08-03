@@ -18,6 +18,30 @@ const boosterTypeOption = (option: any) =>
     { name: "legendary", value: "legendary" }
   );
 
+const fusionCommand = new SlashCommandBuilder()
+  .setName("fusion")
+  .setDescription("Fusionner des cartes choisies ou consulter l'historique")
+  .addStringOption((option) =>
+    option.setName("rarity").setDescription("Rareté à fusionner").setRequired(false).addChoices(
+      { name: "Common", value: "Common" },
+      { name: "Uncommon", value: "Uncommon" },
+      { name: "Rare", value: "Rare" },
+      { name: "Very Rare", value: "Very Rare" },
+      { name: "Import", value: "Import" },
+      { name: "Exotic", value: "Exotic" }
+    )
+  );
+
+for (let index = 1; index <= 6; index += 1) {
+  fusionCommand.addStringOption((option) =>
+    option
+      .setName(`carte_${index}`)
+      .setDescription(`Carte précise à détruire · choix ${index}/6`)
+      .setRequired(false)
+      .setAutocomplete(true)
+  );
+}
+
 export const commandBuilders = [
   new SlashCommandBuilder().setName("explore").setDescription("Ouvrir ou réparer le centre d'exploration"),
   new SlashCommandBuilder().setName("collection").setDescription("Voir ta collection de cartes"),
@@ -56,19 +80,7 @@ export const commandBuilders = [
     .setDescription("Voir la valeur dynamique d'une carte")
     .addStringOption(cardNameOption)
     .addStringOption(variantOption),
-  new SlashCommandBuilder()
-    .setName("fusion")
-    .setDescription("Fusionner cinq cartes vers la rareté supérieure")
-    .addStringOption((option) =>
-      option.setName("rarity").setDescription("Rareté à fusionner").setRequired(true).addChoices(
-        { name: "Common", value: "Common" },
-        { name: "Uncommon", value: "Uncommon" },
-        { name: "Rare", value: "Rare" },
-        { name: "Very Rare", value: "Very Rare" },
-        { name: "Import", value: "Import" },
-        { name: "Exotic", value: "Exotic" }
-      )
-    ),
+  fusionCommand,
   new SlashCommandBuilder().setName("daily").setDescription("Réclamer la récompense quotidienne"),
   new SlashCommandBuilder()
     .setName("shop")
