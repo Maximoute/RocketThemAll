@@ -40,7 +40,7 @@
 - Une seule annonce Hall of Fame par tentative de capture.
 - Une récompense de quête ou de succès au plus une fois.
 - Une tâche de gardien au plus par `(guild_id, progression_id, slot)`.
-- Au plus un boss journalier et un gardien persistant ouverts par guilde dans les services métier; leurs contributions et leurs expirations restent indépendantes.
+- Au plus un boss journalier et un gardien persistant ouverts par guilde, garanti par un index partiel sur `(guildId, isPersistent)`; leurs contributions et leurs expirations restent indépendantes.
 - Quantités et soldes non négatifs.
 - Clés de définition uniques et insensibles aux renommages d’affichage.
 - Toute ligne mutable critique possède `version` ou une transition d’état conditionnelle.

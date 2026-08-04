@@ -31,4 +31,24 @@ describe("persistent guardian migration", () => {
     expect(migration).toContain('"type" = \'boss.expire\'');
     expect(migration).toContain('"status" = \'CANCELLED\'');
   });
+
+  it("replaces the legacy one-boss constraint with one slot per boss kind", () => {
+    const migration = readFileSync(
+      new URL(
+        "../../database/prisma/migrations/20260804030000_allow_daily_and_guardian_bosses/migration.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain(
+      'DROP INDEX IF EXISTS "BossRun_single_open_per_guild_key"'
+    );
+    expect(migration).toContain(
+      'ON "BossRun"("guildId", "isPersistent")'
+    );
+    expect(migration).toContain(
+      'WHERE "status" IN (\'SCHEDULED\', \'ACTIVE\')'
+    );
+  });
 });
