@@ -1437,17 +1437,31 @@ export async function handleBoss(
   interaction: ChatInputCommandInteraction | ButtonInteraction | StringSelectMenuInteraction,
   user?: any,
   notice?: string,
-  completedBossRunId?: string
+  selectedBossRunId?: string
 ) {
   if (!interaction.guildId) {
     await interaction.editReply("Cette commande doit être utilisée dans un serveur.");
     return;
   }
-  const { guild, run, rallyBanner } = await bossService.getGuildBoss(interaction.guildId);
-  const completedRun = completedBossRunId && user
+  const { guild, runs, guardianRun, dailyRun } = await bossService.getGuildBoss(
+    interaction.guildId
+  );
+  const run = selectedBossRunId === "daily"
+    ? dailyRun
+    : selectedBossRunId === "guardian"
+      ? guardianRun
+      : selectedBossRunId
+        ? runs.find((entry) => entry.id === selectedBossRunId) ?? null
+        : null;
+  const rallyBanner = run
+    ? await bossService.getRallyBannerState(run.id)
+    : null;
+  const completedRun = selectedBossRunId &&
+    !["daily", "guardian"].includes(selectedBossRunId) &&
+    user
     ? await prisma.bossRun.findFirst({
         where: {
-          id: completedBossRunId,
+          id: selectedBossRunId,
           guildId: guild.id,
           status: "DEFEATED"
         },
@@ -1546,69 +1560,84 @@ export async function handleBoss(
     return;
   }
 
-  const guardian = !run && guild.progress?.frontierWorldId
-    ? await prisma.bossDefinition.findFirst({
-        where: {
-          status: "PUBLISHED",
-          kind: "GUARDIAN",
-          worldId: guild.progress.frontierWorldId
-        },
-        orderBy: { contentKey: "asc" }
-      })
-    : null;
-  if (!run) {
+  if (!selectedBossRunId) {
     const mastery = Math.max(0, guild.progress?.mastery ?? 0);
     const masteryTarget = Math.max(0, guild.progress?.masteryTarget ?? 0);
-    const masteryRemaining = Math.max(0, masteryTarget - mastery);
     const currentWorld = guild.progress?.frontierWorld?.name ?? "Monde actuel";
     const unlockedWorldCount = Math.max(0, guild.progress?.unlockedWorldCount ?? 0);
-    const progressionEnabled = guild.config?.progressionBossEnabled !== false;
-    const guardianReady =
-      guardian &&
-      progressionEnabled &&
-      guild.progress?.state === "BOSS_READY";
-    const automaticEnabled =
-      guardianReady ||
-      guild.config?.regularBossEnabled !== false;
-    const nextSlot = automaticEnabled
-      ? nextDailyBossSlot(
-          new Date(),
-          guild.config?.timezone ?? "Europe/Paris"
-        )
-      : null;
-    const nextSlotTimestamp = nextSlot
-      ? Math.floor(nextSlot.getTime() / 1_000)
-      : null;
-    const countdown = nextSlotTimestamp
-      ? `\n\n⏳ **Prochain créneau : <t:${nextSlotTimestamp}:R>**\n` +
-        `📅 <t:${nextSlotTimestamp}:F>`
-      : "\n\n⏸️ Les boss automatiques sont désactivés sur ce serveur.";
+    const nextDailySlot = nextDailyBossSlot(
+      new Date(),
+      guild.config?.timezone ?? "Europe/Paris"
+    );
+    const nextDailyTimestamp = Math.floor(nextDailySlot.getTime() / 1_000);
+    const dailyValue = dailyRun
+      ? `**${dailyRun.definition.name}**\n` +
+        `${bossProgressBar(dailyRun.progress, dailyRun.targetSnapshot)}\n` +
+        `Expire <t:${Math.floor(dailyRun.endsAt.getTime() / 1_000)}:R>.`
+      : guild.config?.regularBossEnabled === false
+        ? "⏸️ Les boss journaliers sont désactivés sur ce serveur."
+        : `Aucun boss journalier actif. Prochaine rotation <t:${nextDailyTimestamp}:R>.`;
+    const guardianValue = guardianRun
+      ? `**${guardianRun.definition.name}**\n` +
+        `${bossProgressBar(guardianRun.progress, guardianRun.targetSnapshot)}\n` +
+        "♾️ Persistant : il reste actif jusqu’à sa défaite."
+      : unlockedWorldCount >= 9
+        ? "✅ Tous les mondes sont débloqués."
+        : masteryTarget > 0
+          ? `**${currentWorld}**\n${bossProgressBar(mastery, masteryTarget)}\n` +
+            `**${mastery}/${masteryTarget}** points de maîtrise avant le gardien.`
+          : "La progression du gardien n’est pas encore initialisée.";
     embed
+      .setTitle("🐲 Centre des boss")
       .setDescription(
-        `Aucun boss actif.\n\n` +
-        (guardianReady
-          ? `✅ Le seuil est atteint : le prochain boss sera le gardien **${guardian.name}**.`
-          : guardian
-            ? `Le gardien **${guardian.name}** apparaîtra lorsque ce monde aura atteint 100 %. ` +
-              "En attendant, le prochain cycle choisira un boss standard."
-            : "Le prochain cycle choisira un boss standard.") +
-        `\n\nChaque boss apparaît à minuit et reste actif pendant 24 heures.${countdown}`
+        `${notice ? `**${notice}**\n\n` : ""}` +
+        "Choisis le type de boss à consulter. Les deux progressions sont indépendantes."
       )
-      .addFields({
-        name: `🌍 Progression du monde · ${currentWorld}`,
-        value: masteryTarget > 0
-          ? `${bossProgressBar(mastery, masteryTarget)}\n` +
-            `**${mastery}/${masteryTarget}** points de maîtrise` +
-            (masteryRemaining > 0
-              ? ` · encore **${masteryRemaining}** avant le gardien`
-              : " · **gardien prêt**") +
-            `\nMondes débloqués : **${unlockedWorldCount}/9**` +
-            (progressionEnabled
-              ? ""
-              : "\n⏸️ Les gardiens de progression sont désactivés sur ce serveur.")
-          : "La progression de ce monde n’est pas encore initialisée."
+      .addFields(
+        {
+          name: "📅 Boss journalier · 24 heures",
+          value: dailyValue
+        },
+        {
+          name: "🌍 Gardien du monde · persistant",
+          value: guardianValue
+        }
+      )
+      .setFooter({
+        text: `Mondes débloqués : ${unlockedWorldCount}/9 · le gardien ne disparaît jamais à minuit`
       });
-    await interaction.editReply({ embeds: [embed], components: [] });
+    await interaction.editReply({
+      embeds: [embed],
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(createInteractionToken(
+              "j", "view-daily", "overview", interaction.user.id
+            ))
+            .setLabel("Boss journalier")
+            .setEmoji("📅")
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(!dailyRun),
+          new ButtonBuilder()
+            .setCustomId(createInteractionToken(
+              "j", "view-guardian", "overview", interaction.user.id
+            ))
+            .setLabel("Gardien du monde")
+            .setEmoji("🌍")
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(!guardianRun)
+        )
+      ]
+    });
+    return;
+  }
+
+  if (!run) {
+    await handleBoss(
+      interaction,
+      user,
+      "Ce boss n’est plus disponible. Le centre des boss a été actualisé."
+    );
     return;
   }
 
@@ -1672,13 +1701,19 @@ export async function handleBoss(
           `Éligibilité : ${minimumContribution} point(s) ou une offrande majeure`
       },
       {
-        name: run.status === "ACTIVE" ? "Fin du boss" : "Apparition du boss",
-        value: (() => {
-          const timestamp = Math.floor(
-            (run.status === "ACTIVE" ? run.endsAt : run.startsAt).getTime() / 1_000
-          );
-          return `<t:${timestamp}:R>\n<t:${timestamp}:F>`;
-        })(),
+        name: run.isPersistent
+          ? "Durée"
+          : run.status === "ACTIVE"
+            ? "Fin du boss"
+            : "Apparition du boss",
+        value: run.isPersistent
+          ? "♾️ Jusqu’à sa défaite · aucune réinitialisation à minuit"
+          : (() => {
+              const timestamp = Math.floor(
+                (run.status === "ACTIVE" ? run.endsAt : run.startsAt).getTime() / 1_000
+              );
+              return `<t:${timestamp}:R>\n<t:${timestamp}:F>`;
+            })(),
         inline: true
       },
       {
@@ -1697,8 +1732,8 @@ export async function handleBoss(
     )
     .setFooter({
       text: run.definition.kind === "GUARDIAN"
-        ? "Gardien de progression · la victoire débloque le monde suivant"
-        : "Boss standard · seuls les participants actifs reçoivent la récompense"
+        ? "Gardien persistant · la victoire débloque le monde suivant"
+        : "Boss journalier · seuls les participants actifs reçoivent la récompense"
     });
 
   if (rallyBanner?.activeUntil) {
@@ -1811,6 +1846,13 @@ export async function handleBoss(
           "j", "mine", run.id, interaction.user.id
         ))
         .setLabel("Actualiser ma contribution")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(createInteractionToken(
+          "j", "overview", run.id, interaction.user.id
+        ))
+        .setLabel("Tous les boss")
+        .setEmoji("↩️")
         .setStyle(ButtonStyle.Secondary)
     );
     components.push(row);
@@ -2021,7 +2063,7 @@ async function handleBossItems(
     }),
     prisma.bossRun.findUniqueOrThrow({
       where: { id: bossRunId },
-      select: { objectiveSnapshot: true, mechanic: true }
+      select: { objectiveSnapshot: true, mechanic: true, isPersistent: true }
     }),
     bossService.getRallyBannerState(bossRunId)
   ]);
@@ -2076,6 +2118,10 @@ async function handleBossItems(
   const mechanicLine = run.mechanic === "OFFERING"
     ? "Ce boss demande des ressources et les offrandes rituelles affichées ci-dessous."
     : "Ces objets sont des soutiens facultatifs : la victoire avance uniquement avec la mécanique indiquée sur la fiche du boss.";
+  const flowerLine = run.isPersistent
+    ? "**Fleur du Néant :** inutilisable — ce gardien n’a aucune limite de temps.\n"
+    : `**Fleur :** ${Number(flower.deposited ?? 0)}/${Number(flower.maximum ?? 0)} — ` +
+      "+5 % de durée initiale, minimum 5 min.\n";
   await interaction.editReply({
     embeds: [
       new EmbedBuilder()
@@ -2086,8 +2132,7 @@ async function handleBossItems(
           `**Bannière :** ${bannerState} — +20 % cumulés pendant 15 min, soit ` +
           "1 point bonus par tranche de 5 points de base (recharge serveur : 60 min).\n" +
           (ritualLines.length ? `${ritualLines.join("\n")}\n` : "") +
-          `**Fleur :** ${Number(flower.deposited ?? 0)}/${Number(flower.maximum ?? 0)} — ` +
-          "+5 % de durée initiale, minimum 5 min.\n\n" +
+          `${flowerLine}\n` +
           "Un objet n'est consommé qu'après la confirmation et une activation réussie."
         )
     ],
@@ -2182,8 +2227,14 @@ async function handleBossItemConfirmation(
   }
   const run = await prisma.bossRun.findUniqueOrThrow({
     where: { id: bossRunId },
-    select: { objectiveSnapshot: true, endsAt: true }
+    select: { objectiveSnapshot: true, endsAt: true, isPersistent: true }
   });
+  if (shortKey === "flower" && run.isPersistent) {
+    throw new AppError(
+      "La Fleur du Néant est inutile ici : ce gardien reste actif jusqu’à sa défaite.",
+      409
+    );
+  }
   const specials = objectRecord(
     objectRecord(run.objectiveSnapshot).specialOfferings
   );
@@ -2389,6 +2440,18 @@ export async function handleBossButton(
     interaction.user.username,
     interaction.user.displayAvatarURL()
   );
+  if (action === "view-daily") {
+    await handleBoss(interaction, user, undefined, "daily");
+    return;
+  }
+  if (action === "view-guardian") {
+    await handleBoss(interaction, user, undefined, "guardian");
+    return;
+  }
+  if (action === "overview") {
+    await handleBoss(interaction, user);
+    return;
+  }
   if (action === "cards") {
     await handleBossCollectionRequirement(
       interaction,

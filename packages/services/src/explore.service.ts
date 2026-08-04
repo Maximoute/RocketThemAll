@@ -631,14 +631,30 @@ async function grantCaptureBossOfferingDrop(
     worldLabel: string;
   }
 ): Promise<CaptureBossOfferingReward | null> {
-  const activeBoss = await tx.bossRun.findFirst({
+  const activeBosses = await tx.bossRun.findMany({
     where: {
       guildId: input.guildId,
       status: "ACTIVE",
       endsAt: { gt: new Date() }
     },
-    select: { id: true, objectiveSnapshot: true }
+    select: { id: true, objectiveSnapshot: true, isPersistent: true },
+    orderBy: [
+      { isPersistent: "asc" },
+      { startsAt: "asc" }
+    ]
   });
+  const maskBoss = activeBosses.find((boss) => {
+    const specials = jsonRecord(
+      jsonRecord(boss.objectiveSnapshot).specialOfferings as Prisma.JsonValue
+    );
+    const mask = jsonRecord(specials.brokenMask as Prisma.JsonValue);
+    return (
+      Number(mask.required ?? 0) > Number(mask.deposited ?? 0) &&
+      mask.sourceType === "WORLD" &&
+      mask.sourceKey === input.worldId
+    );
+  });
+  const activeBoss = maskBoss ?? activeBosses[0] ?? null;
   const bossSpecials = jsonRecord(
     jsonRecord(activeBoss?.objectiveSnapshot).specialOfferings as Prisma.JsonValue
   );
@@ -1797,7 +1813,11 @@ export class ExploreService {
           endsAt: { gt: new Date() },
           definition: { worldId: selection.world.id }
         },
-        include: { definition: true }
+        include: { definition: true },
+        orderBy: [
+          { isPersistent: "desc" },
+          { startsAt: "asc" }
+        ]
       }),
       prisma.userGameplayState.findUnique({ where: { userId: input.userId } }),
       prisma.userSkill.findMany({

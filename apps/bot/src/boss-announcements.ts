@@ -100,8 +100,10 @@ export async function syncBossAnnouncements(client: Client) {
               inline: true
             },
             {
-              name: "Disponible jusqu’au",
-              value: `<t:${endTimestamp}:R>\n<t:${endTimestamp}:F>`,
+              name: run.isPersistent ? "Durée" : "Disponible jusqu’au",
+              value: run.isPersistent
+                ? "Persistant · reste actif jusqu’à sa défaite"
+                : `<t:${endTimestamp}:R>\n<t:${endTimestamp}:F>`,
               inline: true
             },
             {

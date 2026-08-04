@@ -1,5 +1,6 @@
 import {
   type BossCategory,
+  type BossDefinition,
   type BossMechanic,
   Prisma,
   prisma
@@ -15,6 +16,7 @@ import {
 const OPEN_BOSS_STATUSES = ["SCHEDULED", "ACTIVE"] as const;
 const ACTIVE_MEMBER_WINDOW_MS = 7 * 24 * 60 * 60_000;
 const DEFAULT_GUARDIAN_DURATION_HOURS = 24;
+const PERSISTENT_BOSS_ENDS_AT = new Date("9999-12-31T23:59:59.999Z");
 export const BOSS_FRAGMENT_POINT_VALUE = 100;
 export const BOSS_DUPLICATE_CARD_POINT_VALUE = 100;
 export const FUNERAL_CANDLE_REQUIREMENT = 5;
@@ -205,6 +207,7 @@ export function bossSpecialOfferingRequirements(input: {
   mechanic: BossMechanic;
   worldId: string;
   worldLabel: string;
+  persistent?: boolean;
 }): SpecialOfferingState {
   const balance = BOSS_TIER_BALANCE[input.tier];
   const offeringMechanic = input.mechanic === "OFFERING";
@@ -240,7 +243,10 @@ export function bossSpecialOfferingRequirements(input: {
           }
         }
       : {}),
-    voidFlower: { maximum: balance.voidFlowers, deposited: 0 }
+    voidFlower: {
+      maximum: input.persistent ? 0 : balance.voidFlowers,
+      deposited: 0
+    }
   };
 }
 
@@ -406,6 +412,14 @@ export function rallyBannerProgressAmount(
   const safePrior = Math.max(0, Math.floor(priorBaseAmount));
   const safeBase = Math.max(0, Math.floor(baseAmount));
   return Math.floor((safePrior + safeBase) * 1.2) - Math.floor(safePrior * 1.2);
+}
+
+export function eligibleCaptureBossMechanics(
+  bossMinion: boolean
+): BossMechanic[] {
+  return bossMinion
+    ? ["HUNT", "EXPEDITION_MINION"]
+    : ["HUNT"];
 }
 
 export function scaleBossTarget(baseTarget: number, activePlayers: number) {
@@ -1093,22 +1107,25 @@ export class BossService {
       }
     });
     if (!guild) throw new AppError("Serveur RTA introuvable.", 404);
-    const run = await prisma.bossRun.findFirst({
+    const runs = await prisma.bossRun.findMany({
       where: {
         guildId: guild.id,
-        status: { in: [...OPEN_BOSS_STATUSES] }
+        status: { in: [...OPEN_BOSS_STATUSES] },
+        endsAt: { gt: new Date() }
       },
       include: {
         definition: { include: { world: true } },
         contributions: true,
         rewardGrants: true
       },
-      orderBy: { startsAt: "asc" }
+      orderBy: [
+        { isPersistent: "desc" },
+        { startsAt: "asc" }
+      ]
     });
-    const rallyBanner = run
-      ? await this.getRallyBannerState(run.id)
-      : null;
-    return { guild, run, rallyBanner };
+    const guardianRun = runs.find((entry) => entry.definition.kind === "GUARDIAN") ?? null;
+    const dailyRun = runs.find((entry) => entry.definition.kind === "REGULAR") ?? null;
+    return { guild, runs, guardianRun, dailyRun };
   }
 
   async getRallyBannerState(bossRunId: string) {
@@ -1249,6 +1266,7 @@ export class BossService {
     durationHours?: number;
     endsAt?: Date;
     slotKey?: string;
+    persistent?: boolean;
   }) {
     const now = new Date();
     const startsAt = input.startsAt ?? now;
@@ -1292,9 +1310,20 @@ export class BossService {
         }
       }
       const open = await tx.bossRun.findFirst({
-        where: { guildId: guild.id, status: { in: [...OPEN_BOSS_STATUSES] } }
+        where: {
+          guildId: guild.id,
+          status: { in: [...OPEN_BOSS_STATUSES] },
+          definition: { kind: definition.kind }
+        }
       });
-      if (open) throw new AppError("Un boss est déjà actif ou planifié.", 409);
+      if (open) {
+        throw new AppError(
+          definition.kind === "GUARDIAN"
+            ? "Un gardien de monde est déjà actif ou planifié."
+            : "Un boss journalier est déjà actif ou planifié.",
+          409
+        );
+      }
 
       const activePlayers = Math.max(1, await tx.guildMember.count({
         where: {
@@ -1348,10 +1377,13 @@ export class BossService {
       const durationHours = input.durationHours
         ?? definition.durationHours
         ?? DEFAULT_GUARDIAN_DURATION_HOURS;
+      const isPersistent = input.persistent ?? definition.kind === "GUARDIAN";
       const requestedEndsAt = input.endsAt;
-      const endsAt = requestedEndsAt && requestedEndsAt > startsAt
-        ? requestedEndsAt
-        : new Date(startsAt.getTime() + durationHours * 60 * 60_000);
+      const endsAt = isPersistent
+        ? PERSISTENT_BOSS_ENDS_AT
+        : requestedEndsAt && requestedEndsAt > startsAt
+          ? requestedEndsAt
+          : new Date(startsAt.getTime() + durationHours * 60 * 60_000);
       const progressionKey = definition.kind === "GUARDIAN"
         ? `guardian:${guild.id}:${definition.id}`
         : null;
@@ -1365,7 +1397,8 @@ export class BossService {
         tier: bossTier,
         mechanic,
         worldId: definition.world.id,
-        worldLabel: definition.world.name
+        worldLabel: definition.world.name,
+        persistent: isPersistent
       });
       if (offeringPlan && previous) {
         const previousSnapshot = record(previous.objectiveSnapshot);
@@ -1405,9 +1438,7 @@ export class BossService {
             specialOfferings.silverTear.required;
         }
       }
-      const carriedProgress = previous && !["HUNT", "EXPEDITION_MINION"].includes(mechanic)
-        ? previous.progress
-        : 0;
+      const carriedProgress = previous?.progress ?? 0;
       const status = startsAt <= now ? "ACTIVE" : "SCHEDULED";
       const collectionRequirement = ["HARMONIZATION", "COLLECTIVE_COLLECTION"].includes(mechanic)
         ? bossCollectionRequirementLabel({
@@ -1426,6 +1457,7 @@ export class BossService {
           category,
           mechanic,
           status,
+          isPersistent,
           targetSnapshot: Math.max(1, target),
           progress: Math.min(carriedProgress, Math.max(1, target)),
           activePlayers,
@@ -1435,6 +1467,7 @@ export class BossService {
               ?? `Atteindre ${Math.max(1, target)} contributions`,
             mechanic,
             bossTier,
+            persistent: isPersistent,
             specialOfferings,
             ...(offeringPlan
               ? {
@@ -1487,13 +1520,15 @@ export class BossService {
             payload: { bossRunId: run.id },
             runAt: startsAt
           },
-          {
-            queue: "boss",
-            type: "boss.expire",
-            dedupeKey: `boss.expire:${run.id}`,
-            payload: { bossRunId: run.id },
-            runAt: endsAt
-          }
+          ...(!isPersistent
+            ? [{
+                queue: "boss",
+                type: "boss.expire",
+                dedupeKey: `boss.expire:${run.id}`,
+                payload: { bossRunId: run.id },
+                runAt: endsAt
+              }]
+            : [])
         ],
         skipDuplicates: true
       });
@@ -1534,7 +1569,79 @@ export class BossService {
         });
         progress.state = "BOSS_READY";
       }
-      if (progress.state === "BOSS_READY") results.push(guild.id);
+      const openGuardian = await prisma.bossRun.findFirst({
+        where: {
+          guildId: guild.id,
+          status: { in: [...OPEN_BOSS_STATUSES] },
+          definition: { kind: "GUARDIAN" }
+        },
+        include: { definition: true }
+      });
+      if (openGuardian) {
+        if (!openGuardian.isPersistent) {
+          const snapshot = record(openGuardian.objectiveSnapshot);
+          const specials = specialOfferingsFromSnapshot(snapshot);
+          const flower = record(specials.voidFlower as Prisma.JsonValue);
+          await prisma.$transaction([
+            prisma.bossRun.update({
+              where: { id: openGuardian.id },
+              data: {
+                isPersistent: true,
+                endsAt: PERSISTENT_BOSS_ENDS_AT,
+                objectiveSnapshot: {
+                  ...snapshot,
+                  persistent: true,
+                  specialOfferings: {
+                    ...(specials as Prisma.InputJsonObject),
+                    voidFlower: { ...flower, maximum: 0 }
+                  }
+                },
+                version: { increment: 1 }
+              }
+            }),
+            prisma.scheduledJob.updateMany({
+              where: {
+                dedupeKey: `boss.expire:${openGuardian.id}`,
+                status: "PENDING"
+              },
+              data: { status: "CANCELLED" }
+            })
+          ]);
+        }
+        if (openGuardian.status === "ACTIVE" && progress.state !== "BOSS_ACTIVE") {
+          await prisma.guildProgress.update({
+            where: { guildId: guild.id },
+            data: { state: "BOSS_ACTIVE", version: { increment: 1 } }
+          });
+        }
+        results.push(openGuardian.id);
+        continue;
+      }
+      if (!["BOSS_READY", "BOSS_ACTIVE"].includes(progress.state)) continue;
+      const guardian = await prisma.bossDefinition.findFirst({
+        where: {
+          status: "PUBLISHED",
+          kind: "GUARDIAN",
+          worldId: progress.frontierWorldId
+        }
+      });
+      if (!guardian) continue;
+      try {
+        const run = await this.scheduleBoss({
+          guildDiscordId: guild.discordId,
+          definitionKey: guardian.contentKey,
+          startsAt: now,
+          persistent: true,
+          slotKey: `guardian:persistent:${guardian.contentKey}:${now.toISOString()}`
+        });
+        results.push(run.id);
+      } catch (error) {
+        const isConcurrentGuardian =
+          error instanceof AppError &&
+          error.statusCode === 409 &&
+          error.message.includes("gardien de monde");
+        if (!isConcurrentGuardian) throw error;
+      }
     }
     return results;
   }
@@ -1557,33 +1664,26 @@ export class BossService {
         now,
         guild.config?.timezone ?? "Europe/Paris"
       );
-      const slotKey = `daily:${window.dayKey}`;
+      const slotKey = `daily:regular:${window.dayKey}`;
 
       const staleRuns = await prisma.bossRun.findMany({
         where: {
           guildId: guild.id,
           status: { in: [...OPEN_BOSS_STATUSES] },
+          definition: { kind: "REGULAR" },
           endsAt: { lte: now }
         },
-        select: {
-          id: true,
-          definition: { select: { kind: true } }
-        }
+        select: { id: true }
       });
-      let expiredGuardian = false;
       for (const staleRun of staleRuns) {
-        const expired = await this.expireRun(staleRun.id, now);
-        expiredGuardian ||= Boolean(
-          expired && staleRun.definition.kind === "GUARDIAN"
-        );
+        await this.expireRun(staleRun.id, now);
       }
 
-      const existingSlot = await prisma.bossRun.findUnique({
+      const existingSlot = await prisma.bossRun.findFirst({
         where: {
-          guildId_slotKey: {
-            guildId: guild.id,
-            slotKey
-          }
+          guildId: guild.id,
+          definition: { kind: "REGULAR" },
+          startsAt: { gte: window.startsAt, lt: window.endsAt }
         },
         select: { id: true }
       });
@@ -1593,30 +1693,17 @@ export class BossService {
         where: {
           guildId: guild.id,
           status: { in: [...OPEN_BOSS_STATUSES] },
+          definition: { kind: "REGULAR" },
           endsAt: { gt: now }
         },
         select: { id: true }
       });
       if (open) continue;
 
-      const guardianWorldId = guild.progress?.frontierWorldId ?? null;
-      const guardianReady = Boolean(
-        (guild.progress?.state === "BOSS_READY" || expiredGuardian) &&
-        guild.config?.progressionBossEnabled !== false &&
-        guardianWorldId
-      );
-      let definition = guardianReady
-        ? await prisma.bossDefinition.findFirst({
-            where: {
-              status: "PUBLISHED",
-              kind: "GUARDIAN",
-              worldId: guardianWorldId!
-            }
-          })
-        : null;
+      let definition: BossDefinition | null = null;
       let mechanic: BossMechanic | undefined;
 
-      if (!definition && guild.config?.regularBossEnabled !== false) {
+      if (guild.config?.regularBossEnabled !== false) {
         const unlockedWorldIds = guild.worldProgress.map((entry) => entry.worldId);
         const candidates = unlockedWorldIds.length > 0
           ? await prisma.bossDefinition.findMany({
@@ -1657,7 +1744,7 @@ export class BossService {
         const isConcurrentOpenBoss =
           error instanceof AppError &&
           error.statusCode === 409 &&
-          error.message.includes("actif ou planifié");
+          error.message.includes("journalier");
         if (!isDuplicate && !isConcurrentOpenBoss) throw error;
       }
     }
@@ -1693,6 +1780,7 @@ export class BossService {
       });
       if (
         !run ||
+        run.isPersistent ||
         !OPEN_BOSS_STATUSES.includes(run.status as typeof OPEN_BOSS_STATUSES[number]) ||
         run.endsAt > now
       ) {
@@ -2281,57 +2369,71 @@ export class BossService {
     });
     if (!attempt || attempt.status !== "SUCCEEDED") return null;
     return prisma.$transaction(async (tx) => {
-      const run = await tx.bossRun.findFirst({
+      const runs = await tx.bossRun.findMany({
         where: {
           guildId: attempt.encounter.guildId,
           status: "ACTIVE",
           endsAt: { gt: new Date() },
           definition: { worldId: attempt.encounter.zone.worldId },
-          OR: [
-            { mechanic: "HUNT" },
-            {
-              mechanic: "EXPEDITION_MINION",
-              id: attempt.encounter.bossRunId ?? "__no_boss_minion__"
-            }
-          ]
-        },
-        include: { definition: true }
-      });
-      if (!run) return null;
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BossRun" WHERE "id" = ${run.id} FOR UPDATE`);
-      const operationKey = `boss-capture:${attempt.id}`;
-      const replay = await tx.bossContribution.findUnique({ where: { operationKey } });
-      if (replay) return replay;
-      const current = await tx.bossRun.findUniqueOrThrow({ where: { id: run.id } });
-      if (current.status !== "ACTIVE" || current.progress >= current.targetSnapshot) return null;
-      const progressGain = await bossProgressAmount(tx, current, 1);
-      const contribution = await tx.bossContribution.create({
-        data: {
-          bossRunId: run.id,
-          userId: attempt.userId,
-          operationKey,
-          type: run.mechanic === "EXPEDITION_MINION"
-            ? "MINION_CAPTURE"
-            : "VALID_CAPTURE",
-          resourceKey: attempt.encounter.cardId,
-          amount: progressGain.amount,
-          destructive: false,
-          metadata: {
-            captureAttemptId: attempt.id,
-            baseAmount: 1,
-            bannerKey: progressGain.bannerKey
+          mechanic: {
+            in: eligibleCaptureBossMechanics(attempt.encounter.bossMinion)
           }
+        },
+        orderBy: { id: "asc" }
+      });
+      if (runs.length === 0) return null;
+      const contributions = [];
+      const legacyReplay = await tx.bossContribution.findUnique({
+        where: { operationKey: `boss-capture:${attempt.id}` }
+      });
+      for (const run of runs) {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "BossRun" WHERE "id" = ${run.id} FOR UPDATE`
+        );
+        const operationKey = `boss-capture:${attempt.id}:${run.id}`;
+        if (legacyReplay?.bossRunId === run.id) {
+          contributions.push(legacyReplay);
+          continue;
         }
-      });
-      const progress = current.progress + progressGain.amount;
-      await tx.bossRun.update({
-        where: { id: run.id },
-        data: { progress, version: { increment: 1 } }
-      });
-      if (progress >= current.targetSnapshot) {
-        await grantRewardsIfObjectivesComplete(tx, run.id);
+        const replay = await tx.bossContribution.findUnique({ where: { operationKey } });
+        if (replay) {
+          contributions.push(replay);
+          continue;
+        }
+        const current = await tx.bossRun.findUniqueOrThrow({ where: { id: run.id } });
+        if (current.status !== "ACTIVE" || current.progress >= current.targetSnapshot) {
+          continue;
+        }
+        const progressGain = await bossProgressAmount(tx, current, 1);
+        const contribution = await tx.bossContribution.create({
+          data: {
+            bossRunId: run.id,
+            userId: attempt.userId,
+            operationKey,
+            type: run.mechanic === "EXPEDITION_MINION"
+              ? "MINION_CAPTURE"
+              : "VALID_CAPTURE",
+            resourceKey: attempt.encounter.cardId,
+            amount: progressGain.amount,
+            destructive: false,
+            metadata: {
+              captureAttemptId: attempt.id,
+              baseAmount: 1,
+              bannerKey: progressGain.bannerKey
+            }
+          }
+        });
+        const progress = current.progress + progressGain.amount;
+        await tx.bossRun.update({
+          where: { id: run.id },
+          data: { progress, version: { increment: 1 } }
+        });
+        if (progress >= current.targetSnapshot) {
+          await grantRewardsIfObjectivesComplete(tx, run.id);
+        }
+        contributions.push(contribution);
       }
-      return contribution;
+      return contributions;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
@@ -2546,10 +2648,19 @@ export class BossService {
       }
       let endsAt = run.endsAt;
       if (input.itemKey === "offering.void_flower") {
+        if (run.isPersistent) {
+          throw new AppError(
+            "La Fleur du Néant est réservée aux boss temporaires. Ce gardien reste actif jusqu’à sa défaite.",
+            409
+          );
+        }
         const count = await tx.bossContribution.count({
           where: { bossRunId: run.id, type: "VOID_FLOWER" }
         });
-        const maximum = positiveInteger(requirement.maximum, 1);
+        const maximum = Math.max(0, Math.floor(Number(requirement.maximum ?? 0)));
+        if (maximum < 1) {
+          throw new AppError("Ce boss n’accepte pas de Fleur du Néant.", 409);
+        }
         if (count >= maximum) {
           throw new AppError(
             `Ce boss a déjà reçu le maximum de ${maximum} Fleur(s) du Néant.`,

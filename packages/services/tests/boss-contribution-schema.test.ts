@@ -15,3 +15,20 @@ describe("boss support contribution schema", () => {
     expect(migration).not.toContain('CHECK ("amount" > 0)');
   });
 });
+
+describe("persistent guardian migration", () => {
+  it("converts active guardians and cancels only their expiration jobs", () => {
+    const migration = readFileSync(
+      new URL(
+        "../../database/prisma/migrations/20260804020000_split_persistent_guardians/migration.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('ADD COLUMN "isPersistent" BOOLEAN NOT NULL DEFAULT false');
+    expect(migration).toContain('definition."kind" = \'GUARDIAN\'');
+    expect(migration).toContain('"type" = \'boss.expire\'');
+    expect(migration).toContain('"status" = \'CANCELLED\'');
+  });
+});

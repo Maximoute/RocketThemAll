@@ -79,7 +79,7 @@
 ## ADR-015 — Cycle des boss
 
 - Décision utilisateur : un boss standard par jour, créé à minuit dans le fuseau de la guilde et actif pendant 24 heures.
-- Les gardiens de progression restent prioritaires et utilisent le créneau de progression configurable.
+- Les gardiens de progression n’occupent plus le créneau journalier : un gardien persistant et un boss standard temporaire peuvent être actifs simultanément sur le même serveur.
 - Les contributions destructives d’un gardien expiré sont reprises lors de la tentative suivante.
 
 ## ADR-016 — Équipement

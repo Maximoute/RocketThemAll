@@ -209,7 +209,8 @@ export default async function AdminBossesPage({
         bossRuns: {
           where: { status: { in: ["SCHEDULED", "ACTIVE"] } },
           include: { definition: true },
-          take: 1
+          orderBy: [{ isPersistent: "desc" }, { startsAt: "asc" }],
+          take: 2
         }
       },
       orderBy: [{ isPrimary: "desc" }, { name: "asc" }]
@@ -234,8 +235,9 @@ export default async function AdminBossesPage({
     <section>
       <h1 style={{ marginTop: 0 }}>Boss et progression</h1>
       <p>
-        Un boss apparaît chaque jour à minuit dans le fuseau du serveur et reste actif 24 heures.
-        Un gardien prêt est prioritaire ; sinon le jeu choisit un boss standard d’un monde débloqué.
+        Le boss journalier apparaît à minuit et reste actif 24 heures. Le gardien du monde
+        possède une progression séparée et reste actif jusqu’à sa défaite. Les deux peuvent
+        être actifs simultanément.
       </p>
       {searchParams.notice && (
         <p className="card" style={{ borderColor: "#22c55e", color: "#166534" }}>
@@ -249,7 +251,8 @@ export default async function AdminBossesPage({
       )}
 
       {guilds.map((guild) => {
-        const activeRun = guild.bossRuns[0];
+        const guardianRun = guild.bossRuns.find((run) => run.definition.kind === "GUARDIAN");
+        const regularRun = guild.bossRuns.find((run) => run.definition.kind === "REGULAR");
         return (
           <article key={guild.id} className="card" style={{ marginBottom: "16px" }}>
             <h2>{guild.name} {guild.isPrimary ? "· principal" : ""}</h2>
@@ -258,16 +261,25 @@ export default async function AdminBossesPage({
               {" · "}{guild.progress?.mastery ?? 0}/{guild.progress?.masteryTarget ?? 0}
               {" · "}{guild.progress?.state ?? "PROGRESSING"}
             </p>
-            {activeRun && (
-              <div style={{ padding: "10px", border: "1px solid #ef4444", borderRadius: "8px" }}>
-                <strong>{activeRun.definition.name}</strong> · {activeRun.status}
-                {" · "}{activeRun.progress}/{activeRun.targetSnapshot}
+            {guild.bossRuns.map((run) => (
+              <div
+                key={run.id}
+                style={{
+                  padding: "10px",
+                  marginTop: "8px",
+                  border: `1px solid ${run.isPersistent ? "#7c3aed" : "#ef4444"}`,
+                  borderRadius: "8px"
+                }}
+              >
+                <strong>{run.definition.name}</strong>
+                {" · "}{run.isPersistent ? "Gardien persistant" : "Boss journalier"}
+                {" · "}{run.status}{" · "}{run.progress}/{run.targetSnapshot}
                 <form action={cancelBoss} style={{ display: "inline", marginLeft: "12px" }}>
-                  <input type="hidden" name="bossRunId" value={activeRun.id} />
-                  <button type="submit">Annuler le boss</button>
+                  <input type="hidden" name="bossRunId" value={run.id} />
+                  <button type="submit">Annuler</button>
                 </form>
               </div>
-            )}
+            ))}
 
             <details style={{ marginTop: "12px" }}>
               <summary>Configuration automatique</summary>
@@ -296,14 +308,14 @@ export default async function AdminBossesPage({
               </form>
             </details>
 
-            {!activeRun && guild.progress?.state === "BOSS_READY" && (
+            {!guardianRun && guild.progress?.state === "BOSS_READY" && (
               <form action={startGuardianNow} style={{ marginTop: "12px" }}>
                 <input type="hidden" name="guildDiscordId" value={guild.discordId} />
                 <button type="submit">Lancer le gardien prêt maintenant</button>
               </form>
             )}
 
-            {!activeRun && (
+            {!regularRun && (
               <details style={{ marginTop: "12px" }}>
                 <summary>Lancer un boss standard maintenant</summary>
                 <form action={startRegularBoss} style={{ display: "grid", gap: "8px", maxWidth: "620px", paddingTop: "10px" }}>

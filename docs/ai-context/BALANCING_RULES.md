@@ -12,7 +12,7 @@
 - Trois quêtes quotidiennes sont attribuées par joueur et par jour UTC.
 - Un joueur gagne un point de compétence par niveau.
 - Exactement deux artefacts au maximum sont équipés; les consommables de préparation utilisent un autre quota.
-- Un boss standard apparaît chaque jour à minuit dans le fuseau de la guilde et dure 24 heures. Les gardiens de progression conservent leur créneau dédié.
+- Un boss standard apparaît chaque jour à minuit dans le fuseau de la guilde et dure 24 heures. En parallèle, le gardien du monde apparaît dès que la maîtrise atteint 100 %, conserve toute sa progression et reste actif jusqu’à sa défaite.
 - Le tier d’un boss régulier est tiré indépendamment du monde : 30 % Common, 25 % Uncommon, 20 % Rare, 13 % Very Rare, 8 % Import et 4 % Exotic.
 - Le tier d’un gardien est fixe selon le passage protégé : Common, Uncommon, Rare, Very Rare, Import, puis Exotic pour les trois derniers passages.
 - Une entrée de zone premium en crédits vaut le prix de référence du Pass d’expédition + 50 crédits. Le Pass est actuellement non achetable (`0`), donc le coût de base est 50 crédits.

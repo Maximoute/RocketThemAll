@@ -1354,6 +1354,7 @@ model BossRun {
   category           BossCategory
   mechanic           BossMechanic
   status             BossRunStatus           @default(SCHEDULED)
+  isPersistent       Boolean                 @default(false)
   targetSnapshot     Int
   progress           Int                     @default(0)
   activePlayers      Int
@@ -1377,6 +1378,7 @@ model BossRun {
 
   @@unique([guildId, slotKey])
   @@index([guildId, status])
+  @@index([guildId, isPersistent, status])
   @@index([status, startsAt, endsAt])
 }
 

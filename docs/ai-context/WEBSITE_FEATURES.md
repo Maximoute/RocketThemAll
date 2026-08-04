@@ -25,7 +25,7 @@
 - Supervision des jobs, erreurs, événements et idempotency.
 - Ajustements économiques par opérations compensatoires auditées.
 - Attribution auditée de crédits/fragments, d’XP et d’objets Vault à un joueur.
-- Configuration des boss par serveur, lancement/annulation des boss standards et démarrage manuel d’un gardien prêt.
+- Configuration indépendante des boss journaliers et des gardiens persistants par serveur, lancement/annulation des boss standards et démarrage manuel d’un gardien prêt.
 - Feature flags avec portée et auteur.
 
 ## Sécurité de session

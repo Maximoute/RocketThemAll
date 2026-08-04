@@ -10,6 +10,7 @@ import {
   bossTierForAppearance,
   deterministicBossCategory,
   deterministicRegularBossTier,
+  eligibleCaptureBossMechanics,
   bossObjectiveTarget,
   bossOfferingObjectives,
   bossSpecialOfferingRequirements,
@@ -79,6 +80,31 @@ describe("boss offering objectives", () => {
     })).toEqual({
       voidFlower: { maximum: 2, deposited: 0 }
     });
+  });
+
+  it("disables timer flowers on persistent world guardians", () => {
+    expect(bossSpecialOfferingRequirements({
+      tier: "uncommon",
+      mechanic: "EXPEDITION_MINION",
+      worldId: "world-2",
+      worldLabel: "Monde 2",
+      persistent: true
+    })).toEqual({
+      voidFlower: { maximum: 0, deposited: 0 }
+    });
+  });
+});
+
+describe("simultaneous capture boss progression", () => {
+  it("counts a normal capture for every compatible hunt boss", () => {
+    expect(eligibleCaptureBossMechanics(false)).toEqual(["HUNT"]);
+  });
+
+  it("counts an anomalous trace for hunt and minion bosses together", () => {
+    expect(eligibleCaptureBossMechanics(true)).toEqual([
+      "HUNT",
+      "EXPEDITION_MINION"
+    ]);
   });
 });
 
