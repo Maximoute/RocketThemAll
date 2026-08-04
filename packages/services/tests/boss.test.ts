@@ -17,6 +17,7 @@ import {
   nextDailyBossSlot,
   nextWeeklyBossSlot,
   preferredBossMechanic,
+  rallyBannerProgressAmount,
   selectDailyRegularBoss,
   scaleBossTarget
 } from "../src/boss.service.js";
@@ -130,6 +131,21 @@ describe("boss target scaling", () => {
     ).toBeGreaterThan(
       bossObjectiveTarget("REGULAR", "HUNT", 1, 9, 0, "common")
     );
+  });
+});
+
+describe("rally banner progression", () => {
+  it("adds exactly 20 percent cumulatively without inventing fractional points", () => {
+    const gains = Array.from({ length: 10 }, (_, prior) =>
+      rallyBannerProgressAmount(prior, 1)
+    );
+    expect(gains).toEqual([1, 1, 1, 1, 2, 1, 1, 1, 1, 2]);
+    expect(gains.reduce((sum, gain) => sum + gain, 0)).toBe(12);
+  });
+
+  it("supports multi-point contributions with the same cumulative rule", () => {
+    expect(rallyBannerProgressAmount(0, 5)).toBe(6);
+    expect(rallyBannerProgressAmount(3, 7)).toBe(9);
   });
 });
 

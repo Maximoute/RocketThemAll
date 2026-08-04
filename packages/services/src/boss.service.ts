@@ -393,12 +393,19 @@ async function bossProgressAmount(
       ? sum + positiveInteger(metadata.baseAmount, 0)
       : sum;
   }, 0);
-  const before = Math.floor(priorBannerBase * 1.2);
-  const after = Math.floor((priorBannerBase + baseAmount) * 1.2);
   return {
-    amount: baseAmount + (after - before - baseAmount),
+    amount: rallyBannerProgressAmount(priorBannerBase, baseAmount),
     bannerKey: banner.scopeKey
   };
+}
+
+export function rallyBannerProgressAmount(
+  priorBaseAmount: number,
+  baseAmount: number
+) {
+  const safePrior = Math.max(0, Math.floor(priorBaseAmount));
+  const safeBase = Math.max(0, Math.floor(baseAmount));
+  return Math.floor((safePrior + safeBase) * 1.2) - Math.floor(safePrior * 1.2);
 }
 
 export function scaleBossTarget(baseTarget: number, activePlayers: number) {
@@ -1098,7 +1105,42 @@ export class BossService {
       },
       orderBy: { startsAt: "asc" }
     });
-    return { guild, run };
+    const rallyBanner = run
+      ? await this.getRallyBannerState(run.id)
+      : null;
+    return { guild, run, rallyBanner };
+  }
+
+  async getRallyBannerState(bossRunId: string) {
+    const run = await prisma.bossRun.findUnique({
+      where: { id: bossRunId },
+      select: { id: true, guildId: true, status: true, endsAt: true }
+    });
+    if (!run) throw new AppError("Boss introuvable.", 404);
+    const [activeRecord, cooldownRecord] = await Promise.all([
+      prisma.actionCooldown.findUnique({
+        where: { scopeKey: `boss-banner:${run.id}` }
+      }),
+      prisma.actionCooldown.findUnique({
+        where: { scopeKey: `boss-banner-cooldown:${run.guildId}` }
+      })
+    ]);
+    const now = new Date();
+    const activeUntil = activeRecord && activeRecord.expiresAt > now
+      ? activeRecord.expiresAt
+      : null;
+    const cooldownUntil = cooldownRecord && cooldownRecord.expiresAt > now
+      ? cooldownRecord.expiresAt
+      : null;
+    return {
+      activeUntil,
+      cooldownUntil,
+      canActivate:
+        run.status === "ACTIVE" &&
+        run.endsAt > now &&
+        !activeUntil &&
+        !cooldownUntil
+    };
   }
 
   async getCollectionRequirement(input: {
@@ -2305,7 +2347,15 @@ export class BossService {
       const replay = await tx.economicLedgerEntry.findUnique({
         where: { operationKey: `${input.operationKey}:rally-banner` }
       });
-      if (replay) return { expiresAt: null, replayed: true };
+      if (replay) {
+        const existing = await tx.actionCooldown.findUnique({
+          where: { scopeKey: `boss-banner:${input.bossRunId}` }
+        });
+        return {
+          expiresAt: existing?.expiresAt ?? null,
+          replayed: true
+        };
+      }
       const run = await tx.bossRun.findUniqueOrThrow({ where: { id: input.bossRunId } });
       if (run.status !== "ACTIVE" || run.endsAt <= new Date()) {
         throw new AppError("Ce boss n'est plus actif.", 409);

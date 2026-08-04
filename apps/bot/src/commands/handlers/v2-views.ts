@@ -1363,7 +1363,9 @@ function bossMechanicDescription(mechanic: string) {
     HARMONIZATION: "Présentez vos cartes uniques du monde. Les cartes restent dans votre collection.",
     COLLECTIVE_COLLECTION: "Réunissez collectivement des cartes uniques du monde, sans les consommer.",
     HUNT: "Chaque capture réussie dans ce monde inflige automatiquement 1 point.",
-    EXPEDITION_MINION: "Chaque créature capturée en exploration dans ce monde compte automatiquement."
+    EXPEDITION_MINION:
+      "Chaque exploration dans ce monde a 35 % de faire apparaître une Trace anormale. " +
+      "Seule sa capture réussie ajoute 1 point ; une carte ordinaire ne compte pas."
   };
   return descriptions[mechanic] ?? "Contribuez collectivement pour vaincre ce boss.";
 }
@@ -1441,7 +1443,7 @@ export async function handleBoss(
     await interaction.editReply("Cette commande doit être utilisée dans un serveur.");
     return;
   }
-  const { guild, run } = await bossService.getGuildBoss(interaction.guildId);
+  const { guild, run, rallyBanner } = await bossService.getGuildBoss(interaction.guildId);
   const completedRun = completedBossRunId && user
     ? await prisma.bossRun.findFirst({
         where: {
@@ -1698,6 +1700,22 @@ export async function handleBoss(
         ? "Gardien de progression · la victoire débloque le monde suivant"
         : "Boss standard · seuls les participants actifs reçoivent la récompense"
     });
+
+  if (rallyBanner?.activeUntil) {
+    const activeTimestamp = Math.floor(rallyBanner.activeUntil.getTime() / 1_000);
+    embed.addFields({
+      name: "🏳️ Bannière de ralliement active",
+      value:
+        `+20 % de progression communautaire cumulée jusqu'à <t:${activeTimestamp}:R>. ` +
+        "Concrètement, le serveur gagne 1 point bonus par tranche de 5 points de base."
+    });
+  } else if (rallyBanner?.cooldownUntil) {
+    const cooldownTimestamp = Math.floor(rallyBanner.cooldownUntil.getTime() / 1_000);
+    embed.addFields({
+      name: "🏳️ Recharge de la Bannière",
+      value: `Une nouvelle Bannière pourra être activée <t:${cooldownTimestamp}:R>.`
+    });
+  }
 
   if (collectionRequirement) {
     embed.addFields({
@@ -1993,7 +2011,7 @@ async function handleBossItems(
     ["mask", "offering.broken_mask", "Masque", "🎭"],
     ["flower", "offering.void_flower", "Fleur", "🌑"]
   ] as const;
-  const [owned, run] = await Promise.all([
+  const [owned, run, rallyBanner] = await Promise.all([
     prisma.userItem.findMany({
       where: {
         userId: user.id,
@@ -2003,8 +2021,9 @@ async function handleBossItems(
     }),
     prisma.bossRun.findUniqueOrThrow({
       where: { id: bossRunId },
-      select: { objectiveSnapshot: true }
-    })
+      select: { objectiveSnapshot: true, mechanic: true }
+    }),
+    bossService.getRallyBannerState(bossRunId)
   ]);
   const quantities = new Map(owned.map((entry) => [entry.item.contentKey, entry.quantity]));
   const specialOfferings = objectRecord(
@@ -2019,40 +2038,65 @@ async function handleBossItems(
     }[action];
     return key ? objectRecord(specialOfferings[key]) : {};
   };
-  const offeringUseful = (action: string) => {
+  const offeringRelevant = (action: string) => {
     if (action === "banner") return true;
     const state = requirementState(action);
     const maximum = Number(state.required ?? state.maximum ?? 0);
-    return maximum > 0 && Number(state.deposited ?? 0) < maximum;
+    return maximum > 0;
+  };
+  const offeringUseful = (action: string) => {
+    if (action === "banner") return rallyBanner.canActivate;
+    const state = requirementState(action);
+    const maximum = Number(state.required ?? state.maximum ?? 0);
+    return offeringRelevant(action) && Number(state.deposited ?? 0) < maximum;
   };
   const candle = requirementState("candle");
   const tear = requirementState("tear");
   const mask = requirementState("mask");
   const flower = requirementState("flower");
+  const visibleItemDefinitions = itemDefinitions.filter(([action]) =>
+    offeringRelevant(action)
+  );
+  const bannerState = rallyBanner.activeUntil
+    ? `active jusqu'à <t:${Math.floor(rallyBanner.activeUntil.getTime() / 1_000)}:R>`
+    : rallyBanner.cooldownUntil
+      ? `en recharge jusqu'à <t:${Math.floor(rallyBanner.cooldownUntil.getTime() / 1_000)}:R>`
+      : "disponible";
+  const ritualLines = [
+    Number(candle.required ?? 0) > 0
+      ? `**Cierge :** ${Number(candle.deposited ?? 0)}/${Number(candle.required)} — désactive la protection.`
+      : null,
+    Number(tear.required ?? 0) > 0
+      ? `**Larme :** ${Number(tear.deposited ?? 0)}/${Number(tear.required)} — dissipe les illusions.`
+      : null,
+    Number(mask.required ?? 0) > 0
+      ? `**Masque :** ${Number(mask.deposited ?? 0)}/${Number(mask.required)} — source : ${String(mask.sourceLabel ?? "non définie")}.`
+      : null
+  ].filter((line): line is string => Boolean(line));
+  const mechanicLine = run.mechanic === "OFFERING"
+    ? "Ce boss demande des ressources et les offrandes rituelles affichées ci-dessous."
+    : "Ces objets sont des soutiens facultatifs : la victoire avance uniquement avec la mécanique indiquée sur la fiche du boss.";
   await interaction.editReply({
     embeds: [
       new EmbedBuilder()
         .setColor(0xc0392b)
         .setTitle("🎒 Objets et offrandes de boss")
         .setDescription(
-          "**Bannière :** +20 % de progression serveur pendant 15 min (recharge serveur 60 min).\n" +
-          `**Cierge :** ${Number(candle.deposited ?? 0)}/${Number(candle.required ?? 0)} — ` +
-          "désactive la protection lorsque le seuil affiché est atteint.\n" +
-          `**Larme :** ${Number(tear.deposited ?? 0)}/${Number(tear.required ?? 0)} — ` +
-          "révèle la phase et dissipe les illusions.\n" +
-          `**Masque :** ${Number(mask.deposited ?? 0)}/${Number(mask.required ?? 0)} — ` +
-          `source exigée : ${String(mask.sourceLabel ?? "aucune")}.\n` +
-          `**Fleur :** ${Number(flower.deposited ?? 0)}/${Number(flower.maximum ?? 3)} — ` +
+          `${mechanicLine}\n\n` +
+          `**Bannière :** ${bannerState} — +20 % cumulés pendant 15 min, soit ` +
+          "1 point bonus par tranche de 5 points de base (recharge serveur : 60 min).\n" +
+          (ritualLines.length ? `${ritualLines.join("\n")}\n` : "") +
+          `**Fleur :** ${Number(flower.deposited ?? 0)}/${Number(flower.maximum ?? 0)} — ` +
           "+5 % de durée initiale, minimum 5 min.\n\n" +
-          "Les boutons inutiles sont désactivés. Chaque offrande passe par une confirmation."
+          "Un objet n'est consommé qu'après la confirmation et une activation réussie."
         )
     ],
     components: [
       new ActionRowBuilder<ButtonBuilder>().addComponents(
-        ...itemDefinitions.map(([action, itemKey, label, emoji]) =>
+        ...visibleItemDefinitions.map(([action, itemKey, label, emoji]) =>
           new ButtonBuilder()
             .setCustomId(createInteractionToken(
-              "j", action === "banner" ? "item-banner" : `pi-${action}`,
+              "j", `pi-${action}`,
               bossRunId, interaction.user.id
             ))
             .setLabel(`${label} (${quantities.get(itemKey) ?? 0})`)
@@ -2082,6 +2126,7 @@ async function handleBossItemConfirmation(
 ) {
   const shortKey = action.slice(3);
   const labels: Record<string, string> = {
+    banner: "Bannière de ralliement",
     candle: "Cierge funéraire",
     tear: "Larme d’argent",
     mask: "Masque brisé",
@@ -2089,6 +2134,52 @@ async function handleBossItemConfirmation(
   };
   const label = labels[shortKey];
   if (!label) throw new AppError("Offrande de boss inconnue.", 400);
+  if (shortKey === "banner") {
+    const rallyBanner = await bossService.getRallyBannerState(bossRunId);
+    if (rallyBanner.activeUntil) {
+      throw new AppError(
+        `Une Bannière est déjà active jusqu'à <t:${Math.floor(rallyBanner.activeUntil.getTime() / 1_000)}:R>.`,
+        409
+      );
+    }
+    if (rallyBanner.cooldownUntil) {
+      throw new AppError(
+        `La Bannière du serveur est en recharge jusqu'à <t:${Math.floor(rallyBanner.cooldownUntil.getTime() / 1_000)}:R>.`,
+        409
+      );
+    }
+    await interaction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x27ae60)
+          .setTitle("🏳️ Confirmer la Bannière de ralliement")
+          .setDescription(
+            "Tu vas consommer définitivement **1 Bannière de ralliement**.\n\n" +
+            "Pendant 15 minutes, les actions de progression du serveur gagnent **+20 % cumulés** : " +
+            "1 point bonus est ajouté par tranche de 5 points de base. La Bannière ne réduit pas les offrandes " +
+            "et déclenche une recharge serveur de 60 minutes.\n\n" +
+            "La Bannière ne sera retirée que si l’activation réussit."
+          )
+      ],
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(createInteractionToken(
+              "j", "xi-banner", bossRunId, interaction.user.id
+            ))
+            .setLabel("Activer la Bannière")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(createInteractionToken(
+              "j", "items", bossRunId, interaction.user.id
+            ))
+            .setLabel("Annuler")
+            .setStyle(ButtonStyle.Secondary)
+        )
+      ]
+    });
+    return;
+  }
   const run = await prisma.bossRun.findUniqueOrThrow({
     where: { id: bossRunId },
     select: { objectiveSnapshot: true, endsAt: true }
@@ -2346,7 +2437,7 @@ export async function handleBossButton(
     await handleBoss(interaction, user, notice, bossRunId);
     return;
   }
-  if (/^pi-(?:candle|tear|mask|flower)$/.test(action)) {
+  if (/^pi-(?:banner|candle|tear|mask|flower)$/.test(action)) {
     await handleBossItemConfirmation(interaction, bossRunId, action);
     return;
   }
@@ -2363,7 +2454,7 @@ export async function handleBossButton(
     return;
   }
   let notice = "Progression actualisée.";
-  if (action === "item-banner") {
+  if (action === "item-banner" || action === "xi-banner") {
     const result = await bossService.activateRallyBanner({
       bossRunId,
       userId: user.id,
