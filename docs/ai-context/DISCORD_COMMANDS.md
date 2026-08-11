@@ -7,7 +7,7 @@
 | `/explore` | Hub public persistant + confirmation éphémère | Crée ou rafraîchit l’unique hub de la guilde |
 | `/collection` | Éphémère | Collection globale, filtres et pagination |
 | `/profile` | Éphémère | Progression globale, résumé des achievements et équipement interactif |
-| `/quests` | Éphémère | Trois quêtes du jour, progression et expiration UTC |
+| `/quests` | Éphémère | Trois quêtes du jour, progression et expiration à minuit Paris/Belgique; les objectifs impossibles sont remplacés avant affichage |
 | `/achievements` | Éphémère | Catalogue paginé, filtres par catégorie, points et progression personnelle |
 | `/skills` | Éphémère | Arbre, points et équipement |
 | `/items` | Éphémère | Inventaire et état des artefacts |

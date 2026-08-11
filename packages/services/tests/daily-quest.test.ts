@@ -3,6 +3,7 @@ import {
   accessibleQuestWorlds,
   dailyQuestWindow,
   questTargetForDifficulty,
+  requiredAccessibleWorldCount,
 } from "../src/daily-quest.service.js";
 
 describe("daily quest accessible worlds", () => {
@@ -81,5 +82,29 @@ describe("daily quest targets", () => {
     };
     expect(questTargetForDifficulty(definition as any, "EASY", 1)).toBe(2);
     expect(questTargetForDifficulty(definition as any, "HARD", 1)).toBe(2);
+  });
+
+  it("requires every distinct world requested by the selected difficulty", () => {
+    const definition = {
+      target: 3,
+      objectiveKey: "EXPLORE_DISTINCT_WORLDS",
+      metadata: { targetStrategy: "GENERAL_EXPLORATION_TABLE" }
+    };
+    expect(requiredAccessibleWorldCount(definition as any, "EASY", 1)).toBe(2);
+    expect(requiredAccessibleWorldCount(definition as any, "NORMAL", 1)).toBe(3);
+    expect(requiredAccessibleWorldCount(definition as any, "HARD", 1)).toBe(5);
+  });
+
+  it("requires two worlds for fixed cross-world discovery quests", () => {
+    const definition = {
+      target: 2,
+      objectiveKey: "DISCOVER_IN_WORLD",
+      metadata: {
+        targetStrategy: "FIXED_BY_TEMPLATE",
+        objectiveVariant: "discoveries_across_two_worlds",
+        requiresMultipleWorlds: true
+      }
+    };
+    expect(requiredAccessibleWorldCount(definition as any, "NORMAL", 1)).toBe(2);
   });
 });

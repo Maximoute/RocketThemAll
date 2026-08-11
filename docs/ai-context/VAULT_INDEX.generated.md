@@ -1,6 +1,6 @@
 # Index généré du vault RTA
 
-> Généré par `npm run audit:vault` le 2026-08-11T04:42:13.281Z. Ne pas modifier à la main.
+> Généré par `npm run audit:vault` le 2026-08-11T15:57:05.880Z. Ne pas modifier à la main.
 
 ## Totaux
 
@@ -10,7 +10,7 @@
 | Notes Markdown | 2199 |
 | Assets image | 2531 |
 | Cartes uniques | 810 |
-| Taille totale (octets) | 747136090 |
+| Taille totale (octets) | 747139386 |
 
 ## Répartition des notes
 
@@ -115,9 +115,9 @@
 | Fichier | Sujet | Statut | Lignes | Priorité |
 | --- | --- | --- | --- | --- |
 | `00-Cockpit/Checklist complète du projet.md` | 🎯 Objectif de cette page | non précisé | 1112 | à qualifier |
-| `00-Cockpit/Journal de bord - Application.md` | Journal de bord - Application | active | 62 | à qualifier |
+| `00-Cockpit/Journal de bord - Application.md` | Journal de bord - Application | active | 74 | à qualifier |
 | `00-Cockpit/Rocket Them All.md` | Rocket Them All | non précisé | 46 | à qualifier |
-| `00-Cockpit/État actuel de l'application.md` | État actuel de l'application | live | 74 | à qualifier |
+| `00-Cockpit/État actuel de l'application.md` | État actuel de l'application | live | 75 | à qualifier |
 | `01-Vision & Gameplay/Arbres de compétences.md` | 🌳 Arbre de compétences V3 — 45 nœuds | non précisé | 971 | à qualifier |
 | `01-Vision & Gameplay/Boss-System.md` | Système de Boss | Conception | 6267 | à qualifier |
 | `01-Vision & Gameplay/Capture collective et préparation.md` | Capture collective et préparation | decision | 113 | normative |
@@ -133,7 +133,7 @@
 | `02-Contenu du jeu/Achèvement.md` | Système d’achievements | non précisé | 2530 | à qualifier |
 | `02-Contenu du jeu/Contenu du jeu.md` | Contenu du jeu | non précisé | 321 | à qualifier |
 | `02-Contenu du jeu/Items.md` | 🎒 Catalogue des objets de départ — V1 | non précisé | 2701 | à qualifier |
-| `02-Contenu du jeu/Quêtes.md` | Système de quêtes quotidiennes | non précisé | 1837 | à qualifier |
+| `02-Contenu du jeu/Quêtes.md` | Système de quêtes quotidiennes | non précisé | 1835 | à qualifier |
 | `03-Developpement/Administration, fiabilité et analytics.md` | Administration, fiabilité et analytics | decision | 191 | normative |
 | `03-Developpement/API Routes.md` | API Routes | empty-in-notion | 22 | à qualifier |
 | `03-Developpement/Discord Commands/Command - booster buy.md` | /booster buy | Live | 19 | à qualifier |

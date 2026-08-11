@@ -31,7 +31,7 @@ Dernière mise à jour : 11 août 2026.
 - Les 42 définitions d’objets Vault sont publiées avec leurs types, limites de pile, clés d’effet et métadonnées média.
 - Les 90 modèles de quêtes quotidiennes, 156 succès et 17 boss Vault sont publiés avec leurs règles, récompenses, métadonnées et relations aux mondes.
 - Les 17 images de boss sont stockées dans MinIO; le catalogue média contient désormais 2 489 ressources Vault.
-- `/quests` génère idempotemment trois quêtes personnelles par jour à 00:00 UTC et `/achievements` expose le catalogue ainsi que la progression du joueur.
+- `/quests` génère idempotemment trois quêtes personnelles par jour à 00:00 `Europe/Paris` et `/achievements` expose le catalogue ainsi que la progression du joueur.
 - Première tranche Discord exploration livrée : `/explore`, hub persistant, sélection privée du monde puis des routes proposées, rencontre publique multi-capture et résultat privé.
 - Sélection de route alignée sur le produit : deux zones gratuites et une premium en boutons, deck affiché dans le libellé, aucun écran de sélection de deck et bouton Objets avec reroll par Prisme.
 - Les rencontres n’affichent plus de `Capture hint` gratuitement; un Élixir de lucidité consommé depuis le bouton Objets révèle l’indice uniquement au joueur concerné.
@@ -69,6 +69,7 @@ Dernière mise à jour : 11 août 2026.
 - Supervision de production enrichie : état des serveurs, alertes de victoire de boss, avatars Discord web et notifications privées de quête/achievement/niveau après capture.
 - Déploiement VPS durci contre la saturation disque : nettoyage des images et caches inutilisés sans suppression des volumes, seuil minimal de 2 Gio, sauvegarde avant migration et health checks publics. Version `1aa68b1` confirmée healthy pour bot, web et API.
 - Politique obligatoire code ↔ Obsidian ajoutée dans `AGENTS.md`, le Vault et `DOCUMENTATION_WORKFLOW.md`; chaque fonctionnalité doit désormais synchroniser théorie, état courant et journal dans le même travail.
+- Quêtes multi-mondes corrigées : l’éligibilité compare la cible exacte de difficulté au nombre de mondes accessibles et la réconciliation remplace les quêtes actives impossibles, y compris celles ayant déjà commencé.
 
 ## En cours
 

@@ -45,7 +45,7 @@
 
 ## ADR-009 — Fuseaux
 
-- Décision : stockage UTC; reset des quêtes à minuit UTC. Les créneaux de gardiens utilisent par défaut `Europe/Brussels` tant qu’une configuration de guilde n’est pas validée.
+- Décision mise à jour : stockage UTC; reset des quêtes à minuit `Europe/Paris`, qui couvre l’heure civile de Paris et de la Belgique avec gestion automatique été/hiver. Les créneaux de gardiens utilisent le fuseau configuré par guilde.
 
 ## ADR-010 — Branche de reprise
 
@@ -121,3 +121,9 @@
 - Décision utilisateur : toute fonctionnalité ajoutée, modifiée ou supprimée met à jour la théorie Obsidian concernée pendant le même travail.
 - La page de domaine porte la règle, `État actuel de l'application` résume le déployé et `Journal de bord - Application` conserve la chronologie.
 - Une proposition non implémentée doit être étiquetée comme telle; elle ne peut pas rester mélangée au comportement de production.
+
+## ADR-022 — Éligibilité des quêtes multi-mondes
+
+- Une quête globale doit être réalisable avec les mondes effectivement accessibles au joueur au moment de la réconciliation quotidienne.
+- Pour `EXPLORE_DISTINCT_WORLDS`, le seuil d’éligibilité est la cible exacte après application de la difficulté, et non un minimum générique de deux mondes.
+- Toute quête active devenue impossible est remplacée dans son slot avant affichage ; elle ne verse aucune récompense et sa progression précédente n’est pas transférée.

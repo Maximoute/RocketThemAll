@@ -6,7 +6,7 @@
 | Les identités/actifs personnels sont globaux | modèle hybride explicitement demandé | faible, décision structurante |
 | Les états communautaires sont par guilde | conception du hub et des boss | faible |
 | Les notes Core V2/V3 priment sur les exports historiques | elles sont plus récentes et cohérentes | élevée via version de contenu |
-| UTC est utilisé pour stockage et quêtes quotidiennes | comportement déterministe multi-région | élevée pour l’affichage |
+| UTC est utilisé pour le stockage; la journée de quête est calculée dans `Europe/Paris` | comportement déterministe et minuit cohérent pour Paris/Belgique | élevée pour l’affichage |
 | Les probabilités utilisent des entiers en points de base ou millionièmes | évite les comparaisons flottantes ambiguës | élevée |
 | Le broker/cache partagé n’est pas encore choisi | l’interface de job doit rester portable | élevée |
 | Une zone premium se paie avec un Pass ou pour `prix du Pass + 50` crédits, sauf ouverture globale par la guilde | décision utilisateur et contrôle transactionnel existant | élevée |

@@ -1,6 +1,6 @@
 # Inventaire généré du contenu RTA
 
-> Généré par `npm run audit:vault` le 2026-08-11T04:42:13.281Z. Ne pas modifier à la main.
+> Généré par `npm run audit:vault` le 2026-08-11T15:57:05.880Z. Ne pas modifier à la main.
 
 ## Fichiers par zone
 

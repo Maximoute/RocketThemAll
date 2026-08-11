@@ -252,6 +252,22 @@ function difficultyAllowed(definition: QuestDefinition, difficulty: QuestDifficu
   return configured.length === 0 || configured.includes(difficulty);
 }
 
+export function requiredAccessibleWorldCount(
+  definition: Pick<QuestDefinition, "target" | "objectiveKey" | "metadata">,
+  difficulty: QuestDifficulty,
+  level: number
+) {
+  const metadata = record(definition.metadata);
+  if (definition.objectiveKey === "EXPLORE_DISTINCT_WORLDS") {
+    return questTargetForDifficulty(definition, difficulty, level);
+  }
+  const variant = String(metadata.objectiveVariant ?? "");
+  if (metadata.requiresMultipleWorlds === true || variant === "discoveries_across_two_worlds") {
+    return Math.max(2, positiveInteger(metadata.requiredWorldCount, 2));
+  }
+  return 1;
+}
+
 function questIsLive(
   definition: QuestDefinition,
   difficulty: QuestDifficulty,
@@ -263,11 +279,11 @@ function questIsLive(
   }
   if (!difficultyAllowed(definition, difficulty)) return false;
   const metadata = record(definition.metadata);
-  if (
-    capabilities.accessibleWorldCount < 2 &&
-    (metadata.requiresMultipleWorlds === true ||
-      definition.objectiveKey === "EXPLORE_DISTINCT_WORLDS")
-  ) {
+  if (capabilities.accessibleWorldCount < requiredAccessibleWorldCount(
+    definition,
+    difficulty,
+    level
+  )) {
     return false;
   }
   const feature = String(metadata.requiredFeature ?? "");
@@ -540,25 +556,6 @@ export class DailyQuestService {
     ]);
     if (!user) throw new AppError("Joueur introuvable.", 404);
     const level = user.progress?.level ?? user.level;
-    for (const quest of existing) {
-      const difficulty = DIFFICULTIES[quest.slot];
-      const snapshot = record(quest.rewardSnapshot);
-      if (difficulty && quest.status === "ACTIVE" && quest.progress === 0
-        && snapshot.difficulty !== difficulty) {
-        await prisma.userDailyQuest.update({
-          where: { id: quest.id },
-          data: {
-            targetSnapshot: questTargetForDifficulty(quest.definition, difficulty, level),
-            rewardSnapshot: rewardFor(quest.definition, difficulty, level),
-            version: { increment: 1 }
-          }
-        });
-      }
-    }
-    if (existing.length >= 3) {
-      await this.ensureNextRotation(now);
-      return existing;
-    }
 
     const rarityTotals = new Map<string, number>();
     for (const item of inventory) {
@@ -581,13 +578,64 @@ export class DailyQuestService {
       credits: user.credits,
       accessibleWorldCount: accessibleWorldRows.length
     };
-    const selectedIds = new Set(existing.map((quest) => quest.definitionId));
-    const selectedGroups = new Set(existing.map((quest) =>
+
+    const compatibleExisting: typeof existing = [];
+    for (const quest of existing) {
+      const difficulty = DIFFICULTIES[quest.slot];
+      if (quest.status === "EXPIRED") {
+        await prisma.userDailyQuest.deleteMany({ where: { id: quest.id, status: "EXPIRED" } });
+        continue;
+      }
+      if (
+        difficulty &&
+        quest.status === "ACTIVE" &&
+        capabilities.accessibleWorldCount < requiredAccessibleWorldCount(
+          quest.definition,
+          difficulty,
+          level
+        )
+      ) {
+        const removed = await prisma.userDailyQuest.deleteMany({
+          where: { id: quest.id, status: "ACTIVE" }
+        });
+        if (removed.count === 1) continue;
+        const refreshed = await prisma.userDailyQuest.findUnique({
+          where: { id: quest.id },
+          include: { definition: true }
+        });
+        if (refreshed) compatibleExisting.push(refreshed);
+        continue;
+      }
+      compatibleExisting.push(quest);
+    }
+
+    for (const quest of compatibleExisting) {
+      const difficulty = DIFFICULTIES[quest.slot];
+      const snapshot = record(quest.rewardSnapshot);
+      if (difficulty && quest.status === "ACTIVE" && quest.progress === 0
+        && snapshot.difficulty !== difficulty) {
+        await prisma.userDailyQuest.update({
+          where: { id: quest.id },
+          data: {
+            targetSnapshot: questTargetForDifficulty(quest.definition, difficulty, level),
+            rewardSnapshot: rewardFor(quest.definition, difficulty, level),
+            version: { increment: 1 }
+          }
+        });
+      }
+    }
+    if (compatibleExisting.length >= 3) {
+      await this.ensureNextRotation(now);
+      return compatibleExisting;
+    }
+
+    const selectedIds = new Set(compatibleExisting.map((quest) => quest.definitionId));
+    const selectedGroups = new Set(compatibleExisting.map((quest) =>
       String(record(quest.definition.metadata).similarityGroup ?? quest.definition.objectiveKey)
     ));
 
     for (let slot = 0; slot < 3; slot += 1) {
-      if (existing.some((quest) => quest.slot === slot)) continue;
+      if (compatibleExisting.some((quest) => quest.slot === slot)) continue;
       const difficulty = DIFFICULTIES[slot]!;
       const definition = definitions
         .filter((candidate) => !selectedIds.has(candidate.id))

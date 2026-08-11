@@ -14,7 +14,7 @@
 | Progression joueur | Niveaux, XP, 1 point de compétence par niveau | XP, niveaux et points persistés |
 | Compétences | 45 nœuds, trois branches de 15 | Arbre complet importé |
 | Progression guilde | Maîtrise, déblocages et gardiens | Progression par monde et guilde |
-| Quêtes | 3/jour, déterministes, expiration UTC, 90 modèles | 90 modèles importés, objectifs contextuels et récompenses automatiques |
+| Quêtes | 3/jour, déterministes, expiration à minuit Europe/Paris, 90 modèles | objectifs contextuels bornés par les mondes réellement accessibles, remplacement automatique des quêtes actives impossibles et récompenses automatiques |
 | Succès | 144 achievements permanents + 12 modèles générateurs | 156 définitions en BDD, progression durable, rattrapage historique et profils Discord/web |
 | Boss | 9 réguliers + 8 gardiens de progression | six tiers possibles dans chaque monde régulier, gardiens à tier fixe, difficulté/offrandes/fragments et récompenses Conquérant proportionnels |
 | Contrats | Recherche et don de doublons via la spécialisation Courtier | séquestre, expiration, transfert protégé et réseau intelligent privés |

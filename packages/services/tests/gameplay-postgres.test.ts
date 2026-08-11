@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@rta/database";
 import { AchievementService } from "../src/achievement.service.js";
-import { DailyQuestService } from "../src/daily-quest.service.js";
+import {
+  DailyQuestService,
+  dailyQuestWindow,
+  requiredAccessibleWorldCount
+} from "../src/daily-quest.service.js";
 import { RecycleService } from "../src/recycle.service.js";
 import { ConquerorRewardService } from "../src/conqueror-reward.service.js";
 import { CollectionContractService } from "../src/collection-contract.service.js";
@@ -131,6 +135,56 @@ suite("gameplay PostgreSQL integration", () => {
     expect(completed.status).toBe("CLAIMED");
     expect(progress.level).toBeGreaterThan(1);
     expect(ledger.balanceAfter - ledger.balanceBefore).toBe(ledger.delta);
+  });
+
+  it("replaces an active cross-world quest that the player cannot complete", async () => {
+    const now = new Date("2026-08-11T12:00:00.000Z");
+    const { dayKey, expiresAt } = dailyQuestWindow(now);
+    const definition = await prisma.questDefinition.findUniqueOrThrow({
+      where: { contentKey: "Q009" }
+    });
+    const user = await prisma.user.create({
+      data: {
+        discordId: `${prefix}-quest-repair`,
+        username: "Quest repair",
+        progress: { create: { level: 1, xp: 0 } }
+      }
+    });
+    userIds.push(user.id);
+    const guild = await prisma.guild.create({
+      data: {
+        discordId: `${prefix}-quest-guild`,
+        name: "Quest repair guild",
+        progress: { create: { unlockedWorldCount: 1 } },
+        members: { create: { userId: user.id } }
+      }
+    });
+    guildIds.push(guild.id);
+    const impossibleQuest = await prisma.userDailyQuest.create({
+      data: {
+        userId: user.id,
+        definitionId: definition.id,
+        dayKey,
+        slot: 1,
+        progress: 1,
+        targetSnapshot: 3,
+        rewardSnapshot: { difficulty: "NORMAL", xp: 125, credits: 100 },
+        contextSnapshot: { accessibleWorldIds: ["world-1"] },
+        expiresAt
+      }
+    });
+
+    const quests = await new DailyQuestService().ensureDailyQuestsForUser(user.id, now);
+    const replacement = quests.find((quest) => quest.slot === 1);
+    expect(replacement).toBeDefined();
+    expect(replacement?.id).not.toBe(impossibleQuest.id);
+    expect(replacement?.definitionId).not.toBe(definition.id);
+    expect(replacement?.progress).toBe(0);
+    expect(await prisma.userDailyQuest.findUnique({ where: { id: impossibleQuest.id } })).toBeNull();
+    for (const quest of quests) {
+      const difficulty = (["EASY", "NORMAL", "HARD"] as const)[quest.slot]!;
+      expect(requiredAccessibleWorldCount(quest.definition, difficulty, 1)).toBeLessThanOrEqual(1);
+    }
   });
 
   it("counts normal and special exploration events in achievements", async () => {

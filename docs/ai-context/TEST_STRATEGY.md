@@ -26,7 +26,7 @@ Même clé + même empreinte retourne le même résultat. Même clé + empreinte
 
 ### Temps
 
-- minuit UTC;
+- minuit `Europe/Paris`, y compris les transitions heure d’été/hiver;
 - changement d’heure Europe/Brussels;
 - interactions juste avant/après expiration;
 - worker en retard;

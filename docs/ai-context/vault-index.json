@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-11T04:42:13.281Z",
+  "generatedAt": "2026-08-11T15:57:05.880Z",
   "vaultRoot": "C:\\Users\\lecom\\OneDrive\\Developpement\\RocketThemAll\\Vault-RTA",
   "totals": {
     "files": 4812,
     "markdown": 2199,
     "assets": 2531,
-    "bytes": 747136090,
+    "bytes": 747139386,
     "uniqueCards": 810
   },
   "counts": {
@@ -7235,8 +7235,8 @@
     {
       "path": "00-Cockpit/Journal de bord - Application.md",
       "area": "00-Cockpit",
-      "bytes": 2754,
-      "lines": 62,
+      "bytes": 3455,
+      "lines": 74,
       "title": "Journal de bord - Application",
       "type": "application-changelog",
       "status": "active",
@@ -7254,6 +7254,10 @@
         {
           "level": 1,
           "title": "Journal de bord - Application"
+        },
+        {
+          "level": 2,
+          "title": "2026-08-11 — Réparation des quêtes multi-mondes impossibles"
         },
         {
           "level": 2,
@@ -7277,6 +7281,9 @@
         }
       ],
       "wikiLinks": [
+        "Quêtes",
+        "Q009",
+        "État actuel de l'application",
         "Économie des doublons",
         "Frontend Pages - Next.js",
         "Administration, fiabilité et analytics",
@@ -7284,7 +7291,7 @@
         "État actuel de l'application"
       ],
       "assetLinks": [],
-      "sha256": "a48163617e5a3451d69d34732726578a6244f81654b523dc0431e23b87889fe0"
+      "sha256": "91fd4c7817068fe7fd3535e6ed635021cbe76681f387e272f727a31b9c94a1e4"
     },
     {
       "path": "00-Cockpit/Rocket Them All.md",
@@ -7345,8 +7352,8 @@
     {
       "path": "00-Cockpit/État actuel de l'application.md",
       "area": "00-Cockpit",
-      "bytes": 3862,
-      "lines": 74,
+      "bytes": 4132,
+      "lines": 75,
       "title": "État actuel de l'application",
       "type": "application-status",
       "status": "live",
@@ -7408,7 +7415,7 @@
         "Items"
       ],
       "assetLinks": [],
-      "sha256": "bfb827a87254a88ec7197728eb8e9286177652647b75683fdd0d2e005564ee27"
+      "sha256": "8fa98a5cf20e02ea6e11127f78e64d4225350c794fef31694a3967a84d98a0b8"
     },
     {
       "path": "01-Vision & Gameplay/Arbres de compétences.md",
@@ -11637,8 +11644,8 @@
     {
       "path": "02-Contenu du jeu/Quêtes.md",
       "area": "02-Contenu du jeu",
-      "bytes": 40796,
-      "lines": 1837,
+      "bytes": 41401,
+      "lines": 1835,
       "title": "Système de quêtes quotidiennes",
       "type": "markdown",
       "frontmatter": {},
@@ -11921,7 +11928,7 @@
         },
         {
           "level": 3,
-          "title": "Quête terminée à 23:59:59 UTC"
+          "title": "Quête terminée à 23:59:59 Europe/Paris"
         },
         {
           "level": 3,
@@ -12006,7 +12013,7 @@
       ],
       "wikiLinks": [],
       "assetLinks": [],
-      "sha256": "ccd81345cc7fa2c3643738e6bb0683a89df217f690c8185069ea7301500eddbb"
+      "sha256": "d82d131647f673a3b4703657e5b97ae99db3acd85b902e8a501f25a43742f792"
     },
     {
       "path": "03-Developpement/Administration, fiabilité et analytics.md",
@@ -12801,13 +12808,14 @@
     {
       "path": "05-Marketing & Feedback/Marketing & Feedback.md",
       "area": "05-Marketing & Feedback",
-      "bytes": 301,
-      "lines": 11,
+      "bytes": 1586,
+      "lines": 36,
       "title": "Marketing & Feedback",
       "type": "notion-page",
       "frontmatter": {
         "type": "notion-page",
-        "source": "https://app.notion.com/p/3615b80afef78096914af40c672a5f58"
+        "source": "https://app.notion.com/p/3615b80afef78096914af40c672a5f58",
+        "last-updated": "2026-08-11"
       },
       "headings": [
         {
@@ -12817,11 +12825,15 @@
         {
           "level": 2,
           "title": "Role dans l'architecture"
+        },
+        {
+          "level": 2,
+          "title": "Message promotionnel — serveurs partenaires"
         }
       ],
       "wikiLinks": [],
       "assetLinks": [],
-      "sha256": "d74685f2192bf8b89426796ef9444ec1b1e5e0f196878c597e0e0bef0bee128f"
+      "sha256": "4f3581e518db54dc76729e9f30b482085d4c88a469c68551a7a27baad8d1a584"
     },
     {
       "path": "06-Brainstorm/Brainstorm.md",
@@ -100809,8 +100821,8 @@
     {
       "path": "10-BDD/Quetes/Q009.md",
       "area": "10-BDD",
-      "bytes": 2113,
-      "lines": 70,
+      "bytes": 2548,
+      "lines": 73,
       "title": "Q009 — Effectuer une exploration dans `{target}` mondes différents.",
       "type": "notion-bdd-row",
       "database": "BDD - Quetes",
@@ -100822,6 +100834,7 @@
         "source": "collection://3635b80a-fef7-811c-a8ee-000b6ea4579c",
         "quest_id": "Q009",
         "version": 1,
+        "last-updated": "2026-08-11",
         "categorie": "Explorations générales",
         "category_key": "GENERAL_EXPLORATION",
         "objective_type": "EXPLORE_DISTINCT_WORLDS",
@@ -100864,7 +100877,7 @@
       ],
       "wikiLinks": [],
       "assetLinks": [],
-      "sha256": "6a8ad7033bfe79b58def831685642300e056c93ee53d1543b382c21d67083197"
+      "sha256": "4eb9734f989feef845e74fc714b2bc2590079c8b6ca3bef864c6bccaffb7fc56"
     },
     {
       "path": "10-BDD/Quetes/Q010.md",

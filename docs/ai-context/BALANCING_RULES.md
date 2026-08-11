@@ -9,7 +9,8 @@
 - Un encens de tier porte ce tier à 50 % dans la distribution de rencontre et fixe, pour la run concernée, les chances de variante à 5 % Shiny et 1 % Holo.
 - Une capture réussie possède environ 10 % de chance de donner un consommable, puis le tier de l’objet est tiré séparément.
 - Chaque joueur possède quatre charges d’exploration; une charge se régénère toutes les cinq minutes, une par une. Les administrateurs explicitement marqués comme illimités ne consomment pas de charge.
-- Trois quêtes quotidiennes sont attribuées par joueur et par jour UTC.
+- Trois quêtes quotidiennes sont attribuées par joueur et par journée `Europe/Paris`.
+- Une quête de mondes distincts n’est éligible que si sa cible exacte est inférieure ou égale au nombre de mondes accessibles. Une attribution active incompatible avec ce nombre est remplacée automatiquement sans récompense.
 - Un joueur gagne un point de compétence par niveau.
 - Exactement deux artefacts au maximum sont équipés; les consommables de préparation utilisent un autre quota.
 - Un boss standard apparaît chaque jour à minuit dans le fuseau de la guilde et dure 24 heures. En parallèle, le gardien du monde apparaît dès que la maîtrise atteint 100 %, conserve toute sa progression et reste actif jusqu’à sa défaite.
