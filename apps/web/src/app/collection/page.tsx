@@ -182,6 +182,14 @@ export default async function CollectionPage({
             3 decks par page · cartes classées de Common à Black Market
           </p>
         </div>
+        {user && (
+          <a
+            href="/transmutation"
+            className="rounded-lg border border-rta-accentHi bg-rta-accentHi/15 px-4 py-2 text-sm font-black text-purple-200 hover:bg-rta-accentHi/25"
+          >
+            ⚛️ Réacteur d’Anomalies
+          </a>
+        )}
       </div>
 
       <CollectionFiltersClient

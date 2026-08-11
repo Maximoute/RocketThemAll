@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
+  accessibleQuestWorlds,
   dailyQuestWindow,
   questTargetForDifficulty,
 } from "../src/daily-quest.service.js";
+
+describe("daily quest accessible worlds", () => {
+  const worlds = Array.from({ length: 9 }, (_, index) => ({
+    position: index + 1,
+    minLevel: 1,
+    name: `Monde ${index + 1}`
+  }));
+
+  it("never assigns a locked published world", () => {
+    expect(accessibleQuestWorlds(worlds, 99, [1]).map((world) => world.position))
+      .toEqual([1]);
+    expect(accessibleQuestWorlds(worlds, 99, [2, 4]).map((world) => world.position))
+      .toEqual([1, 2, 3, 4]);
+  });
+
+  it("falls back to the first world when the player has no active guild", () => {
+    expect(accessibleQuestWorlds(worlds, 99, []).map((world) => world.position))
+      .toEqual([1]);
+  });
+});
 
 describe("daily quest Paris rotation", () => {
   it("ends at the next local midnight in summer", () => {

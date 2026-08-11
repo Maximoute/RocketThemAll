@@ -1,13 +1,26 @@
+import { createHash } from "node:crypto";
 import { Prisma, prisma } from "@rta/database";
 import { AppError } from "./errors.js";
 import {
-  FRAGMENT_REWARD_KEYS,
   RECYCLE_PRICE_KEYS,
   getEconomyConfig,
-  getFragmentReward,
   getRecyclePrice
 } from "./economy-config.js";
 import { assertCardCanLeaveCollection } from "./collection-protection.js";
+
+type RecycleVariant = "normal" | "shiny" | "holo";
+
+export function recycleFragmentRange(variant: RecycleVariant) {
+  if (variant === "holo") return { min: 400, max: 700 };
+  if (variant === "shiny") return { min: 50, max: 100 };
+  return { min: 3, max: 5 };
+}
+
+function deterministicFragmentReward(seed: string, variant: RecycleVariant) {
+  const { min, max } = recycleFragmentRange(variant);
+  const roll = createHash("sha256").update(seed).digest().readUInt32BE(0);
+  return min + (roll % (max - min + 1));
+}
 
 export class RecycleService {
   async getRecycleQuote(
@@ -23,35 +36,45 @@ export class RecycleService {
     }
     if (
       !(card.rarity.name in RECYCLE_PRICE_KEYS)
-      || !(card.rarity.name in FRAGMENT_REWARD_KEYS)
     ) {
       throw new AppError("Cette rareté ne peut pas être recyclée.", 409);
     }
 
     const config = await getEconomyConfig();
     const unitCredits = getRecyclePrice(config, card.rarity.name as keyof typeof import("./economy-config.js").RECYCLE_PRICE_KEYS);
-    const unitFragments = getFragmentReward(config, card.rarity.name as keyof typeof import("./economy-config.js").FRAGMENT_REWARD_KEYS);
     const credits = unitCredits * safeQuantity;
-    const fragments = unitFragments * safeQuantity;
-    const owned = await prisma.inventoryItem.aggregate({
+    const inventoryRows = await prisma.inventoryItem.findMany({
       where: {
         userId,
         cardId,
         ...(variant ? { variant } : {})
       },
-      _sum: { quantity: true }
+      orderBy: [{ variant: "asc" }, { quantity: "desc" }, { id: "asc" }]
     });
-    if ((owned._sum.quantity ?? 0) < safeQuantity) {
+    if (inventoryRows.reduce((sum, row) => sum + row.quantity, 0) < safeQuantity) {
       throw new AppError("Not enough cards in inventory", 409);
+    }
+    let remaining = safeQuantity;
+    let fragmentMin = 0;
+    let fragmentMax = 0;
+    for (const row of inventoryRows) {
+      const selected = Math.min(remaining, row.quantity);
+      const range = recycleFragmentRange(row.variant);
+      fragmentMin += selected * range.min;
+      fragmentMax += selected * range.max;
+      remaining -= selected;
+      if (remaining <= 0) break;
     }
     return {
       card,
       quantity: safeQuantity,
       variant: variant ?? null,
       unitCredits,
-      unitFragments,
+      unitFragments: Math.floor(fragmentMin / safeQuantity),
       credits,
-      fragments
+      fragments: fragmentMin,
+      fragmentMin,
+      fragmentMax
     };
   }
 
@@ -71,9 +94,7 @@ export class RecycleService {
       card,
       quantity: safeQuantity,
       unitCredits,
-      unitFragments,
-      credits,
-      fragments: baseFragments
+      credits
     } = quote;
     const operationKey = `card-recycle:${userId}:${idempotencyKey}`;
 
@@ -102,7 +123,6 @@ export class RecycleService {
           replayed: true
         };
       }
-      let fragments = baseFragments;
       const bonusSkill = await tx.userSkill.findFirst({
         where: {
           userId,
@@ -120,7 +140,6 @@ export class RecycleService {
         : {};
       const transmutationsToday = Math.max(0, Number(daily.transmutations ?? 0));
       const fragmentBonus = bonusSkill && transmutationsToday < 3 ? 1 : 0;
-      fragments += fragmentBonus;
 
       const inventoryRows = await tx.inventoryItem.findMany({
         where: {
@@ -147,10 +166,14 @@ export class RecycleService {
       });
 
       let remaining = safeQuantity;
+      const consumedVariants: RecycleVariant[] = [];
       for (const row of inventoryRows) {
         if (remaining <= 0) break;
         const remove = Math.min(remaining, row.quantity);
         remaining -= remove;
+        for (let index = 0; index < remove; index += 1) {
+          consumedVariants.push(row.variant);
+        }
         const consumed = await tx.inventoryItem.updateMany({
           where: { id: row.id, quantity: { gte: remove } },
           data: { quantity: { decrement: remove }, version: { increment: 1 } }
@@ -158,6 +181,14 @@ export class RecycleService {
         if (consumed.count !== 1) throw new AppError("Inventory changed concurrently", 409);
         await tx.inventoryItem.deleteMany({ where: { id: row.id, quantity: 0 } });
       }
+      let fragments = consumedVariants.reduce(
+        (sum, consumedVariant, index) => sum + deterministicFragmentReward(
+          `${operationKey}:${index}`,
+          consumedVariant
+        ),
+        0
+      );
+      fragments += fragmentBonus;
 
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`);
       const user = await tx.user.findUnique({ where: { id: userId } });
@@ -200,8 +231,10 @@ export class RecycleService {
         credits,
         fragments,
         unitCredits,
-        unitFragments
-        ,
+        fragmentRange: {
+          min: quote.fragmentMin,
+          max: quote.fragmentMax
+        },
         fragmentBonus
       };
       await tx.economicLedgerEntry.createMany({

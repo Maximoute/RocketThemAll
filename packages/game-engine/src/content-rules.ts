@@ -24,6 +24,9 @@ export const INCENSE_VARIANT_WEIGHTS: readonly WeightedValue<CardVariant>[] = [
   { value: "holo", weight: 10_000 }
 ];
 
+/** A tier incense is deliberately decisive: 95% of the rarity roll. */
+export const TIER_INCENSE_TARGET_PERCENT = 95;
+
 export const DANGER_RARITY_WEIGHTS: Readonly<
   Record<DangerProfile, readonly WeightedValue<CoreRarity>[]>
 > = {
@@ -116,17 +119,25 @@ export function rarityWeightsForDanger(
   boostedRarity?: CoreRarity | null
 ): readonly WeightedValue<CoreRarity>[] {
   const baseWeights = DANGER_RARITY_WEIGHTS[profile];
-  if (!boostedRarity || !baseWeights.some((entry) => entry.value === boostedRarity)) {
+  if (!boostedRarity) {
     return baseWeights;
   }
   const otherWeight = baseWeights.reduce(
     (total, entry) => total + (entry.value === boostedRarity ? 0 : entry.weight),
     0
   );
-  return baseWeights.map((entry) => ({
+  const targetWeight = Math.max(
+    1,
+    otherWeight * TIER_INCENSE_TARGET_PERCENT /
+      (100 - TIER_INCENSE_TARGET_PERCENT)
+  );
+  const boosted = baseWeights.map((entry) => ({
     value: entry.value,
-    weight: entry.value === boostedRarity ? otherWeight : entry.weight
+    weight: entry.value === boostedRarity ? targetWeight : entry.weight
   }));
+  return boosted.some((entry) => entry.value === boostedRarity)
+    ? boosted
+    : [...boosted, { value: boostedRarity, weight: targetWeight }];
 }
 
 /**
@@ -171,17 +182,25 @@ export function rarityWeightsForRoute(
   const baseWeights = premium
     ? applyPremiumRouteRarityBonus(DANGER_RARITY_WEIGHTS[profile])
     : DANGER_RARITY_WEIGHTS[profile];
-  if (!boostedRarity || !baseWeights.some((entry) => entry.value === boostedRarity)) {
+  if (!boostedRarity) {
     return baseWeights;
   }
   const otherWeight = baseWeights.reduce(
     (total, entry) => total + (entry.value === boostedRarity ? 0 : entry.weight),
     0
   );
-  return baseWeights.map((entry) => ({
+  const targetWeight = Math.max(
+    1,
+    otherWeight * TIER_INCENSE_TARGET_PERCENT /
+      (100 - TIER_INCENSE_TARGET_PERCENT)
+  );
+  const boosted = baseWeights.map((entry) => ({
     value: entry.value,
-    weight: entry.value === boostedRarity ? otherWeight : entry.weight
+    weight: entry.value === boostedRarity ? targetWeight : entry.weight
   }));
+  return boosted.some((entry) => entry.value === boostedRarity)
+    ? boosted
+    : [...boosted, { value: boostedRarity, weight: targetWeight }];
 }
 
 export function applyRarityWeightMultiplier(

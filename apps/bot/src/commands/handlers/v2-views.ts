@@ -12,6 +12,7 @@ import {
 import {
   BOSS_TIER_BALANCE,
   boosterSelectionRule,
+  itemResaleUnitPrice,
   MAX_SELECTED_ACHIEVEMENT_BADGES,
   nextDailyBossSlot,
   REGULAR_BOSS_TIER_WEIGHTS
@@ -26,6 +27,7 @@ import {
   conquerorRewardService,
   dailyQuestService,
   equipmentService,
+  itemShopService,
   prisma,
   renderQuestName,
   skillService,
@@ -511,6 +513,30 @@ export async function handleItems(
   const components: Array<
     ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>
   > = equipmentComponents(interaction.user.id, equipmentState, "items");
+  const sellableItems = items.filter((entry) => {
+    const metadata = objectRecord(entry.item.metadata);
+    return metadata.tradable === true && entry.item.type !== "SOUVENIR" &&
+      !(entry.item.type === "BOOSTER" && /^booster\.(basic|rare|epic|legendary)$/.test(
+        entry.item.contentKey
+      ));
+  });
+  if (sellableItems.length > 0 && components.length < 5) {
+    components.push(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(createInteractionToken("z", interaction.user.id))
+          .setPlaceholder("Vendre un objet spécial contre des crédits")
+          .addOptions(sellableItems.slice(0, 25).map((entry) => ({
+            label: entry.item.name.slice(0, 100),
+            value: entry.item.contentKey,
+            description: (
+              `+${itemResaleUnitPrice(entry.item.metadata).toLocaleString("fr-FR")} crédits · ` +
+              `${entry.quantity} disponible(s)`
+            ).slice(0, 100)
+          })))
+      )
+    );
+  }
   if ((currentBoosterCount > 0 || legacyBoosters.length > 0) && components.length < 5) {
     components.push(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -652,6 +678,24 @@ export async function handleItems(
     files,
     components
   });
+}
+
+export async function handleItemSale(
+  interaction: StringSelectMenuInteraction,
+  user: any,
+  contentKey: string
+) {
+  const result = await itemShopService.sellItem(
+    user.id,
+    contentKey,
+    1,
+    `discord:${interaction.id}`
+  );
+  await handleItems(
+    interaction,
+    user,
+    `✅ Objet vendu : **+${result.credits.toLocaleString("fr-FR")} crédits**.`
+  );
 }
 
 function conquerorTierLabel(tier: string) {
@@ -1572,6 +1616,7 @@ export async function handleBoss(
     const nextDailyTimestamp = Math.floor(nextDailySlot.getTime() / 1_000);
     const dailyValue = dailyRun
       ? `**${dailyRun.definition.name}**\n` +
+        `**Tier :** ${bossTierDescription(objectRecord(dailyRun.rewardSnapshot).conquerorTier, dailyRun.definition.kind)}\n` +
         `${bossProgressBar(dailyRun.progress, dailyRun.targetSnapshot)}\n` +
         `Expire <t:${Math.floor(dailyRun.endsAt.getTime() / 1_000)}:R>.`
       : guild.config?.regularBossEnabled === false
@@ -1579,6 +1624,7 @@ export async function handleBoss(
         : `Aucun boss journalier actif. Prochaine rotation <t:${nextDailyTimestamp}:R>.`;
     const guardianValue = guardianRun
       ? `**${guardianRun.definition.name}**\n` +
+        `**Tier :** ${bossTierDescription(objectRecord(guardianRun.rewardSnapshot).conquerorTier, guardianRun.definition.kind)}\n` +
         `${bossProgressBar(guardianRun.progress, guardianRun.targetSnapshot)}\n` +
         "♾️ Persistant : il reste actif jusqu’à sa défaite."
       : unlockedWorldCount >= 9

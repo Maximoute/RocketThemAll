@@ -1,25 +1,18 @@
+import Link from "next/link";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@rta/database";
 import { AdminEconomyService } from "@rta/services";
-import { randomUUID } from "node:crypto";
-import { requireAdmin } from "../../../lib/guard";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import DiscordAvatar from "../../../components/discord-avatar";
+import { requireAdmin } from "../../../lib/guard";
 
 const adminEconomyService = new AdminEconomyService();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const CARD_VARIANTS = new Set(["normal", "shiny", "holo"] as const);
-const MAX_ADMIN_QUANTITY = 1_000_000;
 
-function validUserId(value: FormDataEntryValue | null) {
-  const id = String(value ?? "").trim();
-  return UUID.test(id) ? id : null;
-}
-
-function boundedQuantity(value: FormDataEntryValue | null, fallback = 0) {
-  const parsed = Number(value ?? fallback);
-  return Number.isSafeInteger(parsed)
-    ? Math.min(MAX_ADMIN_QUANTITY, Math.max(0, parsed))
-    : fallback;
+function userIdFrom(formData: FormData) {
+  const value = String(formData.get("userId") ?? "").trim();
+  return UUID.test(value) ? value : null;
 }
 
 export default async function AdminUsersPage({
@@ -30,23 +23,46 @@ export default async function AdminUsersPage({
   const searchParams = await searchParamsPromise;
   const currentAdmin = await requireAdmin();
   const q = (searchParams.q ?? "").trim().slice(0, 64);
-  const roleFilter = ["all", "admin", "user"].includes(searchParams.role ?? "")
+  const role = ["all", "admin", "user"].includes(searchParams.role ?? "")
     ? searchParams.role!
     : "all";
+
+  async function quickBalance(formData: FormData) {
+    "use server";
+    const admin = await requireAdmin();
+    const userId = userIdFrom(formData);
+    const creditDelta = Math.trunc(Number(formData.get("creditDelta") ?? 0));
+    const fragmentDelta = Math.trunc(Number(formData.get("fragmentDelta") ?? 0));
+    if (!userId || !Number.isSafeInteger(creditDelta) || !Number.isSafeInteger(fragmentDelta)) {
+      redirect("/admin/users?error=Ajustement invalide");
+    }
+    let errorMessage = "";
+    try {
+      await adminEconomyService.adjustBalance({
+        adminId: admin.id,
+        userId,
+        creditDelta,
+        fragmentDelta,
+        reason: "Ajustement rapide depuis la carte joueur",
+        operationKey: `admin:${admin.id}:quick-balance:${randomUUID()}`
+      });
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : "Ajustement impossible";
+    }
+    if (errorMessage) redirect(`/admin/users?error=${encodeURIComponent(errorMessage)}`);
+    revalidatePath("/admin/users");
+    redirect("/admin/users?notice=Solde mis à jour et audité");
+  }
 
   async function toggleAdmin(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
-    const userId = validUserId(formData.get("userId"));
+    const userId = userIdFrom(formData);
     const nextValue = String(formData.get("nextValue") ?? "false") === "true";
     if (!userId || (userId === admin.id && !nextValue)) return;
-
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(9842072702)`;
-      const target = await tx.user.findUnique({
-        where: { id: userId },
-        select: { isAdmin: true }
-      });
+      const target = await tx.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
       if (!target || target.isAdmin === nextValue) return;
       if (!nextValue && await tx.user.count({ where: { isAdmin: true } }) <= 1) return;
       await tx.user.update({ where: { id: userId }, data: { isAdmin: nextValue } });
@@ -58,358 +74,129 @@ export default async function AdminUsersPage({
         }
       });
     });
-
     revalidatePath("/admin/users");
   }
 
-  async function toggleUnlimitedExplorations(formData: FormData) {
+  async function toggleUnlimited(formData: FormData) {
     "use server";
     const admin = await requireAdmin();
-    const userId = validUserId(formData.get("userId"));
+    const userId = userIdFrom(formData);
     const nextValue = String(formData.get("nextValue") ?? "false") === "true";
     if (!userId) return;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { unlimitedExplorations: nextValue }
-    });
-
+    await prisma.user.update({ where: { id: userId }, data: { unlimitedExplorations: nextValue } });
     await prisma.adminLog.create({
       data: {
         adminId: admin.id,
-        action: nextValue
-          ? "USER_UNLIMITED_EXPLORATIONS_GRANTED"
-          : "USER_UNLIMITED_EXPLORATIONS_REVOKED",
+        action: nextValue ? "USER_UNLIMITED_EXPLORATIONS_GRANTED" : "USER_UNLIMITED_EXPLORATIONS_REVOKED",
         target: userId
       }
     });
-
     revalidatePath("/admin/users");
   }
 
-  async function setBooster(formData: FormData) {
-    "use server";
-    const admin = await requireAdmin();
-    const userId = validUserId(formData.get("userId"));
-    if (!userId) return;
-    const safeBasic = boundedQuantity(formData.get("basicQuantity"));
-    const safeRare = boundedQuantity(formData.get("rareQuantity"));
-    const safeEpic = boundedQuantity(formData.get("epicQuantity"));
-    const safeLegendary = boundedQuantity(formData.get("legendaryQuantity"));
+  const users = await prisma.user.findMany({
+    where: {
+      ...(q ? {
+        OR: [
+          { username: { contains: q, mode: "insensitive" as const } },
+          { discordId: { contains: q } }
+        ]
+      } : {}),
+      ...(role === "admin" ? { isAdmin: true } : {}),
+      ...(role === "user" ? { isAdmin: false } : {})
+    },
+    orderBy: [{ isAdmin: "desc" }, { createdAt: "desc" }],
+    include: {
+      inventory: { select: { quantity: true } },
+      items: { where: { quantity: { gt: 0 } }, select: { quantity: true } },
+      _count: { select: { inventory: true, captureLogs: true, achievements: true } }
+    },
+    take: 200
+  });
 
-    await prisma.$transaction(async (tx) => {
-      await tx.userBooster.upsert({
-        where: { userId_boosterType: { userId, boosterType: "basic" } },
-        update: { quantity: safeBasic },
-        create: { userId, boosterType: "basic", quantity: safeBasic }
-      });
-      await tx.userBooster.upsert({
-        where: { userId_boosterType: { userId, boosterType: "rare" } },
-        update: { quantity: safeRare },
-        create: { userId, boosterType: "rare", quantity: safeRare }
-      });
-      await tx.userBooster.upsert({
-        where: { userId_boosterType: { userId, boosterType: "epic" } },
-        update: { quantity: safeEpic },
-        create: { userId, boosterType: "epic", quantity: safeEpic }
-      });
-      await tx.userBooster.upsert({
-        where: { userId_boosterType: { userId, boosterType: "legendary" } },
-        update: { quantity: safeLegendary },
-        create: { userId, boosterType: "legendary", quantity: safeLegendary }
-      });
-
-      // Keep legacy row zeroed to avoid old/new stock divergence.
-      await tx.booster.upsert({
-        where: { userId },
-        update: { basicQuantity: 0, rareQuantity: 0, epicQuantity: 0, quantity: 0 },
-        create: { userId, basicQuantity: 0, rareQuantity: 0, epicQuantity: 0, quantity: 0 }
-      });
-    });
-
-    await prisma.adminLog.create({
-      data: {
-        adminId: admin.id,
-        action: "BOOSTER_QUANTITY_UPDATED",
-        target: userId,
-        metadata: { basicQuantity: safeBasic, rareQuantity: safeRare, epicQuantity: safeEpic, legendaryQuantity: safeLegendary }
-      }
-    });
-
-    revalidatePath("/admin/users");
-  }
-
-  async function adjustEconomy(formData: FormData) {
-    "use server";
-    const admin = await requireAdmin();
-    const userId = validUserId(formData.get("userId"));
-    const creditDelta = Math.trunc(Number(formData.get("creditDelta") ?? 0));
-    const fragmentDelta = Math.trunc(Number(formData.get("fragmentDelta") ?? 0));
-    const reason = String(formData.get("reason") ?? "");
-    if (!userId) redirect("/admin/users?error=Identifiant joueur invalide.");
-    try {
-      await adminEconomyService.adjustBalance({
-        adminId: admin.id,
-        userId,
-        creditDelta,
-        fragmentDelta,
-        reason,
-        operationKey: `admin:${admin.id}:balance:${randomUUID()}`
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Ajustement impossible.";
-      redirect(`/admin/users?error=${encodeURIComponent(message)}`);
-    }
-    revalidatePath("/admin/users");
-    revalidatePath("/admin/economy");
-    redirect("/admin/users?notice=Solde mis à jour et audité.");
-  }
-
-  async function grantXp(formData: FormData) {
-    "use server";
-    const admin = await requireAdmin();
-    const userId = validUserId(formData.get("userId"));
-    const xp = Math.trunc(Number(formData.get("xp") ?? 0));
-    const reason = String(formData.get("reason") ?? "");
-    if (!userId) redirect("/admin/users?error=Identifiant joueur invalide.");
-    try {
-      await adminEconomyService.grantXp({
-        adminId: admin.id,
-        userId,
-        xp,
-        reason,
-        operationKey: `admin:${admin.id}:xp:${randomUUID()}`
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Don d’XP impossible.";
-      redirect(`/admin/users?error=${encodeURIComponent(message)}`);
-    }
-    revalidatePath("/admin/users");
-    redirect("/admin/users?notice=XP attribuée.");
-  }
-
-  async function grantItem(formData: FormData) {
-    "use server";
-    const admin = await requireAdmin();
-    const userId = validUserId(formData.get("userId"));
-    const itemKey = String(formData.get("itemKey") ?? "");
-    const quantity = Math.trunc(Number(formData.get("quantity") ?? 1));
-    const reason = String(formData.get("reason") ?? "");
-    if (!userId) redirect("/admin/users?error=Identifiant joueur invalide.");
-    try {
-      await adminEconomyService.grantItem({
-        adminId: admin.id,
-        userId,
-        itemKey,
-        quantity,
-        reason,
-        operationKey: `admin:${admin.id}:item:${randomUUID()}`
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Don d’objet impossible.";
-      redirect(`/admin/users?error=${encodeURIComponent(message)}`);
-    }
-    revalidatePath("/admin/users");
-    revalidatePath("/admin/inventories");
-    redirect("/admin/users?notice=Objet attribué.");
-  }
-
-  async function giveCard(formData: FormData) {
-    "use server";
-    const admin = await requireAdmin();
-    const userId = validUserId(formData.get("userId"));
-    const cardName = String(formData.get("cardName") ?? "").trim();
-    const rawVariant = String(formData.get("variant") ?? "normal");
-    const variant = CARD_VARIANTS.has(rawVariant as "normal" | "shiny" | "holo")
-      ? rawVariant as "normal" | "shiny" | "holo"
-      : null;
-    const quantity = Math.max(1, boundedQuantity(formData.get("quantity"), 1));
-
-    if (!userId || !cardName || cardName.length > 120 || !variant) return;
-
-    const card = await prisma.card.findFirst({
-      where: { name: { contains: cardName, mode: "insensitive" as const } }
-    });
-    if (!card) return;
-
-    await prisma.inventoryItem.upsert({
-      where: { userId_cardId_variant: { userId, cardId: card.id, variant } },
-      update: { quantity: { increment: quantity } },
-      create: { userId, cardId: card.id, variant, quantity }
-    });
-
-    await prisma.adminLog.create({
-      data: {
-        adminId: admin.id,
-        action: "CARD_GIVEN",
-        target: userId,
-        metadata: { cardId: card.id, cardName: card.name, variant, quantity }
-      }
-    });
-
-    revalidatePath("/admin/users");
-  }
-
-  const [users, itemCatalog] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        ...(q ? { OR: [{ username: { contains: q, mode: "insensitive" as const } }, { discordId: { contains: q } }] } : {}),
-        ...(roleFilter === "admin" ? { isAdmin: true } : {}),
-        ...(roleFilter === "user" ? { isAdmin: false } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      include: {
-        userBoosters: true,
-        inventory: {
-          select: {
-            quantity: true
-          }
-        },
-        _count: {
-          select: {
-            inventory: true,
-            captureLogs: true
-          }
-        }
-      }
-    }),
-    prisma.itemDefinition.findMany({
-      where: { status: "PUBLISHED" },
-      orderBy: [{ type: "asc" }, { name: "asc" }]
-    })
-  ]);
+  const buttonClass = "rounded-lg border border-rta-border bg-rta-bg px-2.5 py-1.5 text-xs font-bold text-rta-ink transition hover:border-rta-cta hover:text-rta-cta";
 
   return (
-    <div>
-      <h1 className="text-2xl font-black tracking-tight mb-1">Gestion Utilisateurs</h1>
-      <p className="text-rta-muted text-sm mb-6">Profils, rôles admin, boosters et économie. Voir inventaire via le lien dédié.</p>
-
-      {searchParams.notice && (
-        <p className="card" style={{ borderColor: "#22c55e", color: "#166534" }}>
-          {searchParams.notice}
-        </p>
-      )}
-      {searchParams.error && (
-        <p className="card" style={{ borderColor: "#ef4444", color: "#991b1b" }}>
-          {searchParams.error}
-        </p>
-      )}
-
-      <div className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
-        <form method="GET" style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-          <input
-            type="text"
-            name="q"
-            defaultValue={q}
-            placeholder="Rechercher par nom ou Discord ID..."
-            className="bg-rta-bg border border-rta-border rounded-lg px-3 py-2 text-sm text-rta-ink placeholder:text-rta-muted flex-1 min-w-[220px] focus:outline-none focus:border-rta-accentHi"
-          />
-          <select name="role" defaultValue={roleFilter} className="bg-rta-bg border border-rta-border rounded-lg px-3 py-2 text-sm text-rta-ink focus:outline-none focus:border-rta-accentHi">
-            <option value="all">Tous les rôles</option>
-            <option value="admin">Admins seulement</option>
-            <option value="user">Non-admins</option>
-          </select>
-          <button type="submit" className="px-4 py-2 rounded-lg bg-rta-cta text-rta-bg text-sm font-bold hover:bg-rta-cta/90 transition-colors">Filtrer</button>
-          {(q || roleFilter !== "all") && (
-            <a href="/admin/users" className="px-3 py-2 text-sm text-rta-muted hover:text-rta-ink transition-colors">Réinitialiser</a>
-          )}
-        </form>
-        <p className="mt-2 text-xs text-rta-muted">{users.length} utilisateur(s) trouvé(s)</p>
+    <section>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="mb-1 text-2xl font-black tracking-tight">Joueurs</h1>
+          <p className="text-sm text-rta-muted">Une vue rapide ici, tous les outils détaillés dans chaque profil.</p>
+        </div>
+        <span className="rounded-full border border-rta-border bg-rta-surface px-3 py-1 text-xs text-rta-muted">
+          {users.length} joueur(s)
+        </span>
       </div>
-      {users.map((user) => {
-        const boosterMap = new Map(user.userBoosters.map((b) => [b.boosterType, b.quantity]));
-        return (
-          <article key={user.id} className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-4">
-            <p><strong>{user.username}</strong> ({user.discordId})</p>
-            <p>Lv.{user.level} | XP {user.xp}</p>
-            <p>Admin: {user.isAdmin ? "oui" : "non"}</p>
-            <p>Explorations illimitées: {user.unlimitedExplorations ? "oui" : "non"}</p>
-            <p>Crédits: {user.credits} | Fragments: {user.fragments}</p>
-            <p>Boosters: basic {boosterMap.get("basic") ?? 0} | rare {boosterMap.get("rare") ?? 0} | epic {boosterMap.get("epic") ?? 0} | legendary {boosterMap.get("legendary") ?? 0}</p>
-            <p>Inventaire: {user._count.inventory} cartes uniques, {user.inventory.reduce((sum, i) => sum + i.quantity, 0)} cartes totales</p>
-            <p>Captures: {user._count.captureLogs}</p>
-            <p><a href={`/admin/inventories?userId=${user.id}`}>Voir/Gerer inventaire</a></p>
 
-            <form action={toggleAdmin} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-              <input type="hidden" name="userId" value={user.id} />
-              <input type="hidden" name="nextValue" value={String(!user.isAdmin)} />
-              <button
-                type="submit"
-                disabled={user.id === currentAdmin.id && user.isAdmin}
-                title={user.id === currentAdmin.id && user.isAdmin
-                  ? "Tu ne peux pas retirer tes propres droits admin."
-                  : undefined}
-              >
-                {user.isAdmin ? "Retirer admin" : "Rendre admin"}
-              </button>
-            </form>
+      {searchParams.notice && <p className="mb-4 rounded-xl border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-300">{searchParams.notice}</p>}
+      {searchParams.error && <p className="mb-4 rounded-xl border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-300">{searchParams.error}</p>}
 
-            <form action={toggleUnlimitedExplorations} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-              <input type="hidden" name="userId" value={user.id} />
-              <input type="hidden" name="nextValue" value={String(!user.unlimitedExplorations)} />
-              <button type="submit">
-                {user.unlimitedExplorations
-                  ? "Retirer les explorations illimitées"
-                  : "Donner les explorations illimitées"}
-              </button>
-            </form>
+      <form method="GET" className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-rta-border bg-rta-surface p-4">
+        <input name="q" defaultValue={q} placeholder="Pseudo ou identifiant Discord…" className="min-w-[240px] flex-1 rounded-lg border px-3 py-2 text-sm" />
+        <select name="role" defaultValue={role} className="rounded-lg border px-3 py-2 text-sm">
+          <option value="all">Tous les joueurs</option>
+          <option value="admin">Administrateurs</option>
+          <option value="user">Non-administrateurs</option>
+        </select>
+        <button className="rounded-lg bg-rta-cta px-4 py-2 text-sm font-black text-rta-bg">Rechercher</button>
+        {(q || role !== "all") && <Link href="/admin/users" className="px-2 text-sm text-rta-muted hover:text-rta-ink">Effacer</Link>}
+      </form>
 
-            <form action={setBooster} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-              <input type="hidden" name="userId" value={user.id} />
-              <input type="number" name="basicQuantity" min={0} defaultValue={boosterMap.get("basic") ?? 0} />
-              <input type="number" name="rareQuantity" min={0} defaultValue={boosterMap.get("rare") ?? 0} />
-              <input type="number" name="epicQuantity" min={0} defaultValue={boosterMap.get("epic") ?? 0} />
-              <input type="number" name="legendaryQuantity" min={0} defaultValue={boosterMap.get("legendary") ?? 0} />
-              <button type="submit">Mettre a jour boosters</button>
-            </form>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {users.map((user) => {
+          const totalCards = user.inventory.reduce((sum, row) => sum + row.quantity, 0);
+          return (
+            <article key={user.id} className="rounded-2xl border border-rta-border bg-rta-surface p-4 shadow-lg shadow-black/10">
+              <div className="flex items-start gap-3">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-rta-accentHi bg-rta-bg">
+                  <DiscordAvatar avatarUrl={user.avatarUrl} discordId={user.discordId} username={user.username} size={56} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="truncate text-base font-black">{user.username}</h2>
+                    {user.isAdmin && <span className="rounded-full bg-rta-cta/15 px-2 py-0.5 text-[10px] font-black uppercase text-rta-cta">Admin</span>}
+                    {user.unlimitedExplorations && <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-black uppercase text-violet-300">∞ explorations</span>}
+                  </div>
+                  <p className="truncate text-xs text-rta-muted">Discord {user.discordId}</p>
+                </div>
+                <Link href={`/admin/users/${user.id}`} className="rounded-lg bg-rta-accent px-3 py-2 text-xs font-black text-white hover:bg-rta-accentHi">Ouvrir le profil</Link>
+              </div>
 
-            <form action={adjustEconomy} style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
-              <input type="hidden" name="userId" value={user.id} />
-              <input type="number" name="creditDelta" defaultValue={0} placeholder="+/- crédits" required />
-              <input type="number" name="fragmentDelta" defaultValue={0} placeholder="+/- fragments" required />
-              <input type="text" name="reason" placeholder="Motif obligatoire" minLength={3} required />
-              <button type="submit">Ajouter / retirer</button>
-            </form>
+              <div className="my-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-lg bg-rta-bg p-2"><p className="text-[10px] uppercase text-rta-muted">Niveau</p><p className="font-black">{user.level}</p></div>
+                <div className="rounded-lg bg-rta-bg p-2"><p className="text-[10px] uppercase text-rta-muted">Crédits</p><p className="font-black text-rta-cta">{user.credits.toLocaleString("fr-FR")}</p></div>
+                <div className="rounded-lg bg-rta-bg p-2"><p className="text-[10px] uppercase text-rta-muted">Cartes</p><p className="font-black">{totalCards}</p></div>
+                <div className="rounded-lg bg-rta-bg p-2"><p className="text-[10px] uppercase text-rta-muted">Objets</p><p className="font-black">{user.items.length}</p></div>
+              </div>
 
-            <form action={grantXp} style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
-              <input type="hidden" name="userId" value={user.id} />
-              <input type="number" name="xp" min={1} defaultValue={100} required />
-              <input type="text" name="reason" placeholder="Motif du gain d’XP" minLength={3} required />
-              <button type="submit">Donner de l’XP</button>
-            </form>
-
-            <form action={grantItem} style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
-              <input type="hidden" name="userId" value={user.id} />
-              <select name="itemKey" required defaultValue="">
-                <option value="" disabled>Choisir un objet</option>
-                {itemCatalog.map((item) => (
-                  <option key={item.id} value={item.contentKey}>
-                    {item.name} · {item.type}
-                  </option>
+              <div className="flex flex-wrap items-center gap-2 border-t border-rta-border pt-3">
+                <span className="mr-1 text-xs text-rta-muted">Actions rapides :</span>
+                {[100, 1000].map((amount) => (
+                  <form action={quickBalance} key={amount}>
+                    <input type="hidden" name="userId" value={user.id} />
+                    <input type="hidden" name="creditDelta" value={amount} />
+                    <input type="hidden" name="fragmentDelta" value="0" />
+                    <button className={buttonClass}>+ {amount.toLocaleString("fr-FR")} crédits</button>
+                  </form>
                 ))}
-              </select>
-              <input type="number" name="quantity" min={1} defaultValue={1} required />
-              <input type="text" name="reason" placeholder="Motif du don" minLength={3} required />
-              <button type="submit">Donner l’objet</button>
-            </form>
-
-            <form action={giveCard} style={{ display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap", alignItems: "center" }}>
-              <input type="hidden" name="userId" value={user.id} />
-              <input type="text" name="cardName" placeholder="Nom de la carte" required style={{ minWidth: "180px" }} />
-              <select name="variant" style={{ padding: "4px 6px" }}>
-                <option value="normal">Normal</option>
-                <option value="shiny">Shiny ✨</option>
-                <option value="holo">Holo 🌈</option>
-              </select>
-              <input type="number" name="quantity" min={1} defaultValue={1} style={{ width: "60px" }} />
-              <button type="submit">🎁 Give carte</button>
-            </form>
-
-          </article>
-        );
-      })}
-    </div>
+                <Link href={`/admin/users/${user.id}#give-card`} className={buttonClass}>+ carte</Link>
+                <form action={toggleUnlimited}>
+                  <input type="hidden" name="userId" value={user.id} />
+                  <input type="hidden" name="nextValue" value={String(!user.unlimitedExplorations)} />
+                  <button className={buttonClass}>{user.unlimitedExplorations ? "Retirer ∞" : "Donner ∞"}</button>
+                </form>
+                <form action={toggleAdmin}>
+                  <input type="hidden" name="userId" value={user.id} />
+                  <input type="hidden" name="nextValue" value={String(!user.isAdmin)} />
+                  <button className={buttonClass} disabled={user.id === currentAdmin.id && user.isAdmin}>
+                    {user.isAdmin ? "Retirer admin" : "+ admin"}
+                  </button>
+                </form>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
-
-

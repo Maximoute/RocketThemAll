@@ -4,7 +4,7 @@ import { RecycleService, SellService } from "@rta/services";
 import { revalidatePath } from "next/cache";
 import { RARITIES } from "@rta/shared";
 import InventoryFiltersClient from "./filters.client";
-import { FRAGMENT_CHAIN, FRAGMENT_CRAFT_COST, getSourceRarityForTarget, getUserFragmentBalances, type FragmentRarity } from "../../lib/fragments";
+import { getUserFragmentBalances } from "../../lib/fragments";
 import { getDynamicCardValue, getDynamicCardValuesBatch, getUserInventoryValue } from "../../lib/economy";
 import { requireUser } from "../../lib/guard";
 import { cardVariantImageUrl } from "../../lib/card-variant";
@@ -46,26 +46,6 @@ type SearchParams = {
   order?: "asc" | "desc";
   page?: string;
 };
-
-const RECYCLE_PRICE_KEYS = {
-  Common: "commonRecyclePrice",
-  Uncommon: "uncommonRecyclePrice",
-  Rare: "rareRecyclePrice",
-  "Very Rare": "veryRareRecyclePrice",
-  Import: "importRecyclePrice",
-  Exotic: "exoticRecyclePrice",
-  "Black Market": "blackMarketRecyclePrice"
-} as const;
-
-const FRAGMENT_REWARD_KEYS = {
-  Common: "commonFragmentReward",
-  Uncommon: "uncommonFragmentReward",
-  Rare: "rareFragmentReward",
-  "Very Rare": "veryRareFragmentReward",
-  Import: "importFragmentReward",
-  Exotic: "exoticFragmentReward",
-  "Black Market": "blackMarketFragmentReward"
-} as const;
 
 export default async function InventoryPage({
   searchParams: searchParamsPromise
@@ -134,78 +114,6 @@ export default async function InventoryPage({
       item.variant,
       { confirmedLastCopy: formData.get("confirmedLastCopy") === "yes" }
     );
-
-    revalidatePath("/inventory");
-    revalidatePath("/profile");
-  }
-
-  async function craftCardFromFragments(formData: FormData) {
-    "use server";
-
-    const actionUser = await requireUser();
-
-    const targetRarity = String(formData.get("targetRarity") ?? "") as FragmentRarity;
-    if (!FRAGMENT_CHAIN.includes(targetRarity)) {
-      return;
-    }
-
-    const sourceRarity = getSourceRarityForTarget(targetRarity);
-    if (!sourceRarity) {
-      return;
-    }
-
-    const [sourceRarityRow, targetRarityRow] = await Promise.all([
-      prisma.rarity.findUnique({ where: { name: sourceRarity } }),
-      prisma.rarity.findUnique({ where: { name: targetRarity } })
-    ]);
-    if (!sourceRarityRow || !targetRarityRow) {
-      return;
-    }
-
-    const sourceBalance = await prisma.fragmentBalance.findUnique({
-      where: { userId_rarityId: { userId: actionUser.id, rarityId: sourceRarityRow.id } }
-    });
-    if (!sourceBalance || sourceBalance.quantity < FRAGMENT_CRAFT_COST) {
-      return;
-    }
-
-    const pool = await prisma.card.findMany({
-      where: {
-        rarityId: targetRarityRow.id,
-        source: "vault",
-        status: "PUBLISHED",
-        isActive: true
-      }
-    });
-    if (pool.length === 0) {
-      return;
-    }
-
-    const reward = pool[Math.floor(Math.random() * pool.length)];
-
-    await prisma.$transaction(async (tx) => {
-      await tx.fragmentBalance.update({
-        where: { userId_rarityId: { userId: actionUser.id, rarityId: sourceRarityRow.id } },
-        data: { quantity: { decrement: FRAGMENT_CRAFT_COST } }
-      });
-
-      await tx.user.update({ where: { id: actionUser.id }, data: { fragments: { decrement: FRAGMENT_CRAFT_COST } } });
-
-      await tx.inventoryItem.upsert({
-        where: { userId_cardId_variant: { userId: actionUser.id, cardId: reward.id, variant: "normal" } },
-        update: { quantity: { increment: 1 } },
-        create: { userId: actionUser.id, cardId: reward.id, variant: "normal", quantity: 1 }
-      });
-
-      await tx.transactionLog.create({
-        data: {
-          userId: actionUser.id,
-          type: "fragment_craft",
-          amount: 1,
-          metadata: { sourceRarity, targetRarity, cost: FRAGMENT_CRAFT_COST, rewardCardId: reward.id }
-        }
-      });
-    });
 
     revalidatePath("/inventory");
     revalidatePath("/profile");
@@ -330,11 +238,11 @@ export default async function InventoryPage({
         </div>
       </div>
 
-      {/* Fragment craft */}
+      {/* Fragment reactor */}
       <div className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-5">
-        <h2 className="text-sm font-bold mb-1">🔮 Craft de fragments</h2>
+        <h2 className="text-sm font-bold mb-1">⚛️ Réacteur d’Anomalies</h2>
         <p className="text-xs text-rta-muted mb-3">
-          {FRAGMENT_CRAFT_COST} fragments du tier inférieur = 1 carte du tier supérieur · Valeur inventaire: <strong className="text-rta-success">{totalInventoryValue}</strong> crédits
+          Fusionne 5 cartes précises, transforme 100 fragments en carte supérieure ou 50 fragments en booster · Valeur inventaire : <strong className="text-rta-success">{totalInventoryValue}</strong> crédits
         </p>
         <div className="flex gap-3 flex-wrap items-center">
           {fragmentBalances.map((row) => (
@@ -342,16 +250,9 @@ export default async function InventoryPage({
               {row.rarityName}: <strong className="text-rta-success">{row.quantity}</strong>
             </span>
           ))}
-          <form action={craftCardFromFragments} className="flex gap-2 items-center ml-auto">
-            <select name="targetRarity" defaultValue="Uncommon" className="bg-rta-bg border border-rta-border rounded-lg px-3 py-1.5 text-sm text-rta-ink">
-              {FRAGMENT_CHAIN.filter((r) => r !== "Common").map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <button type="submit" className="px-3 py-1.5 rounded-lg bg-rta-accent text-rta-ink text-sm font-bold hover:bg-rta-accentHi transition-colors">
-              Craft
-            </button>
-          </form>
+          <a href="/transmutation" className="ml-auto rounded-lg bg-rta-accent px-3 py-1.5 text-sm font-bold text-rta-ink hover:bg-rta-accentHi transition-colors">
+            Ouvrir le Réacteur
+          </a>
         </div>
       </div>
 

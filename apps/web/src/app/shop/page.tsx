@@ -8,6 +8,8 @@ import {
   formatEuro,
   getMonetizationProduct,
   ItemShopService,
+  itemResaleUnitPrice,
+  itemTechnicalDescription,
   MONETIZATION_PRODUCTS,
   MonetizationService,
   type MonetizationProductKey
@@ -37,6 +39,7 @@ type ShopMetadata = {
   acquisitionSource?: string | null;
   imageUrl?: string | null;
   category?: string | null;
+  tradable?: boolean;
 };
 
 type SearchParams = {
@@ -108,6 +111,29 @@ export default async function ShopPage({
     redirect("/shop?success=Achat%20confirm%C3%A9");
   }
 
+  async function sellCatalogItem(formData: FormData) {
+    "use server";
+
+    const actionUser = await requireUser();
+    const contentKey = String(formData.get("contentKey") ?? "");
+    let credits = 0;
+    try {
+      const result = await itemShopService.sellItem(
+        actionUser.id,
+        contentKey,
+        1,
+        `web-${randomUUID()}`
+      );
+      credits = result.credits;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Vente impossible";
+      redirect(`/shop?error=${encodeURIComponent(message)}`);
+    }
+    redirect(`/shop?success=${encodeURIComponent(
+      `Objet vendu pour ${credits.toLocaleString("fr-FR")} crédits`
+    )}`);
+  }
+
   const [definitions, ownedItems, ownedBoosters] = await Promise.all([
     prisma.itemDefinition.findMany({
       where: { status: "PUBLISHED" },
@@ -132,12 +158,14 @@ export default async function ShopPage({
   const boosterStock = new Map(ownedBoosters.map((row) => [row.boosterType, row.quantity]));
   const catalog = definitions.flatMap((definition) => {
     const metadata = asMetadata(definition.metadata);
-    const price = Number(metadata.creditPrice);
-    if (!Number.isSafeInteger(price) || price <= 0) return [];
+    const rawPrice = Number(metadata.creditPrice);
+    const price = Number.isSafeInteger(rawPrice) && rawPrice > 0 ? rawPrice : 0;
     const type = boosterType(definition.contentKey);
     const stock = definition.type === "BOOSTER"
       ? (type ? boosterStock.get(type) ?? 0 : 0)
       : itemStock.get(definition.id) ?? 0;
+    const sellableOwned = stock > 0 && metadata.tradable === true && definition.type !== "SOUVENIR";
+    if (price <= 0 && !sellableOwned) return [];
     return [{
       definition,
       metadata,
@@ -500,8 +528,15 @@ export default async function ShopPage({
               <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
                 {entries.map(({ definition, metadata, price, stock }) => {
                   const stockFull = definition.type !== "BOOSTER" && stock >= definition.maxStack;
-                  const canBuy = user.credits >= price && !stockFull;
+                  const canBuy = price > 0 && user.credits >= price && !stockFull;
                   const premium = definition.contentKey === "booster.legendary";
+                  const technicalDescription = itemTechnicalDescription(definition);
+                  const canSell =
+                    stock > 0 &&
+                    metadata.tradable === true &&
+                    definition.type !== "SOUVENIR" &&
+                    !(definition.type === "BOOSTER" && /^booster\.(basic|rare|epic|legendary)$/.test(definition.contentKey));
+                  const resalePrice = itemResaleUnitPrice(definition.metadata);
                   return (
                     <article
                       key={definition.contentKey}
@@ -532,9 +567,17 @@ export default async function ShopPage({
                         <p className="text-xs text-rta-muted mt-1 min-h-12">
                           {metadata.acquisitionSource || "Catalogue officiel RTA"}
                         </p>
+                        <div className="mt-3 min-h-24 rounded-lg border border-rta-border bg-rta-bg/50 p-3">
+                          <p className="text-[0.62rem] font-black uppercase tracking-widest text-rta-cta">
+                            Effet technique
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-rta-ink">
+                            {technicalDescription}
+                          </p>
+                        </div>
                         <div className="flex items-center justify-between gap-3 mt-4">
                           <span className={`text-lg font-black ${canBuy ? "text-rta-gold" : "text-rta-muted"}`}>
-                            ⚡ {price.toLocaleString("fr-FR")}
+                            {price > 0 ? `⚡ ${price.toLocaleString("fr-FR")}` : "Butin uniquement"}
                           </span>
                           <form action={buyCatalogItem}>
                             <input type="hidden" name="contentKey" value={definition.contentKey} />
@@ -549,13 +592,24 @@ export default async function ShopPage({
                                   : "bg-rta-surface2 text-rta-muted cursor-not-allowed"
                               ].join(" ")}
                             >
-                              {stockFull ? "Stock max" : canBuy ? "Acheter" : "Insuffisant"}
+                              {stockFull ? "Stock max" : canBuy ? "Acheter" : price <= 0 ? "Non achetable" : "Insuffisant"}
                             </button>
                           </form>
                         </div>
                         <p className="text-xs text-rta-muted mt-2">
                           En stock : {stock}{definition.type === "BOOSTER" ? "" : ` / ${definition.maxStack}`}
                         </p>
+                        {canSell && (
+                          <form action={sellCatalogItem} className="mt-2">
+                            <input type="hidden" name="contentKey" value={definition.contentKey} />
+                            <button
+                              type="submit"
+                              className="w-full rounded-lg border border-rta-gold/50 bg-rta-gold/10 px-3 py-1.5 text-xs font-bold text-rta-gold hover:bg-rta-gold/20"
+                            >
+                              Vendre 1 · +{resalePrice.toLocaleString("fr-FR")} crédits
+                            </button>
+                          </form>
+                        )}
                       </div>
                     </article>
                   );

@@ -218,9 +218,9 @@ export async function handleRecycleCardSelect(
     .setTitle("♻️ Confirmer le recyclage")
     .setDescription(
       `Tu vas détruire **1× ${entry.card.name}** [${variant}].\n\n` +
-      `Tu recevras exactement :\n` +
+      `Tu recevras :\n` +
       `💳 **${quote.credits} crédits**\n` +
-      `🧩 **${quote.fragments} fragments ${entry.card.rarity.name}**\n\n` +
+      `🧩 **${quote.fragmentMin}–${quote.fragmentMax} fragments ${entry.card.rarity.name}**\n\n` +
       `Stock restant après confirmation : **${entry.quantity - 1}**`
     )
     .setFooter({ text: "Cette action est définitive." });

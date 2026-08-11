@@ -9,6 +9,25 @@
     color: #F0ECF8;
     font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    background-color: #17131f;
+    border-color: #57476f;
+    color: #f0ecf8;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #aaa0bc;
+    opacity: 1;
+  }
+
+  select option {
+    background-color: #17131f;
+    color: #f0ecf8;
+  }
 }
 
 @layer components {

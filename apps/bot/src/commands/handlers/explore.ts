@@ -16,6 +16,7 @@ import {
   AppError,
   achievementService,
   archiveService,
+  dailyQuestService,
   discordAchievementRoleService,
   explorationEnergyService,
   exploreService,
@@ -65,6 +66,7 @@ import {
   handleContractOptIn,
   handleContracts,
   handleItems,
+  handleItemSale,
   handleQuests,
   handleSkills
 } from "./v2-views.js";
@@ -81,6 +83,114 @@ type EncounterInteractionPublisher = (
 type ExplorationEnergy = Awaited<
   ReturnType<typeof explorationEnergyService.getSnapshot>
 >;
+
+function jsonRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+async function captureProgressUpdates(input: {
+  userId: string;
+  eventId: string | null;
+  levelBefore: number;
+  unlockedAchievementIds: Set<string>;
+}) {
+  if (!input.eventId) return null;
+  const events = await prisma.outboxEvent.findMany({
+    where: { eventId: { in: [input.eventId, `${input.eventId}:exploration-event`] } },
+    orderBy: { createdAt: "asc" }
+  });
+  if (events.length === 0) return null;
+  for (const event of events) {
+    await dailyQuestService.processDomainEvent({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      aggregateId: event.aggregateId,
+      payload: event.payload
+    });
+  }
+  await achievementService.evaluateUser(input.userId);
+  const eventIds = events.map((event) => event.eventId);
+  const [quests, achievements, progress] = await Promise.all([
+    prisma.userDailyQuest.findMany({
+      where: {
+        userId: input.userId,
+        status: "CLAIMED",
+        eventApplications: { some: { eventId: { in: eventIds } } }
+      },
+      include: { definition: true },
+      orderBy: { claimedAt: "asc" }
+    }),
+    prisma.userAchievement.findMany({
+      where: {
+        userId: input.userId,
+        unlockedAt: { not: null },
+        ...(input.unlockedAchievementIds.size > 0
+          ? { achievementId: { notIn: [...input.unlockedAchievementIds] } }
+          : {})
+      },
+      include: { achievement: true },
+      orderBy: { unlockedAt: "asc" }
+    }),
+    prisma.userProgress.findUnique({ where: { userId: input.userId } })
+  ]);
+  const levelAfter = progress?.level ?? input.levelBefore;
+  if (quests.length === 0 && achievements.length === 0 && levelAfter <= input.levelBefore) {
+    return null;
+  }
+  return { quests, achievements, levelAfter };
+}
+
+async function sendCaptureProgressUpdate(
+  interaction: StringSelectMenuInteraction,
+  update: NonNullable<Awaited<ReturnType<typeof captureProgressUpdates>>>,
+  levelBefore: number
+) {
+  const embed = new EmbedBuilder()
+    .setColor(0xf1c40f)
+    .setTitle("🌟 Progression débloquée !")
+    .setDescription("Cette notification est privée : voici uniquement ce que ta capture vient d’accomplir.");
+  for (const quest of update.quests) {
+    const reward = jsonRecord(quest.rewardSnapshot);
+    embed.addFields({
+      name: `📜 Quête terminée · ${quest.definition.name}`,
+      value: `Récompense reçue : **${Math.max(0, Number(reward.credits ?? 0))} crédits** et **${Math.max(0, Number(reward.xp ?? 0))} XP**.`
+    });
+  }
+  for (const unlocked of update.achievements.slice(0, 5)) {
+    const reward = jsonRecord(unlocked.achievement.reward);
+    const metadata = jsonRecord(unlocked.achievement.metadata);
+    embed.addFields({
+      name: `🏅 Achievement · ${unlocked.achievement.name}`,
+      value: `${String(metadata.description ?? metadata.readableObjective ?? "Objectif accompli.")}\nBadge débloqué${Number(reward.points ?? 0) > 0 ? ` · **${Number(reward.points)} points**` : ""}.`
+    });
+  }
+  if (update.achievements.length > 5) {
+    embed.addFields({ name: "Autres achievements", value: `+${update.achievements.length - 5} autre(s) achievement(s) débloqué(s).` });
+  }
+  if (update.levelAfter > levelBefore) {
+    embed.addFields({
+      name: "🌳 Passage de niveau",
+      value: `Niveau **${levelBefore} → ${update.levelAfter}**. Tes nouveaux points de compétence sont disponibles.`
+    });
+  }
+  const buttons = new ActionRowBuilder<ButtonBuilder>();
+  if (update.quests.length > 0) {
+    buttons.addComponents(new ButtonBuilder().setCustomId(createInteractionToken("g", "quests")).setLabel("Voir mes quêtes").setEmoji("📜").setStyle(ButtonStyle.Primary));
+  }
+  if (update.achievements.length > 0) {
+    buttons.addComponents(new ButtonBuilder().setCustomId(createInteractionToken("g", "achievements")).setLabel("Voir mes achievements").setEmoji("🏅").setStyle(ButtonStyle.Secondary));
+  }
+  if (update.levelAfter > levelBefore) {
+    buttons.addComponents(new ButtonBuilder().setCustomId(createInteractionToken("g", "skills")).setLabel("Arbre de compétences").setEmoji("🌳").setStyle(ButtonStyle.Success));
+  }
+  await interaction.followUp({
+    ephemeral: true,
+    embeds: [embed],
+    components: buttons.components.length > 0 ? [buttons] : []
+  });
+}
 
 function explorationEnergyText(energy: ExplorationEnergy) {
   if (energy.isUnlimited) {
@@ -603,7 +713,7 @@ async function handleWorldSelect(
     `${interaction.id}:${boundUserId}`,
     boundUserId
   );
-  await interaction.update(zoneProposalPayload(
+  await interaction.update(await zoneProposalPayload(
     discordGuildId,
     boundUserId,
     worldPosition,
@@ -613,13 +723,45 @@ async function handleWorldSelect(
 
 type ZoneProposal = Awaited<ReturnType<typeof exploreService.proposeZones>>;
 
-function zoneProposalPayload(
+async function zoneProposalPayload(
   discordGuildId: string,
   boundUserId: string,
   worldPosition: number,
   proposal: ZoneProposal,
   notice?: string
 ) {
+  const now = new Date();
+  const activeEffects = await prisma.userItemEffect.findMany({
+    where: {
+      user: { discordId: boundUserId },
+      effectKey: { in: ["EXP_TIER_WEIGHT_BOOST", "EXP_DECK_WEIGHT_BOOST"] },
+      remainingUses: { gt: 0 },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
+    }
+  });
+  const tierEffect = activeEffects.find((effect) =>
+    effect.effectKey === "EXP_TIER_WEIGHT_BOOST"
+  );
+  const affinityEffect = activeEffects.find((effect) =>
+    effect.effectKey === "EXP_DECK_WEIGHT_BOOST"
+  );
+  const affinityDeck = affinityEffect?.targetKey
+    ? await prisma.deck.findUnique({
+        where: { id: affinityEffect.targetKey },
+        select: { name: true }
+      })
+    : null;
+  const activeBoost = [
+    tierEffect
+      ? `🕯️ **SURCHARGE ENCENS ACTIVE · ${tierEffect.targetKey}**\n` +
+        `**95 %** de chance de ce tier · **5 % Shiny** · **1 % Holo** · ` +
+        `encore **${tierEffect.remainingUses}** exploration(s)`
+      : null,
+    affinityEffect
+      ? `🧲 **Affinité active · ${affinityDeck?.name ?? "deck choisi"}**\n` +
+        `Poids du deck **×2** · encore **${affinityEffect.remainingUses}** exploration(s)`
+      : null
+  ].filter(Boolean).join("\n\n");
   const positions = proposal.proposals.map((entry) => entry.zone.position);
   const embed = new EmbedBuilder()
     .setColor(HUB_COLOR)
@@ -629,6 +771,7 @@ function zoneProposalPayload(
         entry.zone.access === "FREE"
       ).length} gratuites et 1 premium**.\n` +
       "La zone choisie détermine directement son deck." +
+      (activeBoost ? `\n\n${activeBoost}` : "") +
       (notice ? `\n\n${notice}` : "")
     )
     .addFields(proposal.proposals.map((entry, index) => ({
@@ -818,9 +961,9 @@ async function handleZoneButton(
         ? `💳 ${selection.premiumCreditCost} crédit(s) ont été payés.`
         : null,
     result.tierIncense
-      ? `🕯️ Encens ${result.tierIncense.targetRarity} actif : ` +
+      ? `🕯️ **SURCHARGE ENCENS ${result.tierIncense.targetRarity} APPLIQUÉE** : ` +
         `${result.tierIncense.remainingUses} exploration(s) restante(s) · ` +
-        "tier ciblé à 50 % · Shiny 5 % · Holo 1 %."
+        "**tier ciblé à 95 %** · **Shiny 5 %** · **Holo 1 %**."
       : null,
     result.archiveResonance
       ? `🏛️ Résonance d'archives ${result.archiveResonance.type === "DECK" ? "de deck" : "de tier"} : ` +
@@ -1155,10 +1298,10 @@ async function handleItemsButton(
           `Rare ${quantities.get("consumable.rare_incense") ?? 0} • ` +
           `Très rare ${quantities.get("consumable.very_rare_incense") ?? 0}` +
           (activeIncense
-            ? `\n\n🕯️ **Encens ${activeIncense.targetKey} actif** — ` +
+            ? `\n\n🕯️ **SURCHARGE ENCENS ACTIVE · ${activeIncense.targetKey}** — ` +
               `${activeIncense.remainingUses} exploration(s) restante(s).\n` +
-              "**Effet :** tier ciblé à 50 % · Shiny 5 % · Holo 1 %."
-            : "\n\nActive un Encens pour mettre son tier à 50 % pendant 3 explorations " +
+              "**Effet : 95 % sur le tier ciblé** · Shiny 5 % · Holo 1 %."
+            : "\n\nActive un Encens pour mettre son tier à 95 % pendant 3 explorations " +
               "et passer les variantes à 5 % Shiny / 1 % Holo.")
         )
         .setFooter({
@@ -1193,7 +1336,7 @@ async function handleRerollButton(
     seed: interaction.id,
     operationKey: `discord:${interaction.id}:route-reroll`
   });
-  await interaction.editReply(zoneProposalPayload(
+  await interaction.editReply(await zoneProposalPayload(
     discordGuildId,
     boundUserId,
     worldPosition,
@@ -1297,13 +1440,13 @@ async function handleTierIncenseButton(
     worldPosition,
     zonePositions
   );
-  await interaction.editReply(zoneProposalPayload(
+  await interaction.editReply(await zoneProposalPayload(
     discordGuildId,
     boundUserId,
     worldPosition,
     proposal,
-    `🕯️ Encens **${activation.targetRarity}** activé pour ` +
-      `${activation.remainingUses} explorations.`
+    `🕯️ **SURCHARGE ${activation.targetRarity} ACTIVÉE** pour ` +
+      `${activation.remainingUses} explorations · **95 % tier** · **5 % Shiny** · **1 % Holo**.`
   ));
 }
 
@@ -1320,7 +1463,7 @@ async function handleBackToZones(
     worldPosition,
     zonePositions
   );
-  await interaction.update(zoneProposalPayload(
+  await interaction.update(await zoneProposalPayload(
     discordGuildId,
     boundUserId,
     worldPosition,
@@ -1692,12 +1835,32 @@ async function handleAnswerSelect(
     interaction.user.username,
     interaction.user.displayAvatarURL()
   );
+  const unlockedBefore = await prisma.userAchievement.findMany({
+    where: { userId: user.id, unlockedAt: { not: null } },
+    select: { achievementId: true }
+  });
+  const levelBefore = user.level;
   const result = await exploreService.submitAttempt({
     encounterId,
     userId: user.id,
     selectedCardId: interaction.values[0]!,
     operationKey: `discord:${interaction.id}`
   });
+  const progressUpdatePromise = result.alreadySubmitted
+    ? Promise.resolve(null)
+    : captureProgressUpdates({
+        userId: user.id,
+        eventId: result.attempt.rewardEventId,
+        levelBefore,
+        unlockedAchievementIds: new Set(unlockedBefore.map((entry) => entry.achievementId))
+      }).catch((error) => {
+        console.error("Unable to prepare private capture progression update", {
+          userId: user.id,
+          captureAttemptId: result.attempt.id,
+          error
+        });
+        return null;
+      });
   await wait(1_000);
   await interaction.editReply({ embeds: [captureCountdownEmbed(2)], components: [] });
   await wait(1_000);
@@ -1796,6 +1959,10 @@ async function handleAnswerSelect(
       cardId: result.card.id,
       variant: result.attempt.variant
     });
+  }
+  const progressUpdate = await progressUpdatePromise;
+  if (progressUpdate) {
+    await sendCaptureProgressUpdate(interaction, progressUpdate, levelBefore);
   }
 }
 
@@ -2079,6 +2246,17 @@ export async function handleRtaButton(interaction: ButtonInteraction) {
 
 export async function handleRtaSelect(interaction: StringSelectMenuInteraction) {
   const token = parseInteractionToken(interaction.customId);
+  if (token.action === "z") {
+    requireBoundUser(token.parts[0]!, interaction.user.id);
+    await interaction.deferUpdate();
+    const user = await usersService.getOrCreateDiscordUser(
+      interaction.user.id,
+      interaction.user.username,
+      interaction.user.displayAvatarURL()
+    );
+    await handleItemSale(interaction, user, interaction.values[0]!);
+    return;
+  }
   if (token.action === "K") {
     await handleBossCardSelect(interaction, token.parts);
     return;
@@ -2191,7 +2369,7 @@ export async function handleRtaSelect(interaction: StringSelectMenuInteraction) 
       worldPosition,
       zonePositions
     );
-    await interaction.editReply(zoneProposalPayload(
+    await interaction.editReply(await zoneProposalPayload(
       token.parts[0]!,
       token.parts[1]!,
       worldPosition,

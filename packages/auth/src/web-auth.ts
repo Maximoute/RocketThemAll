@@ -54,7 +54,7 @@ export const authOptions: NextAuthOptions = {
         return false;
       }
       const username = String(p.username ?? "unknown");
-      const avatar = p.avatar ? `https://cdn.discordapp.com/avatars/${discordId}/${p.avatar}.png` : undefined;
+      const avatar = p.avatar ? `https://cdn.discordapp.com/avatars/${discordId}/${p.avatar}.png` : null;
       await prisma.user.upsert({
         where: { discordId },
         update: { username, avatarUrl: avatar },
@@ -77,10 +77,12 @@ export const authOptions: NextAuthOptions = {
       if (isDiscordSnowflake(token.sub)) {
         const user = await prisma.user.findUnique({
           where: { discordId: token.sub },
-          select: { id: true, isAdmin: true }
+          select: { id: true, isAdmin: true, username: true, avatarUrl: true }
         });
         token.userId = user?.id;
         token.isAdmin = user?.isAdmin ?? false;
+        token.name = user?.username ?? token.name;
+        token.picture = user?.avatarUrl ?? null;
       } else {
         token.userId = undefined;
         token.isAdmin = false;

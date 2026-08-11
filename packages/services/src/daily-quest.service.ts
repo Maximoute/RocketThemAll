@@ -40,6 +40,7 @@ interface PlayerCapabilities {
   boosterCount: number;
   canFuse: boolean;
   credits: number;
+  accessibleWorldCount: number;
 }
 
 const DIFFICULTIES: QuestDifficulty[] = ["EASY", "NORMAL", "HARD"];
@@ -262,6 +263,13 @@ function questIsLive(
   }
   if (!difficultyAllowed(definition, difficulty)) return false;
   const metadata = record(definition.metadata);
+  if (
+    capabilities.accessibleWorldCount < 2 &&
+    (metadata.requiresMultipleWorlds === true ||
+      definition.objectiveKey === "EXPLORE_DISTINCT_WORLDS")
+  ) {
+    return false;
+  }
   const feature = String(metadata.requiredFeature ?? "");
   if (feature === "boosters" && capabilities.boosterCount <= 0 && capabilities.credits < 1_000) {
     return false;
@@ -279,6 +287,20 @@ type QuestTargetPool = Array<{
   position: number;
   zones: Array<{ id: string; name: string; access: string }>;
 }>;
+
+export function accessibleQuestWorlds<
+  T extends { position: number; minLevel: number }
+>(worlds: T[], level: number, unlockedWorldCounts: number[]) {
+  const highestUnlocked = Math.max(
+    1,
+    ...unlockedWorldCounts.map((count) =>
+      Number.isSafeInteger(count) ? Math.max(1, count) : 1
+    )
+  );
+  return worlds.filter((world) =>
+    world.minLevel <= Math.max(1, level) && world.position <= highestUnlocked
+  );
+}
 
 function deterministicIndex(seed: string, length: number) {
   return length <= 1 ? 0 : Math.floor(deterministicUnit(seed) * length) % length;
@@ -467,7 +489,7 @@ export class DailyQuestService {
       data: { expiresAt, version: { increment: 1 } }
     });
 
-    const [user, existing, definitions, boosters, inventory, worldRows] = await Promise.all([
+    const [user, existing, definitions, boosters, inventory, worldRows, memberships] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         include: { progress: true }
@@ -500,6 +522,20 @@ export class DailyQuestService {
           }
         },
         orderBy: { position: "asc" }
+      }),
+      prisma.guildMember.findMany({
+        where: {
+          userId,
+          isActive: true,
+          guild: { isActive: true }
+        },
+        select: {
+          guild: {
+            select: {
+              progress: { select: { unlockedWorldCount: true } }
+            }
+          }
+        }
       })
     ]);
     if (!user) throw new AppError("Joueur introuvable.", 404);
@@ -531,11 +567,19 @@ export class DailyQuestService {
         (rarityTotals.get(item.card.rarityId) ?? 0) + item.quantity
       );
     }
+    const accessibleWorldRows = accessibleQuestWorlds(
+      worldRows,
+      level,
+      memberships.map((membership) =>
+        membership.guild.progress?.unlockedWorldCount ?? 1
+      )
+    );
     const capabilities: PlayerCapabilities = {
       inventoryCount: inventory.reduce((sum, item) => sum + item.quantity, 0),
       boosterCount: boosters.reduce((sum, booster) => sum + booster.quantity, 0),
       canFuse: [...rarityTotals.values()].some((quantity) => quantity >= 6),
-      credits: user.credits
+      credits: user.credits,
+      accessibleWorldCount: accessibleWorldRows.length
     };
     const selectedIds = new Set(existing.map((quest) => quest.definitionId));
     const selectedGroups = new Set(existing.map((quest) =>
@@ -578,8 +622,7 @@ export class DailyQuestService {
             definition,
             userId,
             dayKey,
-            worldRows
-              .filter((world) => world.minLevel <= level)
+            accessibleWorldRows
               .map((world) => ({
                 id: world.id,
                 name: world.name,

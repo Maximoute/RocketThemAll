@@ -19,6 +19,7 @@ import { registerLevelRoleSynchronization } from "../level-role-sync.js";
 import { resolveCommandChannelDecision } from "../commands/channel-policy.js";
 import { registerHallOfFameSynchronization } from "../commands/hall-of-fame.js";
 import { registerBossAnnouncementSynchronization } from "../boss-announcements.js";
+import { registerServerStatusSynchronization } from "../server-status.js";
 
 const privateCommands = new Set([
   "explore",
@@ -46,6 +47,7 @@ export function registerClientEvents(client: Client, configService: ConfigServic
     await resumePendingEncounterPublications(readyClient);
     registerHallOfFameSynchronization(readyClient);
     registerBossAnnouncementSynchronization(readyClient);
+    registerServerStatusSynchronization(readyClient);
     await syncDiscordMonetization(readyClient).catch((error) => {
       console.error("Discord monetization synchronization failed", error);
     });

@@ -1,6 +1,6 @@
 import { prisma } from "@rta/database";
 
-export const FRAGMENT_CRAFT_COST = 50;
+export const FRAGMENT_CRAFT_COST = 100;
 
 export const FRAGMENT_CHAIN = [
   "Common",

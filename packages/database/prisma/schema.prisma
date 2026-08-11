@@ -708,6 +708,9 @@ model GuildConfiguration {
   hallOfFameEnabled        Boolean  @default(false)
   bossAnnouncementChannelId String?
   bossAnnouncementEnabled  Boolean  @default(false)
+  serverStatusChannelId     String?
+  serverStatusEnabled       Boolean  @default(false)
+  serverStatusMessageId     String?
   progressionBossEnabled   Boolean  @default(true)
   progressionBossWeekday   Int      @default(0)
   progressionBossLocalTime String   @default("18:00")
@@ -1362,6 +1365,8 @@ model BossRun {
   rewardSnapshot     Json
   channelId          String?
   messageId          String?
+  victoryChannelId   String?
+  victoryMessageId   String?
   scheduledAt        DateTime
   startsAt           DateTime
   endsAt             DateTime
@@ -1380,6 +1385,7 @@ model BossRun {
   @@index([guildId, status])
   @@index([guildId, isPersistent, status])
   @@index([status, startsAt, endsAt])
+  @@index([status, victoryMessageId])
 }
 
 model BossContribution {

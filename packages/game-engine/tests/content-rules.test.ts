@@ -5,6 +5,7 @@ import {
   INCENSE_VARIANT_WEIGHTS,
   VARIANT_WEIGHTS,
   PREMIUM_ROUTE_RARITY_UPGRADE_PERCENT,
+  TIER_INCENSE_TARGET_PERCENT,
   applyRarityWeightMultiplier,
   applyPremiumRouteRarityBonus,
   rarityWeightsForDanger,
@@ -49,7 +50,7 @@ describe("content rules", () => {
     expect(rollRarityForDanger("Extreme", () => 0.95)).toBe("Black Market");
   });
 
-  it("sets an incense tier to exactly 50 percent when the tier is present", () => {
+  it("sets an incense tier to exactly 95 percent", () => {
     for (const [profile, baseWeights] of Object.entries(DANGER_RARITY_WEIGHTS)) {
       for (const boosted of baseWeights) {
         const weights = rarityWeightsForDanger(
@@ -58,17 +59,21 @@ describe("content rules", () => {
         );
         const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
         const boostedWeight = weights.find((entry) => entry.value === boosted.value)?.weight ?? 0;
-        expect(boostedWeight / total).toBe(0.5);
+        expect(boostedWeight / total).toBe(TIER_INCENSE_TARGET_PERCENT / 100);
       }
     }
   });
 
-  it("does not add an incense tier that is absent from the danger profile", () => {
+  it("adds an incense tier even when it is absent from the danger profile", () => {
     const calm = rarityWeightsForDanger("Calm", "Very Rare");
-    expect(calm).toEqual(DANGER_RARITY_WEIGHTS.Calm);
+    const calmTotal = calm.reduce((sum, entry) => sum + entry.weight, 0);
+    expect((calm.find((entry) => entry.value === "Very Rare")?.weight ?? 0) / calmTotal)
+      .toBe(TIER_INCENSE_TARGET_PERCENT / 100);
 
     const dangerous = rarityWeightsForDanger("Dangerous", "Rare");
-    expect(dangerous.find((entry) => entry.value === "Rare")?.weight).toBe(55);
+    const dangerousTotal = dangerous.reduce((sum, entry) => sum + entry.weight, 0);
+    expect((dangerous.find((entry) => entry.value === "Rare")?.weight ?? 0) / dangerousTotal)
+      .toBe(TIER_INCENSE_TARGET_PERCENT / 100);
     expect(rollRarityForDangerWithBoost("Dangerous", "Rare", () => 0.2)).toBe("Rare");
   });
 
@@ -106,11 +111,11 @@ describe("content rules", () => {
     }
   });
 
-  it("keeps an incense target at exactly 50 percent on a premium route", () => {
+  it("keeps an incense target at exactly 95 percent on a premium route", () => {
     const weights = rarityWeightsForRoute("Calm", true, "Rare");
     const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
     const rare = weights.find((entry) => entry.value === "Rare")?.weight ?? 0;
-    expect(rare / total).toBe(0.5);
+    expect(rare / total).toBe(TIER_INCENSE_TARGET_PERCENT / 100);
   });
 });
 

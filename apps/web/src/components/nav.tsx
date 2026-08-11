@@ -57,6 +57,7 @@ export default function Nav() {
         {link("/skills", "Compétences", true)}
         {link("/achievements", "Achievements", true)}
         {link("/collection", "Collection", false, true)}
+        {link("/transmutation", "Réacteur", true)}
         {link("/shop?section=premium", "Boutique €", true)}
         {session?.user?.isAdmin === true && link("/admin", "Admin", true)}
       </nav>

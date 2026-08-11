@@ -58,6 +58,10 @@ export default async function AdminServersPage() {
     const bossAnnouncementEnabled =
       String(formData.get("bossAnnouncementEnabled") ?? "") === "on" &&
       Boolean(bossAnnouncementChannelId);
+    const requestedServerStatusChannelId =
+      String(formData.get("serverStatusChannelId") ?? "").trim() || null;
+    const requestedServerStatusEnabled =
+      String(formData.get("serverStatusEnabled") ?? "") === "on";
     const isActive = String(formData.get("isActive") ?? "") === "on";
     if (!DISCORD_SNOWFLAKE.test(discordId)) return;
     if (gameChannelId && !DISCORD_SNOWFLAKE.test(gameChannelId)) return;
@@ -66,6 +70,7 @@ export default async function AdminServersPage() {
       !DISCORD_SNOWFLAKE.test(requestedHallOfFameChannelId)
     ) return;
     if (bossAnnouncementChannelId && !DISCORD_SNOWFLAKE.test(bossAnnouncementChannelId)) return;
+    if (requestedServerStatusChannelId && !DISCORD_SNOWFLAKE.test(requestedServerStatusChannelId)) return;
 
     await prisma.$transaction(async (tx) => {
       const guild = await tx.guild.findUnique({
@@ -79,10 +84,17 @@ export default async function AdminServersPage() {
       const hallOfFameEnabled = Boolean(
         guild.isPrimary && requestedHallOfFameEnabled && hallOfFameChannelId
       );
+      const serverStatusChannelId = guild.isPrimary
+        ? requestedServerStatusChannelId
+        : null;
+      const serverStatusEnabled = Boolean(
+        guild.isPrimary && requestedServerStatusEnabled && serverStatusChannelId
+      );
       const selectedChannels = [
         gameChannelId,
         hallOfFameChannelId,
-        bossAnnouncementChannelId
+        bossAnnouncementChannelId,
+        serverStatusChannelId
       ].filter((channelId): channelId is string => Boolean(channelId));
       if (new Set(selectedChannels).size !== selectedChannels.length) return;
       await tx.guild.update({
@@ -97,6 +109,8 @@ export default async function AdminServersPage() {
           hallOfFameEnabled,
           bossAnnouncementChannelId,
           bossAnnouncementEnabled,
+          serverStatusChannelId,
+          serverStatusEnabled,
           version: { increment: 1 }
         },
         create: {
@@ -105,7 +119,9 @@ export default async function AdminServersPage() {
           hallOfFameChannelId,
           hallOfFameEnabled,
           bossAnnouncementChannelId,
-          bossAnnouncementEnabled
+          bossAnnouncementEnabled,
+          serverStatusChannelId,
+          serverStatusEnabled
         }
       });
       await tx.adminLog.create({
@@ -119,6 +135,8 @@ export default async function AdminServersPage() {
             hallOfFameEnabled,
             bossAnnouncementChannelId,
             bossAnnouncementEnabled,
+            serverStatusChannelId,
+            serverStatusEnabled,
             isActive
           }
         }
@@ -167,6 +185,7 @@ export default async function AdminServersPage() {
           const currentGameChannelId = guild.config?.gameChannelId ?? "";
           const currentHallChannelId = guild.config?.hallOfFameChannelId ?? "";
           const currentBossChannelId = guild.config?.bossAnnouncementChannelId ?? "";
+          const currentStatusChannelId = guild.config?.serverStatusChannelId ?? "";
           const currentGameChannel = channels.find(
             (channel) => channel.id === currentGameChannelId
           );
@@ -176,6 +195,9 @@ export default async function AdminServersPage() {
           const currentBossChannel = channels.find(
             (channel) => channel.id === currentBossChannelId
           );
+          const currentStatusChannel = channels.find(
+            (channel) => channel.id === currentStatusChannelId
+          );
           const gameChannelIsListed = channels.some(
             (channel) => channel.id === currentGameChannelId
           );
@@ -184,6 +206,9 @@ export default async function AdminServersPage() {
           );
           const bossChannelIsListed = channels.some(
             (channel) => channel.id === currentBossChannelId
+          );
+          const statusChannelIsListed = channels.some(
+            (channel) => channel.id === currentStatusChannelId
           );
 
           return (
@@ -359,6 +384,52 @@ export default async function AdminServersPage() {
                     <div style={{ fontSize: "12px", color: "#6b5f4f" }}>
                       <strong>Hall of Fame centralisé</strong><br />
                       Les découvertes de ce serveur sont publiées dans le Hall du serveur principal.
+                    </div>
+                  )}
+
+                  {guild.isPrimary && (
+                    <div>
+                      <label htmlFor={`serverStatusChannelId-${guild.id}`} style={{
+                        display: "block", fontSize: "12px", fontWeight: 600,
+                        color: "#6b5f4f", marginBottom: "4px"
+                      }}>
+                        État des serveurs partenaires
+                      </label>
+                      <select
+                        id={`serverStatusChannelId-${guild.id}`}
+                        name="serverStatusChannelId"
+                        defaultValue={currentStatusChannelId}
+                        style={{ width: "100%", padding: "7px 10px", border: "1px solid #e4d8c6", borderRadius: "8px", fontSize: "13px" }}
+                      >
+                        <option value="">Aucun salon configuré</option>
+                        {currentStatusChannelId && !statusChannelIsListed && (
+                          <option value={currentStatusChannelId}>Salon actuel ({currentStatusChannelId})</option>
+                        )}
+                        {channels.map((channel) => (
+                          <option
+                            key={channel.id}
+                            value={channel.id}
+                            disabled={!channel.botCanPublish && channel.id !== currentStatusChannelId}
+                          >
+                            #{channel.name}
+                            {!channel.botCanPublish
+                              ? ` — bot bloqué : ${channel.missingPermissions.join(", ")}`
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {currentStatusChannel && !currentStatusChannel.botCanPublish && (
+                        <small style={{ display: "block", color: "#b91c1c", marginTop: "6px" }}>
+                          Mise à jour impossible : autorise le bot à {currentStatusChannel.missingPermissions.join(", ")}.
+                        </small>
+                      )}
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", cursor: "pointer" }}>
+                        <input type="checkbox" name="serverStatusEnabled" defaultChecked={guild.config?.serverStatusEnabled ?? false} />
+                        <span style={{ fontSize: "13px" }}>Tableau des serveurs actif</span>
+                      </label>
+                      <small style={{ color: "#6b5f4f" }}>
+                        Un message unique est actualisé avec le monde et la progression de chaque serveur actif.
+                      </small>
                     </div>
                   )}
 

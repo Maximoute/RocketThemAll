@@ -4,7 +4,7 @@ import Link from "next/link";
 import { requireUser } from "../../lib/guard";
 import { FRAGMENT_CRAFT_COST, getUserFragmentBalances } from "../../lib/fragments";
 import { getUserInventoryValue } from "../../lib/economy";
-import DiscordAvatar from "./DiscordAvatar.client";
+import DiscordAvatar from "../../components/discord-avatar";
 
 const achievementService = new AchievementService();
 const monetizationService = new MonetizationService();

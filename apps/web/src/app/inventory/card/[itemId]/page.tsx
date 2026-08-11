@@ -1,6 +1,6 @@
 import { prisma } from "@rta/database";
 import { randomUUID } from "node:crypto";
-import { RecycleService } from "@rta/services";
+import { RecycleService, recycleFragmentRange } from "@rta/services";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getUserFragmentBalances } from "../../../../lib/fragments";
@@ -18,16 +18,6 @@ const RECYCLE_PRICE_KEYS = {
   Import: "importRecyclePrice",
   Exotic: "exoticRecyclePrice",
   "Black Market": "blackMarketRecyclePrice"
-} as const;
-
-const FRAGMENT_REWARD_KEYS = {
-  Common: "commonFragmentReward",
-  Uncommon: "uncommonFragmentReward",
-  Rare: "rareFragmentReward",
-  "Very Rare": "veryRareFragmentReward",
-  Import: "importFragmentReward",
-  Exotic: "exoticFragmentReward",
-  "Black Market": "blackMarketFragmentReward"
 } as const;
 
 const RARITY_COLORS: Record<string, string> = {
@@ -61,7 +51,7 @@ export default async function InventoryCardPage({
   const config = await prisma.appConfig.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
   const rarity = item.card.rarity.name as keyof typeof RECYCLE_PRICE_KEYS;
   const unitCredits = config[RECYCLE_PRICE_KEYS[rarity]] as number;
-  const unitFragments = config[FRAGMENT_REWARD_KEYS[rarity]] as number;
+  const fragmentRange = recycleFragmentRange(item.variant);
   const fragmentBalances = await getUserFragmentBalances(user.id);
   const dynamicValue = await getDynamicCardValue(item.cardId, item.variant);
 
@@ -121,7 +111,9 @@ export default async function InventoryCardPage({
           <p>Variante: {item.variant}</p>
           <p>Deck: {item.card.deck.name}</p>
           <p>Quantité: {item.quantity}</p>
-          <p>Valeur recyclage / carte: {unitCredits} crédits + {unitFragments} fragments</p>
+          <p>
+            Valeur recyclage / carte: {unitCredits} crédits + {fragmentRange.min} à {fragmentRange.max} fragments de tier {item.card.rarity.name}
+          </p>
           <p>Valeur de marché / carte: {dynamicValue?.unitPrice ?? 0} crédits (circulation: {dynamicValue?.circulationCount ?? 0})</p>
           <p>Fragments totaux: {user.fragments}</p>
 
