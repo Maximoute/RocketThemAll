@@ -1,6 +1,7 @@
 import { Prisma, prisma } from "@rta/database";
 import { RARITIES } from "@rta/shared";
 import CollectionFiltersClient from "./filters.client";
+import CollectionSubnav from "./collection-subnav";
 import { resolveSessionUser } from "../../lib/guard";
 
 const DECKS_PER_PAGE = 3;
@@ -175,22 +176,16 @@ export default async function CollectionPage({
 
   return (
     <div>
-      <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
+      <div className="mb-4 flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Collection</h1>
           <p className="text-rta-muted text-sm mt-1">
             3 decks par page · cartes classées de Common à Black Market
           </p>
         </div>
-        {user && (
-          <a
-            href="/transmutation"
-            className="rounded-lg border border-rta-accentHi bg-rta-accentHi/15 px-4 py-2 text-sm font-black text-purple-200 hover:bg-rta-accentHi/25"
-          >
-            ⚛️ Réacteur d’Anomalies
-          </a>
-        )}
       </div>
+
+      {user && <CollectionSubnav active="collection" />}
 
       <CollectionFiltersClient
         decks={allDecks.map((deck) => ({ value: deck, label: deck }))}

@@ -166,7 +166,7 @@ export default async function AdminUserDetailPage({
   if (!user) notFound();
   const boosters = new Map(user.userBoosters.map((row) => [row.boosterType, row.quantity]));
   const totalCards = user.inventory.reduce((sum, row) => sum + row.quantity, 0);
-  const control = "rounded-lg border px-3 py-2 text-sm";
+  const control = "min-w-0 w-full rounded-lg border border-rta-border bg-rta-bg px-3 py-2 text-sm text-rta-ink placeholder:text-rta-muted focus:border-rta-cta focus:outline-none focus:ring-1 focus:ring-rta-cta";
   const submit = "rounded-lg bg-rta-cta px-4 py-2 text-sm font-black text-rta-bg hover:brightness-110";
 
   return (
@@ -220,18 +220,42 @@ export default async function AdminUserDetailPage({
 
       <article id="give-card" className="rounded-2xl border border-rta-border bg-rta-surface p-5">
         <h2 className="mb-3 text-lg font-black">Ajouter une carte ou un objet</h2>
-        <div className="grid gap-4 xl:grid-cols-2">
-          <form action={giveCard} className="grid gap-2 sm:grid-cols-[1fr_110px_80px_auto]">
-            <select className={control} name="cardId" required>{cards.map((card) => <option key={card.id} value={card.id}>{card.deck.name} · {card.name} · {card.rarity.name}</option>)}</select>
-            <select className={control} name="variant"><option value="normal">Normal</option><option value="shiny">Shiny</option><option value="holo">Holo</option></select>
-            <input className={control} type="number" name="quantity" min="1" defaultValue="1" />
-            <button className={submit}>+ carte</button>
+        <div className="grid min-w-0 gap-4 2xl:grid-cols-2">
+          <form action={giveCard} className="min-w-0 rounded-xl border border-rta-border bg-rta-bg/35 p-4">
+            <h3 className="mb-3 text-sm font-black text-rta-cta">🎴 Donner une carte</h3>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_120px_90px]">
+              <label className="min-w-0 text-xs font-bold text-rta-muted">
+                Carte
+                <select className={`${control} mt-1`} name="cardId" required>{cards.map((card) => <option key={card.id} value={card.id}>{card.deck.name} · {card.name} · {card.rarity.name}</option>)}</select>
+              </label>
+              <label className="text-xs font-bold text-rta-muted">
+                Variante
+                <select className={`${control} mt-1`} name="variant"><option value="normal">Normal</option><option value="shiny">Shiny</option><option value="holo">Holo</option></select>
+              </label>
+              <label className="text-xs font-bold text-rta-muted">
+                Quantité
+                <input className={`${control} mt-1`} type="number" name="quantity" min="1" defaultValue="1" />
+              </label>
+            </div>
+            <button className={`${submit} mt-3 w-full`}>+ Donner la carte</button>
           </form>
-          <form action={grantItem} className="grid gap-2 sm:grid-cols-[1fr_80px_1fr_auto]">
-            <select className={control} name="itemKey" required>{catalog.map((item) => <option key={item.id} value={item.contentKey}>{item.name} · {item.type}</option>)}</select>
-            <input className={control} type="number" name="quantity" min="1" defaultValue="1" />
-            <input className={control} name="reason" required minLength={3} placeholder="Motif du don" />
-            <button className={submit}>+ objet</button>
+          <form action={grantItem} className="min-w-0 rounded-xl border border-rta-border bg-rta-bg/35 p-4">
+            <h3 className="mb-3 text-sm font-black text-rta-cta">🎁 Donner un objet</h3>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_90px]">
+              <label className="min-w-0 text-xs font-bold text-rta-muted">
+                Objet
+                <select className={`${control} mt-1`} name="itemKey" required>{catalog.map((item) => <option key={item.id} value={item.contentKey}>{item.name} · {item.type}</option>)}</select>
+              </label>
+              <label className="text-xs font-bold text-rta-muted">
+                Quantité
+                <input className={`${control} mt-1`} type="number" name="quantity" min="1" defaultValue="1" />
+              </label>
+              <label className="min-w-0 text-xs font-bold text-rta-muted sm:col-span-2">
+                Motif du don
+                <input className={`${control} mt-1`} name="reason" required minLength={3} placeholder="Motif obligatoire et audité" />
+              </label>
+            </div>
+            <button className={`${submit} mt-3 w-full`}>+ Donner l’objet</button>
           </form>
         </div>
       </article>

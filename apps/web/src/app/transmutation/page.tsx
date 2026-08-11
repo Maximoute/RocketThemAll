@@ -12,6 +12,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "../../lib/guard";
 import { getUserFragmentBalances } from "../../lib/fragments";
+import { cardVariantImageUrl } from "../../lib/card-variant";
+import CollectionSubnav from "../collection/collection-subnav";
+import CardSacrificeSelector from "./card-sacrifice-selector.client";
 
 const transmutationService = new TransmutationService();
 
@@ -38,15 +41,15 @@ export default async function TransmutationPage({
         sacrificeItemIds: formData.getAll("sacrificeItemId").map(String),
         idempotencyKey: `web-${randomUUID()}`
       });
-      revalidatePath("/transmutation");
+      revalidatePath("/collection/reactor");
       revalidatePath("/inventory");
       revalidatePath("/collection");
-      redirect(`/transmutation?success=${encodeURIComponent(
+      redirect(`/collection/reactor?success=${encodeURIComponent(
         `${result.card.name} [${result.variant}] obtenue`
       )}`);
     } catch (error) {
       if (error && typeof error === "object" && "digest" in error) throw error;
-      redirect(`/transmutation?error=${encodeURIComponent(
+      redirect(`/collection/reactor?error=${encodeURIComponent(
         error instanceof Error ? error.message : "Transmutation impossible"
       )}`);
     }
@@ -57,7 +60,7 @@ export default async function TransmutationPage({
     const actionUser = await requireUser();
     const sourceRarity = String(formData.get("rarity") ?? "");
     if (!TRANSMUTATION_RARITY_CHAIN.includes(sourceRarity as never)) {
-      redirect("/transmutation?error=Tier%20invalide");
+      redirect("/collection/reactor?error=Tier%20invalide");
     }
     try {
       const result = await transmutationService.craftCardFromFragments({
@@ -65,14 +68,14 @@ export default async function TransmutationPage({
         sourceRarity: sourceRarity as (typeof TRANSMUTATION_RARITY_CHAIN)[number],
         idempotencyKey: `web-${randomUUID()}`
       });
-      revalidatePath("/transmutation");
+      revalidatePath("/collection/reactor");
       revalidatePath("/inventory");
-      redirect(`/transmutation?success=${encodeURIComponent(
+      redirect(`/collection/reactor?success=${encodeURIComponent(
         `Catalyse réussie : ${result.card.name} [${result.variant}]`
       )}`);
     } catch (error) {
       if (error && typeof error === "object" && "digest" in error) throw error;
-      redirect(`/transmutation?error=${encodeURIComponent(
+      redirect(`/collection/reactor?error=${encodeURIComponent(
         error instanceof Error ? error.message : "Catalyse impossible"
       )}`);
     }
@@ -83,7 +86,7 @@ export default async function TransmutationPage({
     const actionUser = await requireUser();
     const rarity = String(formData.get("rarity") ?? "");
     if (!TRANSMUTATION_RARITY_CHAIN.includes(rarity as never)) {
-      redirect("/transmutation?error=Tier%20invalide");
+      redirect("/collection/reactor?error=Tier%20invalide");
     }
     try {
       const result = await transmutationService.craftBoosterFromFragments({
@@ -91,14 +94,14 @@ export default async function TransmutationPage({
         rarity: rarity as (typeof TRANSMUTATION_RARITY_CHAIN)[number],
         idempotencyKey: `web-${randomUUID()}`
       });
-      revalidatePath("/transmutation");
+      revalidatePath("/collection/reactor");
       revalidatePath("/profile");
-      redirect(`/transmutation?success=${encodeURIComponent(
+      redirect(`/collection/reactor?success=${encodeURIComponent(
         `Booster ${result.contentKey.split(".").at(-1)} créé`
       )}`);
     } catch (error) {
       if (error && typeof error === "object" && "digest" in error) throw error;
-      redirect(`/transmutation?error=${encodeURIComponent(
+      redirect(`/collection/reactor?error=${encodeURIComponent(
         error instanceof Error ? error.message : "Catalyse impossible"
       )}`);
     }
@@ -117,9 +120,21 @@ export default async function TransmutationPage({
     getUserFragmentBalances(user.id)
   ]);
   const fragmentMap = new Map(fragmentBalances.map((row) => [row.rarityName, row.quantity]));
+  const selectorInventory = inventory.map((item) => ({
+    id: item.id,
+    name: item.card.name,
+    deckId: item.card.deckId,
+    deckName: item.card.deck.name,
+    rarityName: item.card.rarity.name,
+    rarityWeight: item.card.rarity.weight,
+    variant: item.variant,
+    quantity: item.quantity,
+    imageUrl: cardVariantImageUrl(item.card.imageUrl, item.variant)
+  }));
 
   return (
     <div>
+      <CollectionSubnav active="reactor" />
       <div className="mb-6 rounded-2xl border border-rta-accentHi bg-gradient-to-br from-rta-accentHi/20 to-rta-surface p-6">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-rta-cta">Collection avancée</p>
         <h1 className="mt-1 text-3xl font-black">⚛️ Réacteur d’Anomalies</h1>
@@ -157,49 +172,12 @@ export default async function TransmutationPage({
           </div>
         </div>
 
-        <form action={transmuteCards} className="mt-5 space-y-3">
-          <label className="block text-sm font-bold">
-            Mode du Réacteur
-            <select name="mode" className="mt-1 w-full rounded-lg border border-rta-border bg-rta-bg px-3 py-2 text-rta-ink">
-              <option value="DECK">Deck · cinq cartes du même deck</option>
-              <option value="TIER">Tier · cinq cartes du même tier</option>
-              <option value="BULK">Vrac · cinq cartes libres</option>
-            </select>
-          </label>
-          <div className="grid gap-3 lg:grid-cols-5">
-            {Array.from({ length: TRANSMUTATION_CARD_COST }, (_, index) => (
-              <label key={index} className="text-xs font-bold text-rta-muted">
-                Sacrifice {index + 1}
-                <select
-                  name="sacrificeItemId"
-                  required
-                  defaultValue=""
-                  className="mt-1 w-full rounded-lg border border-rta-border bg-rta-bg px-2 py-2 text-xs text-rta-ink"
-                >
-                  <option value="" disabled>Choisir une carte</option>
-                  {inventory.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.card.name} [{item.variant}] ×{item.quantity} · {item.card.deck.name} · {item.card.rarity.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-          <p className="text-xs text-rta-muted">
-            Choisir plusieurs fois la même ligne consomme plusieurs exemplaires ; le stock doit être suffisant.
-          </p>
-          <label className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-rta-muted">
-            <input type="checkbox" required className="mt-0.5" />
-            Je confirme la destruction définitive des cinq exemplaires sélectionnés en échange d’une seule récompense.
-          </label>
-          <button
-            type="submit"
-            disabled={inventory.length === 0}
-            className="rounded-lg bg-rta-cta px-5 py-2.5 text-sm font-black text-rta-bg disabled:opacity-40"
-          >
-            Lancer la transmutation
-          </button>
+        <form action={transmuteCards} className="mt-5">
+          <CardSacrificeSelector
+            inventory={selectorInventory}
+            cost={TRANSMUTATION_CARD_COST}
+            tierNames={TRANSMUTATION_RARITY_CHAIN.slice(0, -1)}
+          />
         </form>
       </section>
 

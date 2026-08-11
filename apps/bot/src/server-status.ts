@@ -1,5 +1,6 @@
 import { EmbedBuilder, type Client } from "discord.js";
 import { prisma } from "./commands/service-instances.js";
+import { rankServerEntries, serverProgressBar } from "./server-ranking.js";
 
 const STATUS_INTERVAL_MS = 60_000;
 let statusUpdateRunning = false;
@@ -34,42 +35,74 @@ export async function syncServerStatus(client: Client) {
     const channelId = primary?.config?.serverStatusChannelId;
     if (!primary || !channelId) return;
 
+    const connectedGuilds = [...client.guilds.cache.values()].filter((guild) => guild.available);
+    const connectedById = new Map(connectedGuilds.map((guild) => [guild.id, guild]));
     const guilds = await prisma.guild.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        discordId: { in: [...connectedById.keys()] }
+      },
       include: {
         progress: { include: { frontierWorld: true } },
         bossRuns: {
           where: { status: "ACTIVE", endsAt: { gt: new Date() } },
           select: { id: true, isPersistent: true }
         }
-      },
-      orderBy: [{ isPrimary: "desc" }, { name: "asc" }]
+      }
     });
-    const lines = guilds.map((guild) => {
-      const progress = guild.progress;
-      const mastery = Math.max(0, progress?.mastery ?? 0);
-      const target = Math.max(0, progress?.masteryTarget ?? 0);
-      const percent = target > 0 ? Math.min(100, Math.round((mastery / target) * 100)) : 0;
-      const activeDaily = guild.bossRuns.some((run) => !run.isPersistent);
-      const activeGuardian = guild.bossRuns.some((run) => run.isPersistent);
+
+    const ranked = rankServerEntries(guilds.map((guild) => {
+      const discordGuild = connectedById.get(guild.discordId)!;
+      return {
+        guild,
+        discordGuild,
+        name: discordGuild.name,
+        unlockedWorldCount: Math.max(1, guild.progress?.unlockedWorldCount ?? 1),
+        mastery: Math.max(0, guild.progress?.mastery ?? 0),
+        masteryTarget: Math.max(0, guild.progress?.masteryTarget ?? 0)
+      };
+    }));
+
+    const visibleRanked = ranked.slice(0, 10);
+    const embeds = visibleRanked.map((entry, index) => {
+      const progress = entry.guild.progress;
+      const activeDaily = entry.guild.bossRuns.some((run) => !run.isPersistent);
+      const activeGuardian = entry.guild.bossRuns.some((run) => run.isPersistent);
       const bosses = [activeDaily ? "boss journalier" : "", activeGuardian ? "gardien" : ""]
         .filter(Boolean)
         .join(" + ") || "aucun boss actif";
-      return `**${guild.isPrimary ? "⭐ " : ""}${guild.name}**\n` +
-        `🌍 ${progress?.frontierWorld?.name ?? "Monde 1"} · ${percent} % · ${mastery}/${target || "?"} · ${stateLabel(progress?.state)}\n` +
-        `🐲 ${bosses} · mondes débloqués ${Math.max(1, progress?.unlockedWorldCount ?? 1)}/9`;
+      const medal = (["🥇", "🥈", "🥉"] as const)[entry.rank - 1] ?? `#${entry.rank}`;
+      const iconUrl = entry.discordGuild.iconURL({ extension: "png", size: 128 });
+      const color = ([0xffd700, 0xc0c0c0, 0xcd7f32] as const)[entry.rank - 1] ?? 0x6b3fd4;
+      const embed = new EmbedBuilder()
+        .setColor(color)
+        .setAuthor({
+          name: `${medal} ${entry.name}${entry.guild.isPrimary ? " · serveur principal" : ""}`,
+          ...(iconUrl ? { iconURL: iconUrl } : {})
+        })
+        .setDescription(
+          `**Score de progression : ${entry.score} points** · ${entry.unlockedWorldCount}/9 mondes débloqués\n` +
+          `🌍 ${progress?.frontierWorld?.name ?? "Monde 1"} · ${stateLabel(progress?.state)}\n` +
+          `${serverProgressBar(entry.percent)} · ${entry.mastery}/${entry.masteryTarget || "?"} maîtrise\n` +
+          `🐲 ${bosses}`
+        );
+      if (index === 0) embed.setTitle("🏆 Classement des serveurs Rocket Them All");
+      if (index === visibleRanked.length - 1) {
+        embed
+          .setFooter({
+            text: `Actualisation automatique · ${ranked.length} serveur(s) connecté(s)${ranked.length > 10 ? " · top 10 affiché" : ""}`
+          })
+          .setTimestamp();
+      }
+      return embed;
     });
-    let description = "";
-    for (const line of lines) {
-      if (`${description}\n\n${line}`.length > 3_900) break;
-      description += `${description ? "\n\n" : ""}${line}`;
+    if (embeds.length === 0) {
+      embeds.push(new EmbedBuilder()
+        .setColor(0x6b3fd4)
+        .setTitle("🏆 Classement des serveurs Rocket Them All")
+        .setDescription("Aucun serveur n’est actuellement connecté au bot.")
+        .setTimestamp());
     }
-    const embed = new EmbedBuilder()
-      .setColor(0x6b3fd4)
-      .setTitle("🚀 État des serveurs Rocket Them All")
-      .setDescription(description || "Aucun serveur actif.")
-      .setFooter({ text: `Actualisation automatique · ${guilds.length} serveur(s) actif(s)` })
-      .setTimestamp();
 
     const channel = await client.channels.fetch(channelId);
     if (!channel || !channel.isTextBased() || channel.isDMBased() || !("messages" in channel)) {
@@ -83,13 +116,13 @@ export async function syncServerStatus(client: Client) {
     if (messageId) {
       try {
         const message = await channel.messages.fetch(messageId);
-        await message.edit({ embeds: [embed], allowedMentions: { parse: [] } });
+        await message.edit({ embeds, allowedMentions: { parse: [] } });
       } catch {
         messageId = null;
       }
     }
     if (!messageId) {
-      const message = await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+      const message = await channel.send({ embeds, allowedMentions: { parse: [] } });
       messageId = message.id;
     }
     await prisma.guildConfiguration.update({
