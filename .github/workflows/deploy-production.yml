@@ -231,6 +231,21 @@ jobs:
           }
           trap cleanup_login EXIT
 
+          # Keep the immutable releases in GHCR, not duplicated indefinitely on the VPS.
+          # Volumes are deliberately excluded so PostgreSQL and MinIO data cannot be pruned.
+          ssh "${ssh_opts[@]}" "$remote" 'bash -s' <<'CLEANUP'
+          set -Eeuo pipefail
+          docker container prune --force --filter label=com.docker.compose.project=rta
+          docker image prune --all --force
+          docker builder prune --all --force
+          available_kb="$(df -Pk / | awk 'NR == 2 { print $4 }')"
+          echo "Deployment disk space available: $((available_kb / 1024)) MiB"
+          if (( available_kb < 2097152 )); then
+            echo "Less than 2 GiB is available after safe Docker cleanup." >&2
+            exit 1
+          fi
+          CLEANUP
+
           printf '%s' "$GHCR_TOKEN" | \
             ssh "${ssh_opts[@]}" "$remote" docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           scp "${scp_opts[@]}" "$RUNNER_TEMP/rta-release.tgz" "$remote:$release_archive"

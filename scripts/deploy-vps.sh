@@ -101,4 +101,8 @@ printf '%s\n' "${IMAGE_TAG}" > "${DEPLOY_ROOT}/shared/.deployed-tag"
 "${COMPOSE[@]}" ps
 
 trap - ERR
+# Active containers retain every layer they need; this only removes superseded
+# immutable images and build cache. Persistent volumes are never pruned.
+docker image prune --all --force
+docker builder prune --all --force
 echo "Deployment ${IMAGE_TAG} completed successfully."
