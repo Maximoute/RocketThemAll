@@ -8,13 +8,14 @@ npm run audit:vault -- "C:\Users\lecom\OneDrive\Developpement\RocketThemAll\Vaul
 
 Le rapport condensé produit par ce script est `VAULT_INDEX.generated.md`. Ne pas modifier manuellement les fichiers `*.generated.md` ou `vault-index.json`.
 
-## Périmètre indexé au 27 juillet 2026
+## Périmètre indexé au 11 août 2026
 
-- 4 812 fichiers, 747 123 637 octets.
+- 4 812 fichiers, 747 136 090 octets.
 - 2 199 notes Markdown.
 - 2 531 images PNG.
 - 42 fichiers JSON, 21 CSV et 17 scripts Python.
 - 810 cartes uniques, présentes dans deux représentations Markdown cohérentes sur leurs champs critiques.
+- 3 notes de gouvernance temps réel : état déployé, journal de bord et règle de synchronisation Code ↔ Obsidian.
 
 ## Routage
 

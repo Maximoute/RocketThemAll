@@ -1,6 +1,6 @@
 # Inventaire généré du contenu RTA
 
-> Généré par `npm run audit:vault` le 2026-07-30T19:10:38.525Z. Ne pas modifier à la main.
+> Généré par `npm run audit:vault` le 2026-08-11T04:42:13.281Z. Ne pas modifier à la main.
 
 ## Fichiers par zone
 
@@ -10,12 +10,12 @@
 | 10-BDD | 1339 |
 | assets | 100 |
 | _data | 49 |
-| 03-Developpement | 20 |
+| 03-Developpement | 21 |
 | _tools | 18 |
 | 01-Vision & Gameplay | 12 |
 | .obsidian | 9 |
+| 00-Cockpit | 4 |
 | 02-Contenu du jeu | 4 |
-| 00-Cockpit | 2 |
 | _incoming_images | 1 |
 | 04-UX - Design - Branding | 1 |
 | 05-Marketing & Feedback | 1 |
@@ -31,7 +31,7 @@
 | Extension | Fichiers |
 | --- | --- |
 | .png | 2531 |
-| .md | 2196 |
+| .md | 2199 |
 | .json | 42 |
 | .csv | 21 |
 | .py | 17 |
@@ -53,6 +53,9 @@
 | notion-database-schema | 3 |
 | database-index | 2 |
 | deck | 2 |
+| application-changelog | 1 |
+| application-status | 1 |
+| documentation-policy | 1 |
 | Gameplay System | 1 |
 | prisma-model-group | 1 |
 | technical-spec | 1 |

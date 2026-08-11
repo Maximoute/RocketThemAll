@@ -1,6 +1,6 @@
 # Progression
 
-Dernière mise à jour : 30 juillet 2026.
+Dernière mise à jour : 11 août 2026.
 
 ## Terminé
 
@@ -62,6 +62,13 @@ Dernière mise à jour : 30 juillet 2026.
 - CI, Dependabot et validation automatique des 19 documents et de l’index du vault ajoutés.
 - Validation complète : 92 tests verts dont 65 scénarios services/PostgreSQL, lint de tous les workspaces, schéma et 40 migrations Prisma à jour, build des quatre applications et des packages, 20 routes Next compilées, contexte documentaire validé et `npm audit` à zéro vulnérabilité connue.
 - Import réel exact confirmé après les tests : 810 cartes, 42 objets, 90 quêtes, 156 achievements, 17 boss et 45 compétences; aucun utilisateur de test résiduel.
+- Économie étendue : vente d’objets spéciaux, Réacteur Deck/Tier/Vrac à cinq sacrifices, catalyse de 100 fragments vers une carte du tier supérieur, craft d’un booster du même tier pour 50 fragments et rendements de recyclage Normal 3–5, Shiny 50–100, Holo 400–700.
+- Réacteur web déplacé dans un sous-menu de la Collection. La sélection utilise les images exactes des cartes, un tri alphabétique, cinq emplacements retirables et des filtres stricts par deck ou tier.
+- Profil admin joueur rendu responsive avec panneaux séparés pour le don de cartes et d’objets, libellés visibles et contrôles sans débordement.
+- Classement central Discord limité aux serveurs réellement connectés au bot, classé par monde puis progression, avec score, podium, jauge et icône de guilde.
+- Supervision de production enrichie : état des serveurs, alertes de victoire de boss, avatars Discord web et notifications privées de quête/achievement/niveau après capture.
+- Déploiement VPS durci contre la saturation disque : nettoyage des images et caches inutilisés sans suppression des volumes, seuil minimal de 2 Gio, sauvegarde avant migration et health checks publics. Version `1aa68b1` confirmée healthy pour bot, web et API.
+- Politique obligatoire code ↔ Obsidian ajoutée dans `AGENTS.md`, le Vault et `DOCUMENTATION_WORKFLOW.md`; chaque fonctionnalité doit désormais synchroniser théorie, état courant et journal dans le même travail.
 
 ## En cours
 

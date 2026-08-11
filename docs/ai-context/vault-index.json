@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-07-30T19:10:38.525Z",
+  "generatedAt": "2026-08-11T04:42:13.281Z",
   "vaultRoot": "C:\\Users\\lecom\\OneDrive\\Developpement\\RocketThemAll\\Vault-RTA",
   "totals": {
-    "files": 4809,
-    "markdown": 2196,
+    "files": 4812,
+    "markdown": 2199,
     "assets": 2531,
-    "bytes": 747120837,
+    "bytes": 747136090,
     "uniqueCards": 810
   },
   "counts": {
     "extensions": {
       ".png": 2531,
-      ".md": 2196,
+      ".md": 2199,
       ".json": 42,
       ".csv": 21,
       ".py": 17,
@@ -23,12 +23,12 @@
       "10-BDD": 1339,
       "assets": 100,
       "_data": 49,
-      "03-Developpement": 20,
+      "03-Developpement": 21,
       "_tools": 18,
       "01-Vision & Gameplay": 12,
       ".obsidian": 9,
+      "00-Cockpit": 4,
       "02-Contenu du jeu": 4,
-      "00-Cockpit": 2,
       "_incoming_images": 1,
       "04-UX - Design - Branding": 1,
       "05-Marketing & Feedback": 1,
@@ -42,10 +42,10 @@
     "noteAreas": {
       "10-BDD": 1339,
       "20-Cards": 811,
-      "03-Developpement": 20,
+      "03-Developpement": 21,
       "01-Vision & Gameplay": 12,
+      "00-Cockpit": 4,
       "02-Contenu du jeu": 4,
-      "00-Cockpit": 2,
       "_incoming_images": 1,
       "04-UX - Design - Branding": 1,
       "05-Marketing & Feedback": 1,
@@ -67,6 +67,9 @@
       "notion-database-schema": 3,
       "database-index": 2,
       "deck": 2,
+      "application-changelog": 1,
+      "application-status": 1,
+      "documentation-policy": 1,
       "Gameplay System": 1,
       "prisma-model-group": 1,
       "technical-spec": 1,
@@ -92,11 +95,14 @@
       "Spécifié — équilibrage requis": 90,
       "Modèle dynamique — points proposés": 8,
       "Live": 7,
-      "decision": 4,
+      "decision": 5,
       "Modèle dynamique validé": 4,
       "À confirmer": 3,
-      "empty-in-notion": 3,
-      "Conception": 1
+      "empty-in-notion": 2,
+      "active": 1,
+      "Conception": 1,
+      "live": 1,
+      "maintained-in-obsidian": 1
     }
   },
   "validation": {
@@ -7227,10 +7233,64 @@
       "sha256": "a6afd35fe53ae8c900d4d8f06632b40961824153a833e7b8b7d934d293eb9508"
     },
     {
+      "path": "00-Cockpit/Journal de bord - Application.md",
+      "area": "00-Cockpit",
+      "bytes": 2754,
+      "lines": 62,
+      "title": "Journal de bord - Application",
+      "type": "application-changelog",
+      "status": "active",
+      "frontmatter": {
+        "type": "application-changelog",
+        "status": "active",
+        "last-updated": "2026-08-11",
+        "tags": [
+          "rta/cockpit",
+          "rta/changelog",
+          "rta/production"
+        ]
+      },
+      "headings": [
+        {
+          "level": 1,
+          "title": "Journal de bord - Application"
+        },
+        {
+          "level": 2,
+          "title": "2026-08-11 — Collection, administration et classement des serveurs"
+        },
+        {
+          "level": 2,
+          "title": "2026-08-11 — Économie, Réacteur et supervision centrale"
+        },
+        {
+          "level": 2,
+          "title": "2026-08-11 — Fiabilité du déploiement VPS"
+        },
+        {
+          "level": 2,
+          "title": "Format des prochaines entrées"
+        },
+        {
+          "level": 2,
+          "title": "AAAA-MM-JJ — Titre"
+        }
+      ],
+      "wikiLinks": [
+        "Économie des doublons",
+        "Frontend Pages - Next.js",
+        "Administration, fiabilité et analytics",
+        "État actuel de l'application",
+        "État actuel de l'application"
+      ],
+      "assetLinks": [],
+      "sha256": "a48163617e5a3451d69d34732726578a6244f81654b523dc0431e23b87889fe0"
+    },
+    {
       "path": "00-Cockpit/Rocket Them All.md",
       "area": "00-Cockpit",
-      "bytes": 965,
-      "lines": 43,
+      "bytes": 1298,
+      "lines": 46,
       "title": "Rocket Them All",
       "type": "notion-page",
       "frontmatter": {
@@ -7274,10 +7334,81 @@
         "Marketing & Feedback",
         "Brainstorm",
         "Cards Database",
+        "État actuel de l'application",
+        "Journal de bord - Application",
+        "Règle de synchronisation Code - Obsidian",
         "Vision & Gameplay"
       ],
       "assetLinks": [],
-      "sha256": "84899c901892247a2440530b9371a6def8f87ed87f6605fc50cf871f1be1f871"
+      "sha256": "71a07750bf70bd744154962df218431a06c8d685f3c6016c44cd8afd334b4c9b"
+    },
+    {
+      "path": "00-Cockpit/État actuel de l'application.md",
+      "area": "00-Cockpit",
+      "bytes": 3862,
+      "lines": 74,
+      "title": "État actuel de l'application",
+      "type": "application-status",
+      "status": "live",
+      "frontmatter": {
+        "type": "application-status",
+        "status": "live",
+        "last-updated": "2026-08-11",
+        "code-branch": "RTAV2",
+        "deployed-commit": "1aa68b124562aace8b54bcaf570aa8c28faf18ce",
+        "tags": [
+          "rta/cockpit",
+          "rta/production",
+          "rta/status"
+        ]
+      },
+      "headings": [
+        {
+          "level": 1,
+          "title": "État actuel de l'application"
+        },
+        {
+          "level": 2,
+          "title": "Production"
+        },
+        {
+          "level": 2,
+          "title": "Boucle Discord"
+        },
+        {
+          "level": 2,
+          "title": "Boss et serveurs"
+        },
+        {
+          "level": 2,
+          "title": "Site joueur"
+        },
+        {
+          "level": 2,
+          "title": "Administration"
+        },
+        {
+          "level": 2,
+          "title": "Économie de collection"
+        },
+        {
+          "level": 2,
+          "title": "Pages de détail"
+        }
+      ],
+      "wikiLinks": [
+        "Journal de bord - Application",
+        "Économie des doublons",
+        "Frontend Pages - Next.js",
+        "Administration, fiabilité et analytics",
+        "Salon de jeu Discord",
+        "Boss-System",
+        "Quêtes",
+        "Achèvement",
+        "Items"
+      ],
+      "assetLinks": [],
+      "sha256": "bfb827a87254a88ec7197728eb8e9286177652647b75683fdd0d2e005564ee27"
     },
     {
       "path": "01-Vision & Gameplay/Arbres de compétences.md",
@@ -10103,14 +10234,15 @@
     {
       "path": "01-Vision & Gameplay/Économie des doublons.md",
       "area": "01-Vision & Gameplay",
-      "bytes": 3850,
-      "lines": 104,
+      "bytes": 4990,
+      "lines": 118,
       "title": "Économie des doublons",
       "type": "gameplay-spec",
       "status": "decision",
       "frontmatter": {
         "type": "gameplay-spec",
         "status": "decision",
+        "last-updated": "2026-08-11",
         "tags": [
           "rta/gameplay",
           "rta/economy",
@@ -10124,19 +10256,31 @@
         },
         {
           "level": 2,
-          "title": "Trois usages"
+          "title": "Usages actuellement implémentés"
         },
         {
           "level": 2,
-          "title": "Fusion vers le tier supérieur"
+          "title": "Réacteur d’Anomalies"
+        },
+        {
+          "level": 3,
+          "title": "Mode Deck"
+        },
+        {
+          "level": 3,
+          "title": "Mode Tier"
+        },
+        {
+          "level": 3,
+          "title": "Mode Vrac"
         },
         {
           "level": 2,
           "title": "Poids des variantes"
         },
         {
-          "level": 2,
-          "title": "Chaudron de deck"
+          "level": 3,
+          "title": "Catalyseurs de fragments"
         },
         {
           "level": 2,
@@ -10163,7 +10307,7 @@
         "Administration, fiabilité et analytics"
       ],
       "assetLinks": [],
-      "sha256": "c01caa23452d8e43dc60dea7e99eac38a3c34b8a706aa3c338b25cda0c634cbf"
+      "sha256": "2cbb14145538c743149739d7ea8d28edc1f87b40b497530f260f78440de4d077"
     },
     {
       "path": "02-Contenu du jeu/Achèvement.md",
@@ -11867,14 +12011,15 @@
     {
       "path": "03-Developpement/Administration, fiabilité et analytics.md",
       "area": "03-Developpement",
-      "bytes": 5855,
-      "lines": 168,
+      "bytes": 7474,
+      "lines": 191,
       "title": "Administration, fiabilité et analytics",
       "type": "technical-spec",
       "status": "decision",
       "frontmatter": {
         "type": "technical-spec",
         "status": "decision",
+        "last-updated": "2026-08-11",
         "tags": [
           "rta/development",
           "rta/operations",
@@ -11894,6 +12039,14 @@
         {
           "level": 2,
           "title": "Outils administrateurs"
+        },
+        {
+          "level": 3,
+          "title": "Panel web actuellement déployé"
+        },
+        {
+          "level": 3,
+          "title": "Classement central des serveurs"
         },
         {
           "level": 2,
@@ -11949,7 +12102,7 @@
         "Checklist complète du projet"
       ],
       "assetLinks": [],
-      "sha256": "9e759e5e93e25f9aaa78bcec22b8ad31024d61ea03620fe69c3402127b0d862c"
+      "sha256": "7f0ffc53a286be227eed4c5b23ae94d1cda1e1b0925136fdfbe0072a2c5bbbd6"
     },
     {
       "path": "03-Developpement/API Routes.md",
@@ -12275,15 +12428,16 @@
     {
       "path": "03-Developpement/Frontend Pages - Next.js.md",
       "area": "03-Developpement",
-      "bytes": 592,
-      "lines": 22,
+      "bytes": 3035,
+      "lines": 61,
       "title": "Frontend Pages - Next.js",
       "type": "notion-database-schema",
-      "status": "empty-in-notion",
+      "status": "maintained-in-obsidian",
       "frontmatter": {
         "type": "notion-database-schema",
         "source": "https://app.notion.com/p/2e3c15d15146422da1780a0362e3b07f",
-        "status": "empty-in-notion"
+        "status": "maintained-in-obsidian",
+        "last-updated": "2026-08-11"
       },
       "headings": [
         {
@@ -12293,13 +12447,30 @@
         {
           "level": 2,
           "title": "Schéma prévu"
+        },
+        {
+          "level": 2,
+          "title": "Pages joueur actuellement déployées"
+        },
+        {
+          "level": 2,
+          "title": "Collection et Réacteur"
+        },
+        {
+          "level": 2,
+          "title": "Administration"
+        },
+        {
+          "level": 2,
+          "title": "Règle UX"
         }
       ],
       "wikiLinks": [
-        "UX Problems & Frictions"
+        "UX Problems & Frictions",
+        "Règle de synchronisation Code - Obsidian"
       ],
       "assetLinks": [],
-      "sha256": "22e590fb541a781dd767d4f79bb18f50bed8a232ec5da9d7c45356d2eb595b06"
+      "sha256": "9bdfee17948327cf4650365017a83b492f97b88d18544ac4d2bf7b15b2e5d666"
     },
     {
       "path": "03-Developpement/Prisma Models/Model - Card.md",
@@ -12495,6 +12666,71 @@
       ],
       "assetLinks": [],
       "sha256": "15576edededff6529c07729e90c47744736b3c52d5b217d7e0ca3fd3deff9881"
+    },
+    {
+      "path": "03-Developpement/Règle de synchronisation Code - Obsidian.md",
+      "area": "03-Developpement",
+      "bytes": 2596,
+      "lines": 54,
+      "title": "Règle de synchronisation Code - Obsidian",
+      "type": "documentation-policy",
+      "status": "decision",
+      "frontmatter": {
+        "type": "documentation-policy",
+        "status": "decision",
+        "last-updated": "2026-08-11",
+        "tags": [
+          "rta/development",
+          "rta/documentation",
+          "rta/governance"
+        ]
+      },
+      "headings": [
+        {
+          "level": 1,
+          "title": "Règle de synchronisation Code - Obsidian"
+        },
+        {
+          "level": 2,
+          "title": "Règle obligatoire"
+        },
+        {
+          "level": 2,
+          "title": "Routage des modifications"
+        },
+        {
+          "level": 2,
+          "title": "Hiérarchie d’autorité"
+        },
+        {
+          "level": 2,
+          "title": "Contrôle avant livraison"
+        }
+      ],
+      "wikiLinks": [
+        "État actuel de l'application",
+        "Journal de bord - Application",
+        "Core Loop",
+        "Capture collective et préparation",
+        "Items",
+        "Économie des doublons",
+        "Progression long terme",
+        "Boss-System",
+        "Quêtes",
+        "Achèvement",
+        "Salon de jeu Discord",
+        "Discord Commands",
+        "Frontend Pages - Next.js",
+        "UX Problems & Frictions",
+        "Administration, fiabilité et analytics",
+        "Prisma Models",
+        "Administration, fiabilité et analytics",
+        "État actuel de l'application",
+        "État actuel de l'application",
+        "Journal de bord - Application"
+      ],
+      "assetLinks": [],
+      "sha256": "700490d69a99a341e49acdb6d915d2fc012f195941e5e66ae9c191b609ab4a50"
     },
     {
       "path": "03-Developpement/Services & Components.md",
@@ -186056,8 +186292,8 @@
     {
       "path": "README.md",
       "area": "README.md",
-      "bytes": 1523,
-      "lines": 49,
+      "bytes": 1643,
+      "lines": 52,
       "title": "Vault RTA",
       "type": "vault-index",
       "frontmatter": {
@@ -186103,11 +186339,14 @@
         "Discord Commands",
         "Prisma Models",
         "Cards Database",
+        "État actuel de l'application",
+        "Journal de bord - Application",
+        "Règle de synchronisation Code - Obsidian",
         "BDD - Decks",
         "BDD - Cartes"
       ],
       "assetLinks": [],
-      "sha256": "e770e625f6e8f67f8859bb7d47462015717d40f988c987dd210a358322f9d5fc"
+      "sha256": "1c797874d6c06970729d7f3caec4daa9aba45ce3ffcd46c4a057333d3733b971"
     },
     {
       "path": "_incoming_images/README.md",

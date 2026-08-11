@@ -23,7 +23,8 @@ const requiredDocuments = [
   "IMPLEMENTATION_PLAN.md",
   "PROGRESS.md",
   "TEST_STRATEGY.md",
-  "DEPLOYMENT_GUIDE.md"
+  "DEPLOYMENT_GUIDE.md",
+  "DOCUMENTATION_WORKFLOW.md"
 ];
 
 for (const document of requiredDocuments) {
@@ -38,8 +39,8 @@ for (const document of requiredDocuments) {
 const indexPath = path.join(contextDirectory, "vault-index.json");
 const index = JSON.parse(await readFile(indexPath, "utf8"));
 const expectedTotals = {
-  files: 4_809,
-  markdown: 2_196,
+  files: 4_812,
+  markdown: 2_199,
   assets: 2_531,
   uniqueCards: 810
 };

@@ -100,3 +100,24 @@
 - Difficulté, fragments garantis, exigences rituelles, limite de Fleurs, booster et coffre du Conquérant utilisent le tier immuable stocké dans le snapshot du run.
 - Les récompenses du Conquérant conservent des jets indépendants; en cas de succès, l’objet obtenu porte exactement le tier du boss.
 - Une zone premium coûte le prix de référence du Pass d’expédition + 50 crédits, avant un éventuel modificateur temporaire d’Envahisseur.
+
+## ADR-019 — Réacteur de collection
+
+- Décision utilisateur : le Réacteur appartient à la Collection et non à la navigation principale.
+- Chaque opération consomme exactement cinq exemplaires explicitement choisis.
+- Mode Deck : cinq cartes du même deck, sortie manquante de ce deck; deck normal complet, priorité aux variantes manquantes.
+- Mode Tier : cinq cartes du même tier, sortie manquante du tier supérieur.
+- Mode Vrac : cinq cartes libres, sortie prioritairement non possédée.
+- L’interface doit filtrer les cartes incompatibles avant confirmation et montrer leurs images; le backend conserve la validation transactionnelle autoritaire.
+
+## ADR-020 — Classement central des serveurs
+
+- Seules les guildes présentes dans le cache du client Discord et actives en base sont classées.
+- Score : `100 × (mondes débloqués - 1) + pourcentage du monde courant`.
+- Le message affiche au maximum dix serveurs, avec rang, progression, boss actifs et icône Discord disponible.
+
+## ADR-021 — Synchronisation Code ↔ Obsidian
+
+- Décision utilisateur : toute fonctionnalité ajoutée, modifiée ou supprimée met à jour la théorie Obsidian concernée pendant le même travail.
+- La page de domaine porte la règle, `État actuel de l'application` résume le déployé et `Journal de bord - Application` conserve la chronologie.
+- Une proposition non implémentée doit être étiquetée comme telle; elle ne peut pas rester mélangée au comportement de production.

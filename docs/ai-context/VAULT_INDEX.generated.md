@@ -1,16 +1,16 @@
 # Index généré du vault RTA
 
-> Généré par `npm run audit:vault` le 2026-07-30T19:10:38.525Z. Ne pas modifier à la main.
+> Généré par `npm run audit:vault` le 2026-08-11T04:42:13.281Z. Ne pas modifier à la main.
 
 ## Totaux
 
 | Mesure | Valeur |
 | --- | --- |
-| Fichiers | 4809 |
-| Notes Markdown | 2196 |
+| Fichiers | 4812 |
+| Notes Markdown | 2199 |
 | Assets image | 2531 |
 | Cartes uniques | 810 |
-| Taille totale (octets) | 747120837 |
+| Taille totale (octets) | 747136090 |
 
 ## Répartition des notes
 
@@ -18,10 +18,10 @@
 | --- | --- |
 | 10-BDD | 1339 |
 | 20-Cards | 811 |
-| 03-Developpement | 20 |
+| 03-Developpement | 21 |
 | 01-Vision & Gameplay | 12 |
+| 00-Cockpit | 4 |
 | 02-Contenu du jeu | 4 |
-| 00-Cockpit | 2 |
 | _incoming_images | 1 |
 | 04-UX - Design - Branding | 1 |
 | 05-Marketing & Feedback | 1 |
@@ -57,11 +57,14 @@
 | Spécifié — équilibrage requis | 90 |
 | Modèle dynamique — points proposés | 8 |
 | Live | 7 |
-| decision | 4 |
+| decision | 5 |
 | Modèle dynamique validé | 4 |
 | À confirmer | 3 |
-| empty-in-notion | 3 |
+| empty-in-notion | 2 |
+| active | 1 |
 | Conception | 1 |
+| live | 1 |
+| maintained-in-obsidian | 1 |
 
 ## Distribution des cartes par deck
 
@@ -112,7 +115,9 @@
 | Fichier | Sujet | Statut | Lignes | Priorité |
 | --- | --- | --- | --- | --- |
 | `00-Cockpit/Checklist complète du projet.md` | 🎯 Objectif de cette page | non précisé | 1112 | à qualifier |
-| `00-Cockpit/Rocket Them All.md` | Rocket Them All | non précisé | 43 | à qualifier |
+| `00-Cockpit/Journal de bord - Application.md` | Journal de bord - Application | active | 62 | à qualifier |
+| `00-Cockpit/Rocket Them All.md` | Rocket Them All | non précisé | 46 | à qualifier |
+| `00-Cockpit/État actuel de l'application.md` | État actuel de l'application | live | 74 | à qualifier |
 | `01-Vision & Gameplay/Arbres de compétences.md` | 🌳 Arbre de compétences V3 — 45 nœuds | non précisé | 971 | à qualifier |
 | `01-Vision & Gameplay/Boss-System.md` | Système de Boss | Conception | 6267 | à qualifier |
 | `01-Vision & Gameplay/Capture collective et préparation.md` | Capture collective et préparation | decision | 113 | normative |
@@ -124,12 +129,12 @@
 | `01-Vision & Gameplay/Salon de jeu Discord.md` | Salon de jeu Discord | decision | 85 | normative |
 | `01-Vision & Gameplay/UX Problems & Frictions.md` | UX Problems & Frictions | non précisé | 67 | à qualifier |
 | `01-Vision & Gameplay/Vision & Gameplay.md` | Vision & Gameplay | non précisé | 47 | à qualifier |
-| `01-Vision & Gameplay/Économie des doublons.md` | Économie des doublons | decision | 104 | normative |
+| `01-Vision & Gameplay/Économie des doublons.md` | Économie des doublons | decision | 118 | normative |
 | `02-Contenu du jeu/Achèvement.md` | Système d’achievements | non précisé | 2530 | à qualifier |
 | `02-Contenu du jeu/Contenu du jeu.md` | Contenu du jeu | non précisé | 321 | à qualifier |
 | `02-Contenu du jeu/Items.md` | 🎒 Catalogue des objets de départ — V1 | non précisé | 2701 | à qualifier |
 | `02-Contenu du jeu/Quêtes.md` | Système de quêtes quotidiennes | non précisé | 1837 | à qualifier |
-| `03-Developpement/Administration, fiabilité et analytics.md` | Administration, fiabilité et analytics | decision | 168 | normative |
+| `03-Developpement/Administration, fiabilité et analytics.md` | Administration, fiabilité et analytics | decision | 191 | normative |
 | `03-Developpement/API Routes.md` | API Routes | empty-in-notion | 22 | à qualifier |
 | `03-Developpement/Discord Commands/Command - booster buy.md` | /booster buy | Live | 19 | à qualifier |
 | `03-Developpement/Discord Commands/Command - booster open.md` | /booster open | Live | 20 | à qualifier |
@@ -140,8 +145,9 @@
 | `03-Developpement/Discord Commands/Command - trade.md` | /trade | Live | 22 | à qualifier |
 | `03-Developpement/Discord Commands/Discord Commands.md` | Discord Commands | non précisé | 44 | à qualifier |
 | `03-Developpement/Développement.md` | Développement | non précisé | 30 | à qualifier |
-| `03-Developpement/Frontend Pages - Next.js.md` | Frontend Pages - Next.js | empty-in-notion | 22 | à qualifier |
+| `03-Developpement/Frontend Pages - Next.js.md` | Frontend Pages - Next.js | maintained-in-obsidian | 61 | à qualifier |
 | `03-Developpement/Prisma Models/Prisma Models.md` | Prisma Models | non précisé | 32 | à qualifier |
+| `03-Developpement/Règle de synchronisation Code - Obsidian.md` | Règle de synchronisation Code - Obsidian | decision | 54 | normative |
 | `03-Developpement/Services & Components.md` | Services & Components | empty-in-notion | 21 | à qualifier |
 
 Les détails par note, leurs frontmatters, titres, liens et contrôles sont conservés dans
