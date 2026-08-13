@@ -32,6 +32,12 @@ tirée dans l’ensemble des decks publiés. Un booster de conquérant tire troi
 cartes et permet d’en conserver une. Le booster est consommé et la carte est
 octroyée dans la même transaction.
 
+## Marché hebdomadaire de cartes
+
+Une rotation mondiale `Europe/Paris` est matérialisée chaque lundi pour rester stable pendant sept jours. Elle contient 2 Common à 15 000 crédits, 2 Rare à 35 000, 1 Very Rare à 75 000 et 1 Import à 150 000. Dans chaque tier, la sélection privilégie les cartes à circulation nulle puis la quantité globale la plus faible ; la semaine départage les égalités de façon déterministe.
+
+Chaque offre livre une carte Normal et n’est achetable qu’une fois par joueur. Le débit, `WeeklyCardPurchase`, l’incrément d’`InventoryItem`, les deux écritures de ledger et l’outbox appartiennent à la même transaction sérialisable.
+
 ## Boss et zones premium
 
 Le tier est fixé dans le snapshot de chaque apparition de boss. Les crédits, l’XP et les fragments garantis augmentent avec ce tier; le booster et le coffre du Conquérant utilisent le même tier lorsqu’un jet indépendant réussit. Les gardiens reçoivent un bonus de récompense de 25 %.

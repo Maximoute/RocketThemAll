@@ -8,6 +8,7 @@
 - `UserProgress` : XP, niveau et points de compétence.
 - `InventoryItem`/`CardInstance` : collection et variantes globales.
 - `UserItem`, `UserSkill`, `UserDailyQuest`, `UserAchievement`. Ce dernier persiste le compteur maximal, la date de déblocage et l’état de réclamation pour chaque définition jouable.
+- `WeeklyCardOffer` matérialise les six cartes d’une semaine ; `WeeklyCardPurchase` relie une offre à son acheteur avec prix et clé d’idempotence.
 
 ### Contexte guilde
 
@@ -39,6 +40,7 @@
 - Un seul résultat principal par `(encounter_id, user_id)`.
 - Une seule annonce Hall of Fame par tentative de capture.
 - Une récompense de quête ou de succès au plus une fois.
+- Une seule offre par `(weekKey, slot)`, une seule occurrence d’une carte par semaine et un achat au plus par `(userId, offerId)`.
 - Une tâche de gardien au plus par `(guild_id, progression_id, slot)`.
 - Au plus un boss journalier et un gardien persistant ouverts par guilde, garanti par un index partiel sur `(guildId, isPersistent)`; leurs contributions et leurs expirations restent indépendantes.
 - Quantités et soldes non négatifs.

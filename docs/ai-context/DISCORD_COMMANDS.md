@@ -11,12 +11,12 @@
 | `/achievements` | Éphémère | Catalogue paginé, filtres par catégorie, points et progression personnelle |
 | `/skills` | Éphémère | Arbre, points et équipement |
 | `/items` | Éphémère | Inventaire et état des artefacts |
-| `/shop` | Éphémère | Boutique, solde de crédits personnel et achat optionnel |
+| `/shop` | Éphémère | Boutique, solde personnel, objets et six cartes rares en rotation hebdomadaire |
 | `/cardinfo` | Réponse de commande | Fiche d’une carte Vault par nom ou identifiant, possession par variante et image jointe |
 | `/trade` | Éphémère jusqu’à confirmation | Échange global, confirmation explicite des deux parties |
 | `/boss` | Éphémère | Centre des boss avec accès séparé au boss journalier et au gardien persistant de la guilde |
 
-Les commandes économiques historiques encore conservées sont `/sell`, `/recycle`, `/fragment`, `/value`, `/fusion`, `/daily`, `/shop`, `/boosters`, `/craft`, `/cardinfo`, `/leaderboard` et `/booster`. `/shop` est toujours privé et affiche le solde de crédits actualisé, y compris après un achat. `/cardinfo` interroge uniquement le catalogue Vault publié, accepte un identifiant non ambigu ou un nom complété par le deck, puis joint l’image normale, shiny ou holo demandée. Les commandes `/spawn`, `/capture` et `/inventory` ne sont plus enregistrées. Aucun spawn automatique de carte normale n’est autorisé; seuls les boss peuvent être déclenchés automatiquement via leur cycle et leurs conditions dédiés.
+Les commandes économiques historiques encore conservées sont `/sell`, `/recycle`, `/fragment`, `/value`, `/fusion`, `/daily`, `/shop`, `/boosters`, `/craft`, `/cardinfo`, `/leaderboard` et `/booster`. `/shop` est toujours privé, affiche le solde actualisé et propose par menu signé les offres hebdomadaires non encore achetées. `/cardinfo` interroge uniquement le catalogue Vault publié, accepte un identifiant non ambigu ou un nom complété par le deck, puis joint l’image normale, shiny ou holo demandée. Les commandes `/spawn`, `/capture` et `/inventory` ne sont plus enregistrées. Aucun spawn automatique de carte normale n’est autorisé; seuls les boss peuvent être déclenchés automatiquement via leur cycle et leurs conditions dédiés.
 
 ## Surface administration
 

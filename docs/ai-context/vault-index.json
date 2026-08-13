@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-08-11T15:57:05.880Z",
+  "generatedAt": "2026-08-13T00:08:54.832Z",
   "vaultRoot": "C:\\Users\\lecom\\OneDrive\\Developpement\\RocketThemAll\\Vault-RTA",
   "totals": {
-    "files": 4812,
-    "markdown": 2199,
+    "files": 4813,
+    "markdown": 2200,
     "assets": 2531,
-    "bytes": 747139386,
+    "bytes": 747144257,
     "uniqueCards": 810
   },
   "counts": {
     "extensions": {
       ".png": 2531,
-      ".md": 2199,
+      ".md": 2200,
       ".json": 42,
       ".csv": 21,
       ".py": 17,
@@ -23,7 +23,7 @@
       "10-BDD": 1339,
       "assets": 100,
       "_data": 49,
-      "03-Developpement": 21,
+      "03-Developpement": 22,
       "_tools": 18,
       "01-Vision & Gameplay": 12,
       ".obsidian": 9,
@@ -42,7 +42,7 @@
     "noteAreas": {
       "10-BDD": 1339,
       "20-Cards": 811,
-      "03-Developpement": 21,
+      "03-Developpement": 22,
       "01-Vision & Gameplay": 12,
       "00-Cockpit": 4,
       "02-Contenu du jeu": 4,
@@ -62,7 +62,7 @@
       "notion-page": 13,
       "markdown": 10,
       "discord-command": 7,
-      "prisma-model": 5,
+      "prisma-model": 6,
       "gameplay-spec": 3,
       "notion-database-schema": 3,
       "database-index": 2,
@@ -99,10 +99,11 @@
       "Modèle dynamique validé": 4,
       "À confirmer": 3,
       "empty-in-notion": 2,
+      "maintained-in-obsidian": 2,
       "active": 1,
       "Conception": 1,
-      "live": 1,
-      "maintained-in-obsidian": 1
+      "implemented": 1,
+      "live": 1
     }
   },
   "validation": {
@@ -7235,15 +7236,15 @@
     {
       "path": "00-Cockpit/Journal de bord - Application.md",
       "area": "00-Cockpit",
-      "bytes": 3455,
-      "lines": 74,
+      "bytes": 4263,
+      "lines": 87,
       "title": "Journal de bord - Application",
       "type": "application-changelog",
       "status": "active",
       "frontmatter": {
         "type": "application-changelog",
         "status": "active",
-        "last-updated": "2026-08-11",
+        "last-updated": "2026-08-13",
         "tags": [
           "rta/cockpit",
           "rta/changelog",
@@ -7254,6 +7255,10 @@
         {
           "level": 1,
           "title": "Journal de bord - Application"
+        },
+        {
+          "level": 2,
+          "title": "2026-08-13 — Marché hebdomadaire des cartes rares"
         },
         {
           "level": 2,
@@ -7281,6 +7286,11 @@
         }
       ],
       "wikiLinks": [
+        "Économie des doublons",
+        "Salon de jeu Discord",
+        "Frontend Pages - Next.js",
+        "Model - WeeklyCardOffer - WeeklyCardPurchase",
+        "Prisma Models",
         "Quêtes",
         "Q009",
         "État actuel de l'application",
@@ -7291,7 +7301,7 @@
         "État actuel de l'application"
       ],
       "assetLinks": [],
-      "sha256": "91fd4c7817068fe7fd3535e6ed635021cbe76681f387e272f727a31b9c94a1e4"
+      "sha256": "075a2cec9b570d500c7ad296b205644e45887a08e193bd20a4ef91175bad974c"
     },
     {
       "path": "00-Cockpit/Rocket Them All.md",
@@ -7352,7 +7362,7 @@
     {
       "path": "00-Cockpit/État actuel de l'application.md",
       "area": "00-Cockpit",
-      "bytes": 4132,
+      "bytes": 4140,
       "lines": 75,
       "title": "État actuel de l'application",
       "type": "application-status",
@@ -7362,7 +7372,7 @@
         "status": "live",
         "last-updated": "2026-08-11",
         "code-branch": "RTAV2",
-        "deployed-commit": "1aa68b124562aace8b54bcaf570aa8c28faf18ce",
+        "deployed-commit": "0f8d252311c462abe2dea59d889960593e02b3cd",
         "tags": [
           "rta/cockpit",
           "rta/production",
@@ -7415,7 +7425,7 @@
         "Items"
       ],
       "assetLinks": [],
-      "sha256": "8fa98a5cf20e02ea6e11127f78e64d4225350c794fef31694a3967a84d98a0b8"
+      "sha256": "45146da5e11254023d43064133ac0d0b38122e85629164464ca9ad87240359f4"
     },
     {
       "path": "01-Vision & Gameplay/Arbres de compétences.md",
@@ -10075,8 +10085,8 @@
     {
       "path": "01-Vision & Gameplay/Salon de jeu Discord.md",
       "area": "01-Vision & Gameplay",
-      "bytes": 3458,
-      "lines": 85,
+      "bytes": 3790,
+      "lines": 86,
       "title": "Salon de jeu Discord",
       "type": "gameplay-spec",
       "status": "decision",
@@ -10127,7 +10137,7 @@
         "Discord Commands"
       ],
       "assetLinks": [],
-      "sha256": "a070390734ebab881b2a2db583cb06a930a9d917d006eea7bd0c1e26b59ab5c5"
+      "sha256": "30d1a6cccbc818d7929727c71ec31f92b83b15e00bb8a1accc6ddf1475cfda41"
     },
     {
       "path": "01-Vision & Gameplay/UX Problems & Frictions.md",
@@ -10241,15 +10251,15 @@
     {
       "path": "01-Vision & Gameplay/Économie des doublons.md",
       "area": "01-Vision & Gameplay",
-      "bytes": 4990,
-      "lines": 118,
+      "bytes": 6196,
+      "lines": 135,
       "title": "Économie des doublons",
       "type": "gameplay-spec",
       "status": "decision",
       "frontmatter": {
         "type": "gameplay-spec",
         "status": "decision",
-        "last-updated": "2026-08-11",
+        "last-updated": "2026-08-13",
         "tags": [
           "rta/gameplay",
           "rta/economy",
@@ -10295,6 +10305,10 @@
         },
         {
           "level": 2,
+          "title": "Marché des singularités — cartes hebdomadaires"
+        },
+        {
+          "level": 2,
           "title": "Garde-fous économiques"
         },
         {
@@ -10314,7 +10328,7 @@
         "Administration, fiabilité et analytics"
       ],
       "assetLinks": [],
-      "sha256": "2cbb14145538c743149739d7ea8d28edc1f87b40b497530f260f78440de4d077"
+      "sha256": "dd7db91375a4a7d79403290ff4892f682a25810666652f839aac6341363d7396"
     },
     {
       "path": "02-Contenu du jeu/Achèvement.md",
@@ -12435,8 +12449,8 @@
     {
       "path": "03-Developpement/Frontend Pages - Next.js.md",
       "area": "03-Developpement",
-      "bytes": 3035,
-      "lines": 61,
+      "bytes": 3635,
+      "lines": 69,
       "title": "Frontend Pages - Next.js",
       "type": "notion-database-schema",
       "status": "maintained-in-obsidian",
@@ -12444,7 +12458,7 @@
         "type": "notion-database-schema",
         "source": "https://app.notion.com/p/2e3c15d15146422da1780a0362e3b07f",
         "status": "maintained-in-obsidian",
-        "last-updated": "2026-08-11"
+        "last-updated": "2026-08-13"
       },
       "headings": [
         {
@@ -12465,6 +12479,10 @@
         },
         {
           "level": 2,
+          "title": "Boutique hebdomadaire de cartes"
+        },
+        {
+          "level": 2,
           "title": "Administration"
         },
         {
@@ -12477,7 +12495,7 @@
         "Règle de synchronisation Code - Obsidian"
       ],
       "assetLinks": [],
-      "sha256": "9bdfee17948327cf4650365017a83b492f97b88d18544ac4d2bf7b15b2e5d666"
+      "sha256": "40dfa3273199c1c719b304e81b5eb305d20bf975754244437c2d9d382222a8b1"
     },
     {
       "path": "03-Developpement/Prisma Models/Model - Card.md",
@@ -12635,15 +12653,63 @@
       "sha256": "4162caa434954c5b8865f177a1b7567a36adea9d8639031db0b2e2ab01a3963b"
     },
     {
+      "path": "03-Developpement/Prisma Models/Model - WeeklyCardOffer - WeeklyCardPurchase.md",
+      "area": "03-Developpement",
+      "bytes": 1364,
+      "lines": 39,
+      "title": "Model - WeeklyCardOffer - WeeklyCardPurchase",
+      "type": "prisma-model",
+      "status": "implemented",
+      "frontmatter": {
+        "type": "prisma-model",
+        "status": "implemented",
+        "last-updated": "2026-08-13",
+        "tags": [
+          "rta/development",
+          "rta/database-model",
+          "rta/economy",
+          "rta/shop"
+        ]
+      },
+      "headings": [
+        {
+          "level": 1,
+          "title": "Model - WeeklyCardOffer - WeeklyCardPurchase"
+        },
+        {
+          "level": 2,
+          "title": "WeeklyCardOffer"
+        },
+        {
+          "level": 2,
+          "title": "WeeklyCardPurchase"
+        },
+        {
+          "level": 2,
+          "title": "Relations"
+        }
+      ],
+      "wikiLinks": [
+        "Économie des doublons",
+        "Frontend Pages - Next.js",
+        "Salon de jeu Discord"
+      ],
+      "assetLinks": [],
+      "sha256": "eaa9443d594c34734c698ca9d35f5ae1ded3c6dac4174f5cb3b28957742bd1d0"
+    },
+    {
       "path": "03-Developpement/Prisma Models/Prisma Models.md",
       "area": "03-Developpement",
-      "bytes": 740,
-      "lines": 32,
+      "bytes": 952,
+      "lines": 36,
       "title": "Prisma Models",
       "type": "notion-database",
+      "status": "maintained-in-obsidian",
       "frontmatter": {
         "type": "notion-database",
         "source": "https://app.notion.com/p/ade15132afca4bb3a8a61d5045e90958",
+        "status": "maintained-in-obsidian",
+        "last-updated": "2026-08-13",
         "tags": [
           "rta/development",
           "rta/database-model"
@@ -12669,10 +12735,11 @@
         "Model - InventoryItem",
         "Model - Trade - TradeItem",
         "Model - TransactionLog - EconomyLog",
-        "Model - UserBooster - FragmentBalance - AppConfig"
+        "Model - UserBooster - FragmentBalance - AppConfig",
+        "Model - WeeklyCardOffer - WeeklyCardPurchase"
       ],
       "assetLinks": [],
-      "sha256": "15576edededff6529c07729e90c47744736b3c52d5b217d7e0ca3fd3deff9881"
+      "sha256": "4d4e242f317a751e8dcf1084b9f107ff3e5cd6f97287b25d0be552f095ec6f6b"
     },
     {
       "path": "03-Developpement/Règle de synchronisation Code - Obsidian.md",

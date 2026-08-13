@@ -12,6 +12,7 @@ import {
   itemTechnicalDescription,
   MONETIZATION_PRODUCTS,
   MonetizationService,
+  WeeklyCardShopService,
   type MonetizationProductKey
 } from "@rta/services";
 import Link from "next/link";
@@ -32,6 +33,7 @@ type BoosterType = (typeof BOOSTER_TYPES)[number];
 const boosterService = new BoosterService();
 const itemShopService = new ItemShopService();
 const monetizationService = new MonetizationService();
+const weeklyCardShopService = new WeeklyCardShopService();
 
 type ShopMetadata = {
   creditPrice?: number;
@@ -134,13 +136,37 @@ export default async function ShopPage({
     )}`);
   }
 
-  const [definitions, ownedItems, ownedBoosters] = await Promise.all([
+  async function buyWeeklyCard(formData: FormData) {
+    "use server";
+
+    const actionUser = await requireUser();
+    const offerId = String(formData.get("offerId") ?? "");
+    const operationKey = String(formData.get("operationKey") ?? "");
+    let purchasedName = "Carte";
+    try {
+      const result = await weeklyCardShopService.buyWeeklyCard(
+        actionUser.id,
+        offerId,
+        operationKey
+      );
+      purchasedName = result.offer.card.name;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Achat impossible";
+      redirect(`/shop?error=${encodeURIComponent(message)}`);
+    }
+    redirect(`/shop?success=${encodeURIComponent(
+      `${purchasedName} ajoutée à ta collection`
+    )}`);
+  }
+
+  const [definitions, ownedItems, ownedBoosters, weeklyShop] = await Promise.all([
     prisma.itemDefinition.findMany({
       where: { status: "PUBLISHED" },
       orderBy: [{ type: "asc" }, { name: "asc" }]
     }),
     prisma.userItem.findMany({ where: { userId: user.id } }),
-    prisma.userBooster.findMany({ where: { userId: user.id } })
+    prisma.userBooster.findMany({ where: { userId: user.id } }),
+    weeklyCardShopService.getWeeklyShop(user.id)
   ]);
   const [supporterAccess, paymentCustomer, paymentOrders] = await Promise.all([
     monetizationService.getUserAccess(user.id),
@@ -208,7 +234,7 @@ export default async function ShopPage({
           <div className="text-2xl font-black text-rta-gold">
             {section === "premium"
               ? `Stripe · ${stripeStatus}`
-              : `⚡ ${user.credits.toLocaleString("fr-FR")} crédits`}
+              : `⚡ ${weeklyShop.credits.toLocaleString("fr-FR")} crédits`}
           </div>
         </div>
       </div>
@@ -503,6 +529,102 @@ export default async function ShopPage({
 
       {section === "credits" && (
       <>
+      <section className="mb-10 rounded-2xl border border-rta-gold/50 bg-gradient-to-br from-rta-gold/10 via-rta-surface to-rta-surface p-5">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-rta-gold">
+              Marché des singularités
+            </div>
+            <h2 className="mt-1 text-2xl font-black">Cartes rares de la semaine</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-rta-muted">
+              Six cartes parmi les moins présentes dans les collections mondiales :
+              2 Common, 2 Rare, 1 Very Rare et 1 Import. Chaque offre est limitée
+              à un achat par joueur et livre une variante Normal.
+            </p>
+          </div>
+          <div className="rounded-xl border border-rta-gold/30 bg-rta-bg/70 px-4 py-3 text-right">
+            <div className="text-[0.65rem] font-black uppercase tracking-widest text-rta-muted">
+              Prochaine rotation
+            </div>
+            <div className="mt-1 font-black text-rta-gold">
+              {new Intl.DateTimeFormat("fr-BE", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Europe/Paris"
+              }).format(weeklyShop.endsAt)}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {weeklyShop.offers.map((offer) => {
+            const canBuy = !offer.purchased && weeklyShop.credits >= offer.price;
+            const rarityStyle = ({
+              Common: "border-slate-400/50 text-slate-200",
+              Rare: "border-blue-400/60 text-blue-300",
+              "Very Rare": "border-violet-400/60 text-violet-300",
+              Import: "border-orange-400/60 text-orange-300"
+            } as Record<string, string>)[offer.rarityName] ?? "border-rta-border text-rta-ink";
+            return (
+              <article
+                key={offer.id}
+                className={`overflow-hidden rounded-xl border bg-rta-bg/65 ${rarityStyle}`}
+              >
+                <Link href={`/cardinfo/${offer.card.id}`} className="block">
+                  <div className="relative aspect-[4/3] bg-gradient-to-b from-rta-surface2 to-rta-bg">
+                    {offer.card.imageUrl ? (
+                      <img
+                        src={offer.card.imageUrl}
+                        alt={offer.card.name}
+                        className="absolute inset-0 h-full w-full object-contain p-3 transition-transform duration-200 hover:scale-[1.03]"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 grid place-items-center text-5xl opacity-30">🃏</div>
+                    )}
+                    <span className="absolute left-2 top-2 rounded-full border border-current bg-rta-bg/90 px-2 py-1 text-[0.65rem] font-black">
+                      {offer.rarityName}
+                    </span>
+                  </div>
+                </Link>
+                <div className="p-4">
+                  <h3 className="text-lg font-black text-rta-ink">{offer.card.name}</h3>
+                  <p className="mt-1 text-xs text-rta-muted">Deck · {offer.card.deck.name}</p>
+                  <p className="mt-3 text-xs text-rta-muted">
+                    {offer.circulationSnapshot === 0
+                      ? "Aucun exemplaire en circulation lors du tirage"
+                      : `${offer.circulationSnapshot.toLocaleString("fr-FR")} exemplaire(s) en circulation lors du tirage`}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <span className="text-xl font-black text-rta-gold">
+                      ⚡ {offer.price.toLocaleString("fr-FR")}
+                    </span>
+                    <form action={buyWeeklyCard}>
+                      <input type="hidden" name="offerId" value={offer.id} />
+                      <input type="hidden" name="operationKey" value={`web-${randomUUID()}`} />
+                      <button
+                        type="submit"
+                        disabled={!canBuy}
+                        className={[
+                          "rounded-lg px-4 py-2 text-sm font-black",
+                          canBuy
+                            ? "bg-rta-gold text-rta-bg hover:bg-rta-gold/90"
+                            : "cursor-not-allowed bg-rta-surface2 text-rta-muted"
+                        ].join(" ")}
+                      >
+                        {offer.purchased ? "Déjà achetée" : canBuy ? "Acheter" : "Crédits insuffisants"}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
       <p className="text-sm text-rta-muted mb-7">
         Les boosters s’ouvrent depuis <code className="bg-rta-surface2 px-1.5 py-0.5 rounded text-rta-ink text-xs">/items</code>
         avec le bouton « Ouvrir un booster ». Basic propose 3 cartes et tu en gardes 1,

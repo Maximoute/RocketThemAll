@@ -7,7 +7,7 @@
 | Capture | 95 % si la réponse est correcte; base 25 % si elle est incorrecte, puis modificateurs bornés | Calcul centralisé avec fenêtre de tension de 3 secondes et objets |
 | Variantes | Normal 98,9 %, Shiny 1 %, Holo 0,1 % | Taux centralisés et configurables |
 | Collection | Globale, un exemplaire protégé, doublons consommables | Collection Vault globale et fiches détaillées |
-| Économie | Crédits globaux, ledger immuable, mutation atomique | Ledger et idempotence actifs |
+| Économie | Crédits globaux, ledger immuable, mutation atomique | Ledger, idempotence et marché hebdomadaire de six cartes à faible circulation actifs |
 | Fusion | Coût par rareté : 3/5/7/9/12/18 | Service transactionnel |
 | Objets | 42 définitions, exactement 2 emplacements d’artefacts et des emplacements de consommables séparés | 42 définitions, effets runtime, inventaire et équipement interactif |
 | Boosters | 1 carte du tier; variantes de boss : 3 tirées, 1 gardée | Carte issue de tous les decks Vault |

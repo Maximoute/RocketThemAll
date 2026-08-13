@@ -127,3 +127,10 @@
 - Une quête globale doit être réalisable avec les mondes effectivement accessibles au joueur au moment de la réconciliation quotidienne.
 - Pour `EXPLORE_DISTINCT_WORLDS`, le seuil d’éligibilité est la cible exacte après application de la difficulté, et non un minimum générique de deux mondes.
 - Toute quête active devenue impossible est remplacée dans son slot avant affichage ; elle ne verse aucune récompense et sa progression précédente n’est pas transférée.
+
+## ADR-023 — Rotation hebdomadaire du marché de cartes
+
+- La liste demandée comme « cinq cartes » contient en réalité six emplacements (`2 + 2 + 1 + 1`) ; la répartition complète prime donc sur le total annoncé.
+- La rotation est mondiale, matérialisée au premier accès après le lundi 00:00 `Europe/Paris` et immuable jusqu’au lundi suivant.
+- La rareté de circulation est mesurée par la somme des quantités de toutes les variantes dans `InventoryItem` au moment du tirage.
+- Une offre donne une variante Normal et ne peut être achetée qu’une fois par joueur et par semaine.

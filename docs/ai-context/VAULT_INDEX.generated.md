@@ -1,16 +1,16 @@
 # Index généré du vault RTA
 
-> Généré par `npm run audit:vault` le 2026-08-11T15:57:05.880Z. Ne pas modifier à la main.
+> Généré par `npm run audit:vault` le 2026-08-13T00:08:54.832Z. Ne pas modifier à la main.
 
 ## Totaux
 
 | Mesure | Valeur |
 | --- | --- |
-| Fichiers | 4812 |
-| Notes Markdown | 2199 |
+| Fichiers | 4813 |
+| Notes Markdown | 2200 |
 | Assets image | 2531 |
 | Cartes uniques | 810 |
-| Taille totale (octets) | 747139386 |
+| Taille totale (octets) | 747144257 |
 
 ## Répartition des notes
 
@@ -18,7 +18,7 @@
 | --- | --- |
 | 10-BDD | 1339 |
 | 20-Cards | 811 |
-| 03-Developpement | 21 |
+| 03-Developpement | 22 |
 | 01-Vision & Gameplay | 12 |
 | 00-Cockpit | 4 |
 | 02-Contenu du jeu | 4 |
@@ -61,10 +61,11 @@
 | Modèle dynamique validé | 4 |
 | À confirmer | 3 |
 | empty-in-notion | 2 |
+| maintained-in-obsidian | 2 |
 | active | 1 |
 | Conception | 1 |
+| implemented | 1 |
 | live | 1 |
-| maintained-in-obsidian | 1 |
 
 ## Distribution des cartes par deck
 
@@ -115,7 +116,7 @@
 | Fichier | Sujet | Statut | Lignes | Priorité |
 | --- | --- | --- | --- | --- |
 | `00-Cockpit/Checklist complète du projet.md` | 🎯 Objectif de cette page | non précisé | 1112 | à qualifier |
-| `00-Cockpit/Journal de bord - Application.md` | Journal de bord - Application | active | 74 | à qualifier |
+| `00-Cockpit/Journal de bord - Application.md` | Journal de bord - Application | active | 87 | à qualifier |
 | `00-Cockpit/Rocket Them All.md` | Rocket Them All | non précisé | 46 | à qualifier |
 | `00-Cockpit/État actuel de l'application.md` | État actuel de l'application | live | 75 | à qualifier |
 | `01-Vision & Gameplay/Arbres de compétences.md` | 🌳 Arbre de compétences V3 — 45 nœuds | non précisé | 971 | à qualifier |
@@ -126,10 +127,10 @@
 | `01-Vision & Gameplay/Exploration System.md` | Exploration System | non précisé | 165 | à qualifier |
 | `01-Vision & Gameplay/Fantasy & Vision Joueur.md` | Fantasy & Vision Joueur | non précisé | 74 | à qualifier |
 | `01-Vision & Gameplay/Progression long terme.md` | Progression long terme | non précisé | 478 | à qualifier |
-| `01-Vision & Gameplay/Salon de jeu Discord.md` | Salon de jeu Discord | decision | 85 | normative |
+| `01-Vision & Gameplay/Salon de jeu Discord.md` | Salon de jeu Discord | decision | 86 | normative |
 | `01-Vision & Gameplay/UX Problems & Frictions.md` | UX Problems & Frictions | non précisé | 67 | à qualifier |
 | `01-Vision & Gameplay/Vision & Gameplay.md` | Vision & Gameplay | non précisé | 47 | à qualifier |
-| `01-Vision & Gameplay/Économie des doublons.md` | Économie des doublons | decision | 118 | normative |
+| `01-Vision & Gameplay/Économie des doublons.md` | Économie des doublons | decision | 135 | normative |
 | `02-Contenu du jeu/Achèvement.md` | Système d’achievements | non précisé | 2530 | à qualifier |
 | `02-Contenu du jeu/Contenu du jeu.md` | Contenu du jeu | non précisé | 321 | à qualifier |
 | `02-Contenu du jeu/Items.md` | 🎒 Catalogue des objets de départ — V1 | non précisé | 2701 | à qualifier |
@@ -145,8 +146,8 @@
 | `03-Developpement/Discord Commands/Command - trade.md` | /trade | Live | 22 | à qualifier |
 | `03-Developpement/Discord Commands/Discord Commands.md` | Discord Commands | non précisé | 44 | à qualifier |
 | `03-Developpement/Développement.md` | Développement | non précisé | 30 | à qualifier |
-| `03-Developpement/Frontend Pages - Next.js.md` | Frontend Pages - Next.js | maintained-in-obsidian | 61 | à qualifier |
-| `03-Developpement/Prisma Models/Prisma Models.md` | Prisma Models | non précisé | 32 | à qualifier |
+| `03-Developpement/Frontend Pages - Next.js.md` | Frontend Pages - Next.js | maintained-in-obsidian | 69 | à qualifier |
+| `03-Developpement/Prisma Models/Prisma Models.md` | Prisma Models | maintained-in-obsidian | 36 | à qualifier |
 | `03-Developpement/Règle de synchronisation Code - Obsidian.md` | Règle de synchronisation Code - Obsidian | decision | 54 | normative |
 | `03-Developpement/Services & Components.md` | Services & Components | empty-in-notion | 21 | à qualifier |
 

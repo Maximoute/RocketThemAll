@@ -17,6 +17,7 @@
 - Le tier d’un boss régulier est tiré indépendamment du monde : 30 % Common, 25 % Uncommon, 20 % Rare, 13 % Very Rare, 8 % Import et 4 % Exotic.
 - Le tier d’un gardien est fixe selon le passage protégé : Common, Uncommon, Rare, Very Rare, Import, puis Exotic pour les trois derniers passages.
 - Une entrée de zone premium en crédits vaut le prix de référence du Pass d’expédition + 50 crédits. Le Pass est actuellement non achetable (`0`), donc le coût de base est 50 crédits.
+- Le marché hebdomadaire contient 2 Common à 15 000 crédits, 2 Rare à 35 000, 1 Very Rare à 75 000 et 1 Import à 150 000. Il tourne le lundi à 00:00 `Europe/Paris`, favorise la circulation la plus faible et limite chaque offre à un achat par joueur.
 
 ## Boss par tier
 

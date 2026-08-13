@@ -11,6 +11,7 @@
 - Compétences : arbre de 45 nœuds, prérequis et état d’engagement de branche.
 - Échanges : création, inspection, double confirmation, expiration et historique.
 - Historique économique : mouvements compréhensibles sans données sensibles.
+- Boutique crédits : un marché hebdomadaire affiche six cartes parmi les moins en circulation avec image, deck, tier, prix, circulation figée et prochain reroll. Une offre est achetable une fois par joueur et livre une variante Normal.
 
 ## Guilde
 

@@ -12,6 +12,7 @@ import {
   DailyService,
   ExploreService,
   ItemShopService,
+  WeeklyCardShopService,
   SkillService,
   EquipmentService,
   BossService,
@@ -43,6 +44,7 @@ export const fusionService = new FusionService();
 export const dailyService = new DailyService();
 export const exploreService = new ExploreService();
 export const itemShopService = new ItemShopService();
+export const weeklyCardShopService = new WeeklyCardShopService();
 export const skillService = new SkillService();
 export const equipmentService = new EquipmentService();
 export const bossService = new BossService();

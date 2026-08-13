@@ -1,6 +1,6 @@
 # Inventaire généré du contenu RTA
 
-> Généré par `npm run audit:vault` le 2026-08-11T15:57:05.880Z. Ne pas modifier à la main.
+> Généré par `npm run audit:vault` le 2026-08-13T00:08:54.832Z. Ne pas modifier à la main.
 
 ## Fichiers par zone
 
@@ -10,7 +10,7 @@
 | 10-BDD | 1339 |
 | assets | 100 |
 | _data | 49 |
-| 03-Developpement | 21 |
+| 03-Developpement | 22 |
 | _tools | 18 |
 | 01-Vision & Gameplay | 12 |
 | .obsidian | 9 |
@@ -31,7 +31,7 @@
 | Extension | Fichiers |
 | --- | --- |
 | .png | 2531 |
-| .md | 2199 |
+| .md | 2200 |
 | .json | 42 |
 | .csv | 21 |
 | .py | 17 |
@@ -48,7 +48,7 @@
 | notion-page | 13 |
 | markdown | 10 |
 | discord-command | 7 |
-| prisma-model | 5 |
+| prisma-model | 6 |
 | gameplay-spec | 3 |
 | notion-database-schema | 3 |
 | database-index | 2 |

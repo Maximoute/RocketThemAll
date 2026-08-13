@@ -18,6 +18,7 @@ export * from "./transmutation.service.js";
 export * from "./daily.service.js";
 export * from "./collection.service.js";
 export * from "./item-shop.service.js";
+export * from "./weekly-card-shop.service.js";
 export * from "./item-copy.js";
 export * from "./skill.service.js";
 export * from "./equipment.service.js";

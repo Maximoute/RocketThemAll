@@ -11,6 +11,7 @@ import {
 import {
   boosterService,
   itemShopService,
+  weeklyCardShopService,
   AppError,
   prisma
 } from "../service-instances.js";
@@ -62,6 +63,33 @@ function shopComponents(
   );
 }
 
+function weeklyCardComponents(
+  discordUserId: string,
+  offers: Array<{
+    id: string;
+    price: number;
+    rarityName: string;
+    purchased: boolean;
+    card: { name: string; deck: { name: string } };
+  }>
+) {
+  const available = offers.filter((offer) => !offer.purchased);
+  if (available.length === 0) return null;
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(createInteractionToken("W", discordUserId))
+      .setPlaceholder("Choisir une carte de la rotation hebdomadaire")
+      .addOptions(available.map((offer) => ({
+        label: offer.card.name.slice(0, 100),
+        value: offer.id,
+        description: (
+          `${offer.rarityName} · ${offer.card.deck.name} · ` +
+          `${offer.price.toLocaleString("fr-FR")} crédits`
+        ).slice(0, 100)
+      })))
+  );
+}
+
 function monetizationComponents() {
   if (!discordMonetizationEnabled()) return null;
   const buttons = Object.values(MONETIZATION_PRODUCTS).flatMap((product) => {
@@ -78,7 +106,8 @@ function monetizationComponents() {
 export async function handleShop(
   interaction: ShopInteraction,
   user: any,
-  selectedItem?: string
+  selectedItem?: string,
+  selectedWeeklyOffer?: string
 ) {
   const requestedItem = selectedItem?.trim() || (
     interaction.isChatInputCommand()
@@ -86,6 +115,16 @@ export async function handleShop(
       : undefined
   );
   let purchaseMessage: string | null = null;
+  if (selectedWeeklyOffer) {
+    const purchase = await weeklyCardShopService.buyWeeklyCard(
+      user.id,
+      selectedWeeklyOffer,
+      interaction.id
+    );
+    purchaseMessage =
+      `✅ **${purchase.offer.card.name}** [Normal] achetée pour ` +
+      `**${purchase.price.toLocaleString("fr-FR")} crédits**.`;
+  }
   if (requestedItem) {
     const definition = await prisma.itemDefinition.findUnique({
       where: { contentKey: requestedItem }
@@ -113,13 +152,7 @@ export async function handleShop(
       purchaseMessage = `✅ **${definition.name}** acheté pour **${purchase.price.toLocaleString("fr-FR")} crédits**.`;
     }
   }
-  const account = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { credits: true }
-  });
-  if (!account) {
-    throw new AppError("Utilisateur introuvable", 404);
-  }
+  const weeklyShop = await weeklyCardShopService.getWeeklyShop(user.id);
   const catalog = await prisma.itemDefinition.findMany({
     where: {
       status: "PUBLISHED"
@@ -148,9 +181,21 @@ export async function handleShop(
     .setTitle("🛒 Boutique RTA")
     .setDescription(
       `${purchaseMessage ? `${purchaseMessage}\n\n` : ""}` +
-      `💳 Ton solde : **${account.credits.toLocaleString("fr-FR")} crédits**\n\n` +
+      `💳 Ton solde : **${weeklyShop.credits.toLocaleString("fr-FR")} crédits**\n\n` +
       "Pour acheter : `/shop objet:<clé>`."
     );
+
+  embed.addFields({
+    name: "🃏 Cartes rares de la semaine",
+    value: weeklyShop.offers.map((offer) =>
+      `${offer.purchased ? "✅" : "•"} **${offer.card.name}** · ` +
+      `${offer.rarityName} · ${offer.card.deck.name} · ` +
+      `**${offer.price.toLocaleString("fr-FR")} crédits** · ` +
+      `${offer.circulationSnapshot} en circulation au tirage`
+    ).join("\n") +
+      `\n\nNouvelle rotation <t:${Math.floor(weeklyShop.endsAt.getTime() / 1000)}:R>. ` +
+      "Chaque carte ne peut être achetée qu’une fois par joueur pendant la semaine."
+  });
 
   const groups = new Map<string, string[]>();
   for (const item of buyable) {
@@ -180,13 +225,16 @@ export async function handleShop(
       value: `${website}/shop#support`
     });
   }
-  embed.setFooter({ text: `${buyable.length} objets achetables sur 42 objets Vault` });
+  embed.setFooter({
+    text: `${weeklyShop.offers.length} cartes hebdomadaires · ${buyable.length} objets achetables`
+  });
   const catalogRows = shopComponents(interaction.user.id, buyable);
+  const weeklyRow = weeklyCardComponents(interaction.user.id, weeklyShop.offers);
   await interaction.editReply({
     embeds: [embed],
     components: premiumRow
-      ? [...catalogRows.slice(0, 4), premiumRow]
-      : catalogRows
+      ? [...(weeklyRow ? [weeklyRow] : []), ...catalogRows.slice(0, 3), premiumRow]
+      : [...(weeklyRow ? [weeklyRow] : []), ...catalogRows.slice(0, 4)]
   });
 }
 

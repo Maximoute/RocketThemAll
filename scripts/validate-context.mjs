@@ -39,8 +39,8 @@ for (const document of requiredDocuments) {
 const indexPath = path.join(contextDirectory, "vault-index.json");
 const index = JSON.parse(await readFile(indexPath, "utf8"));
 const expectedTotals = {
-  files: 4_812,
-  markdown: 2_199,
+  files: 4_813,
+  markdown: 2_200,
   assets: 2_531,
   uniqueCards: 810
 };

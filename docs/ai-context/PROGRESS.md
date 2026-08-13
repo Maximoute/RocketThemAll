@@ -1,6 +1,6 @@
 # Progression
 
-Dernière mise à jour : 11 août 2026.
+Dernière mise à jour : 13 août 2026.
 
 ## Terminé
 
@@ -70,6 +70,7 @@ Dernière mise à jour : 11 août 2026.
 - Déploiement VPS durci contre la saturation disque : nettoyage des images et caches inutilisés sans suppression des volumes, seuil minimal de 2 Gio, sauvegarde avant migration et health checks publics. Version `1aa68b1` confirmée healthy pour bot, web et API.
 - Politique obligatoire code ↔ Obsidian ajoutée dans `AGENTS.md`, le Vault et `DOCUMENTATION_WORKFLOW.md`; chaque fonctionnalité doit désormais synchroniser théorie, état courant et journal dans le même travail.
 - Quêtes multi-mondes corrigées : l’éligibilité compare la cible exacte de difficulté au nombre de mondes accessibles et la réconciliation remplace les quêtes actives impossibles, y compris celles ayant déjà commencé.
+- Marché hebdomadaire de cartes ajouté au web et à `/shop` : six cartes Normal parmi les moins en circulation, prix élevés par tier, rotation du lundi en heure Paris/Belgique, achat personnel unique et transaction complète avec ledger/outbox.
 
 ## En cours
 

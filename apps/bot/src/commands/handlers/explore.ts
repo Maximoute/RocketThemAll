@@ -2339,6 +2339,17 @@ export async function handleRtaSelect(interaction: StringSelectMenuInteraction) 
     await handleShop(interaction, user, interaction.values[0]);
     return;
   }
+  if (token.action === "W") {
+    requireBoundUser(token.parts[0]!, interaction.user.id);
+    await interaction.deferUpdate();
+    const user = await usersService.getOrCreateDiscordUser(
+      interaction.user.id,
+      interaction.user.username,
+      interaction.user.displayAvatarURL()
+    );
+    await handleShop(interaction, user, undefined, interaction.values[0]);
+    return;
+  }
   if (token.action === "w") {
     await handleWorldSelect(interaction, token.parts[0]!, token.parts[1]!);
     return;

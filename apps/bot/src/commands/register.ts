@@ -84,7 +84,7 @@ export const commandBuilders = [
   new SlashCommandBuilder().setName("daily").setDescription("Réclamer la récompense quotidienne"),
   new SlashCommandBuilder()
     .setName("shop")
-    .setDescription("Voir la boutique ou acheter un objet")
+    .setDescription("Voir les objets et les cartes rares de la semaine")
     .addStringOption((option) =>
       option
         .setName("objet")
