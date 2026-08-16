@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@rta/auth": "1.0.0",
     "@rta/database": "1.0.0",
     "@rta/services": "1.0.0",
     "next": "15.5.21",

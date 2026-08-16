@@ -11,6 +11,16 @@ export type CommandChannelDecision = {
   message?: string;
 };
 
+export function missingGameChannelMessage() {
+  const publicBaseUrl = process.env.PUBLIC_BASE_URL?.replace(/\/+$/, "");
+  return (
+    "Aucun salon de jeu n’est configuré. Un propriétaire ou membre avec la permission " +
+    "**Gérer le serveur** peut lancer `/setup salon:#votre-salon`" +
+    (publicBaseUrl ? ` ou ouvrir <${publicBaseUrl}/setup>` : "") +
+    "."
+  );
+}
+
 export function decideCommandChannel(input: {
   commandName: string;
   channelId: string;
@@ -18,12 +28,18 @@ export function decideCommandChannel(input: {
   config: CommandChannelPolicy | null;
 }): CommandChannelDecision {
   if (!input.guildId) {
-    if (input.commandName === "explore" || input.commandName === "showcard") {
+    if (["explore", "setup", "showcard"].includes(input.commandName)) {
       return {
         allowed: false,
         message: `La commande \`/${input.commandName}\` doit être utilisée dans un serveur Discord.`
       };
     }
+    return { allowed: true };
+  }
+
+  // Setup must remain reachable before a game channel exists and must not be
+  // constrained by the channel it is responsible for configuring.
+  if (input.commandName === "setup") {
     return { allowed: true };
   }
 
@@ -66,8 +82,7 @@ export function decideCommandChannel(input: {
     if (!gameChannelId) {
       return {
         allowed: false,
-        message:
-          "Aucun salon de jeu n’est configuré. Un administrateur doit le sélectionner dans le panel RTA."
+        message: missingGameChannelMessage()
       };
     }
     if (input.channelId !== gameChannelId) {

@@ -20,6 +20,20 @@ test("explore is restricted to the configured game channel", () => {
   assert.match(denied.message, /<#game>/);
 });
 
+test("setup remains available everywhere and missing-channel help names both setup paths", () => {
+  assert.equal(decideCommandChannel({
+    commandName: "setup", channelId: "general", guildId: "guild", config: null
+  }).allowed, true);
+  assert.equal(decideCommandChannel({
+    commandName: "setup", channelId: "hall", guildId: "guild", config
+  }).allowed, true);
+  const denied = decideCommandChannel({
+    commandName: "explore", channelId: "general", guildId: "guild", config: null
+  });
+  assert.equal(denied.allowed, false);
+  assert.match(denied.message, /\/setup salon:/);
+});
+
 test("the Hall of Fame accepts showcard and rejects every other RTA command", () => {
   assert.equal(decideCommandChannel({
     commandName: "showcard", channelId: "hall", guildId: "guild", config

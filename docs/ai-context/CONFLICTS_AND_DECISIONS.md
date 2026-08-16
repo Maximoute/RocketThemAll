@@ -134,3 +134,10 @@
 - La rotation est mondiale, matérialisée au premier accès après le lundi 00:00 `Europe/Paris` et immuable jusqu’au lundi suivant.
 - La rareté de circulation est mesurée par la somme des quantités de toutes les variantes dans `InventoryItem` au moment du tirage.
 - Une offre donne une variante Normal et ne peut être achetée qu’une fois par joueur et par semaine.
+
+## ADR-024 — Configuration déléguée du salon de jeu
+
+- Le propriétaire d’une guilde et les membres ayant la permission Discord `ManageGuild` peuvent choisir le salon de jeu sans devenir administrateurs globaux RTA.
+- Deux surfaces équivalentes sont exposées : `/setup salon:#salon` dans Discord et `/setup` sur le site connecté.
+- L’autorisation est relue auprès de Discord lors de chaque mutation; un identifiant de guilde ou de salon fourni par le client ne suffit jamais.
+- Cette délégation modifie exclusivement `GuildConfiguration.gameChannelId`. Le serveur principal, le Hall of Fame, les annonces, l’économie et les joueurs restent dans le panel global.

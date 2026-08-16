@@ -28,6 +28,7 @@ import {
 } from "./handlers/showcard.js";
 import { handleLeaderboard } from "./handlers/leaderboard.js";
 import { handleTrade } from "./handlers/trade.js";
+import { handleSetup } from "./handlers/setup.js";
 import {
   handleExplore,
   handleRtaButton,
@@ -42,6 +43,7 @@ import {
 } from "./handlers/v2-views.js";
 
 const commandHandlers: Record<string, (interaction: ChatInputCommandInteraction, user: any) => Promise<void>> = {
+  setup: handleSetup,
   explore: handleExplore,
   sell: handleSell,
   recycle: handleRecycle,

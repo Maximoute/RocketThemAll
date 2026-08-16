@@ -15,6 +15,7 @@
 
 ## Guilde
 
+- Configuration autonome sur `/setup` pour le propriétaire ou les membres ayant `Gérer le serveur`. La liste est limitée aux guildes actives où Discord confirme ce droit, et la Server Action le revérifie avant de modifier uniquement le salon de jeu.
 - Progression communautaire et mondes débloqués.
 - État du boss, calendrier, contributions et récompenses.
 - Classements bornés et calculés depuis des vues dédiées.
@@ -23,6 +24,7 @@
 ## Administration
 
 - Configuration par guilde avec contrôle de rôle côté serveur. Un bouton permet de définir une unique guilde principale en base. Le salon et l’activation du Hall of Fame sont configurables indépendamment pour chaque serveur.
+- La page `/setup` est séparée de `/admin` : elle n’expose ni joueurs, ni économie, ni réglages d’une autre guilde, ni options avancées.
 - Gestion versionnée du contenu et prévisualisation des imports.
 - Supervision des jobs, erreurs, événements et idempotency.
 - Ajustements économiques par opérations compensatoires auditées.

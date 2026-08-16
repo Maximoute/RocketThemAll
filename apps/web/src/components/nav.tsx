@@ -58,6 +58,7 @@ export default function Nav() {
         {link("/achievements", "Achievements", true)}
         {link("/collection", "Collection", false, true)}
         {link("/shop?section=premium", "Boutique €", true)}
+        {isAuthenticated && link("/setup", "Configurer serveur", true)}
         {session?.user?.isAdmin === true && link("/admin", "Admin", true)}
       </nav>
 

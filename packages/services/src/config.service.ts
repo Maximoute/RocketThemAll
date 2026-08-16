@@ -84,6 +84,52 @@ export class ConfigService {
     });
   }
 
+  async configureGuildGameChannel(data: {
+    guildId: string;
+    guildName: string;
+    gameChannelId: string;
+    actorId: string;
+    source: "DISCORD_SETUP_COMMAND" | "WEB_GUILD_SETTINGS";
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const guild = await tx.guild.upsert({
+        where: { discordId: data.guildId },
+        update: { name: data.guildName, isActive: true },
+        create: {
+          discordId: data.guildId,
+          name: data.guildName,
+          isActive: true
+        }
+      });
+      await tx.guildConfiguration.upsert({
+        where: { guildId: guild.id },
+        update: {
+          gameChannelId: data.gameChannelId,
+          version: { increment: 1 }
+        },
+        create: {
+          guildId: guild.id,
+          gameChannelId: data.gameChannelId
+        }
+      });
+      await tx.adminLog.create({
+        data: {
+          adminId: data.actorId,
+          action: "GUILD_GAME_CHANNEL_CONFIGURED",
+          target: data.guildId,
+          metadata: {
+            gameChannelId: data.gameChannelId,
+            source: data.source
+          }
+        }
+      });
+      return tx.guild.findUniqueOrThrow({
+        where: { id: guild.id },
+        include: { config: true }
+      });
+    });
+  }
+
   markGuildInactive(discordId: string) {
     return prisma.guild.updateMany({
       where: { discordId },

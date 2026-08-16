@@ -4,6 +4,7 @@
 
 | Commande | Réponse | Règles |
 |---|---|---|
+| `/setup salon:#salon` | Éphémère | Propriétaire ou permission Discord `Gérer le serveur`; configure uniquement le salon de jeu de la guilde courante |
 | `/explore` | Hub public persistant + confirmation éphémère | Crée ou rafraîchit l’unique hub de la guilde |
 | `/collection` | Éphémère | Collection globale, filtres et pagination |
 | `/profile` | Éphémère | Progression globale, résumé des achievements et équipement interactif |
@@ -20,7 +21,8 @@ Les commandes économiques historiques encore conservées sont `/sell`, `/recycl
 
 ## Surface administration
 
-- Configuration du salon unique et des rôles autorisés.
+- `/setup` est la surface déléguée : elle reste disponible avant toute configuration et dans tous les salons, vérifie à l’exécution `Gérer le serveur`, l’appartenance du salon à la guilde et les permissions de publication du bot, puis ne modifie que `gameChannelId`.
+- Le panel global reste réservé aux administrateurs RTA et conserve les réglages avancés (serveur principal, Hall of Fame, annonces, économie et opérations joueurs).
 - Activation contrôlée de fonctionnalités.
 - Prévisualisation obligatoire avant toute opération de contenu.
 - Annulation logique plutôt que suppression physique.

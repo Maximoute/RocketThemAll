@@ -1,4 +1,10 @@
-import { REST, Routes, SlashCommandBuilder } from "discord.js";
+import {
+  ChannelType,
+  PermissionFlagsBits,
+  REST,
+  Routes,
+  SlashCommandBuilder
+} from "discord.js";
 
 const cardNameOption = (option: any) =>
   option.setName("nom").setDescription("Nom de la carte").setRequired(true);
@@ -43,6 +49,18 @@ for (let index = 1; index <= 6; index += 1) {
 }
 
 export const commandBuilders = [
+  new SlashCommandBuilder()
+    .setName("setup")
+    .setDescription("Configurer le salon de jeu de ce serveur")
+    .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addChannelOption((option) =>
+      option
+        .setName("salon")
+        .setDescription("Salon où utiliser /explore et recevoir les rencontres publiques")
+        .setRequired(true)
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+    ),
   new SlashCommandBuilder().setName("explore").setDescription("Ouvrir ou réparer le centre d'exploration"),
   new SlashCommandBuilder().setName("collection").setDescription("Voir ta collection de cartes"),
   new SlashCommandBuilder().setName("profile").setDescription("Voir ton profil et ta progression"),

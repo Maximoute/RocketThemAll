@@ -19,6 +19,14 @@
 - Refuser par défaut; ne jamais se fier à un bouton masqué.
 - Enregistrer les refus sensibles avec corrélation, sans contenu secret.
 
+### Configuration déléguée d’une guilde
+
+- `/setup` exige `ManageGuild` dans la commande Discord et refait le contrôle dans le handler; la visibilité Discord de la commande ne constitue pas l’autorisation.
+- `/setup` ne peut cibler que la guilde de l’interaction et un salon textuel résolu dans cette guilde.
+- La page web `/setup` part du Discord ID immuable de la session, interroge l’API Discord avec le bot pour vérifier propriétaire, `Administrator` ou `ManageGuild`, puis refait ce contrôle lors de chaque mutation.
+- Le salon soumis doit appartenir à la guilde active, être textuel et permettre au bot de voir, écrire, intégrer des liens et joindre des fichiers.
+- Le service dédié ne modifie que `GuildConfiguration.gameChannelId`, incrémente sa version et écrit un audit; aucun droit global RTA n’est accordé.
+
 ## Mutations
 
 - Validation de schéma stricte à la frontière.

@@ -35,6 +35,7 @@ import {
 import { attachCardImage } from "../card-media.js";
 import { announceHallOfFameCapture } from "../hall-of-fame.js";
 import { captureResultColor } from "../capture-result.js";
+import { missingGameChannelMessage } from "../channel-policy.js";
 import {
   handleInventory,
   handleRecycleCardCancel,
@@ -571,10 +572,7 @@ async function resolveGameChannel(
   const guild = await exploreService.getGuild(discordGuildId);
   const channelId = guild.config?.gameChannelId;
   if (!channelId) {
-    throw new AppError(
-      "Aucun salon de jeu n’est configuré. Un administrateur doit le sélectionner dans le panel RTA.",
-      409
-    );
+    throw new AppError(missingGameChannelMessage(), 409);
   }
 
   const channel = await interaction.client.channels.fetch(channelId);

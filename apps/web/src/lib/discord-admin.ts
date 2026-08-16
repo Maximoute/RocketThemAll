@@ -1,3 +1,5 @@
+import { hasGuildManagementPermission } from "@rta/auth";
+
 type DiscordChannel = {
   id: string;
   name: string;
@@ -27,6 +29,12 @@ export type DiscordGuildRole = {
 
 type DiscordGuildMember = {
   roles: string[];
+};
+
+type DiscordGuild = {
+  id: string;
+  name: string;
+  owner_id: string;
 };
 
 type DiscordBotUser = {
@@ -60,7 +68,8 @@ function fetchDiscordBotUser(token: string) {
   discordBotUserPromise ??= discordRequest("/users/@me", token)
     .then(async (response) => response.ok
       ? await response.json() as DiscordBotUser
-      : null);
+      : null)
+    .catch(() => null);
   return discordBotUserPromise;
 }
 
@@ -119,39 +128,43 @@ export async function fetchGuildGameChannels(guildId: string): Promise<DiscordGa
   const token = process.env.DISCORD_TOKEN;
   if (!token) return [];
 
-  const botUser = await fetchDiscordBotUser(token);
-  if (!botUser) return [];
-  const [channelsResponse, rolesResponse, memberResponse] = await Promise.all([
-    discordRequest(`/guilds/${guildId}/channels`, token),
-    discordRequest(`/guilds/${guildId}/roles`, token),
-    discordRequest(`/guilds/${guildId}/members/${botUser.id}`, token)
-  ]);
-  if (!channelsResponse.ok || !rolesResponse.ok || !memberResponse.ok) return [];
+  try {
+    const botUser = await fetchDiscordBotUser(token);
+    if (!botUser) return [];
+    const [channelsResponse, rolesResponse, memberResponse] = await Promise.all([
+      discordRequest(`/guilds/${guildId}/channels`, token),
+      discordRequest(`/guilds/${guildId}/roles`, token),
+      discordRequest(`/guilds/${guildId}/members/${botUser.id}`, token)
+    ]);
+    if (!channelsResponse.ok || !rolesResponse.ok || !memberResponse.ok) return [];
 
-  const channels = await channelsResponse.json() as DiscordChannel[];
-  const roles = await rolesResponse.json() as DiscordGuildRole[];
-  const member = await memberResponse.json() as DiscordGuildMember;
-  return channels
-    .filter((channel) => TEXT_CHANNEL_TYPES.has(channel.type))
-    .map((channel) => {
-      const permissionState = channelPermissions({
-        guildId,
-        botUserId: botUser.id,
-        memberRoleIds: member.roles,
-        roles,
-        channel
-      });
-      const missingPermissions = permissionState
-        .filter((permission) => !permission.granted)
-        .map((permission) => permission.label);
-      return {
-        id: channel.id,
-        name: channel.name,
-        botCanPublish: missingPermissions.length === 0,
-        missingPermissions
-      };
-    })
-    .sort((left, right) => left.name.localeCompare(right.name));
+    const channels = await channelsResponse.json() as DiscordChannel[];
+    const roles = await rolesResponse.json() as DiscordGuildRole[];
+    const member = await memberResponse.json() as DiscordGuildMember;
+    return channels
+      .filter((channel) => TEXT_CHANNEL_TYPES.has(channel.type))
+      .map((channel) => {
+        const permissionState = channelPermissions({
+          guildId,
+          botUserId: botUser.id,
+          memberRoleIds: member.roles,
+          roles,
+          channel
+        });
+        const missingPermissions = permissionState
+          .filter((permission) => !permission.granted)
+          .map((permission) => permission.label);
+        return {
+          id: channel.id,
+          name: channel.name,
+          botCanPublish: missingPermissions.length === 0,
+          missingPermissions
+        };
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchGuildRoles(guildId: string): Promise<DiscordGuildRole[]> {
@@ -162,4 +175,39 @@ export async function fetchGuildRoles(guildId: string): Promise<DiscordGuildRole
   if (!response.ok) return [];
   const roles = await response.json() as DiscordGuildRole[];
   return roles.sort((left, right) => right.position - left.position);
+}
+
+/**
+ * Revalidates guild-management access against Discord on every sensitive web
+ * render and mutation. The database membership table is intentionally not an
+ * authorization source because it does not carry live Discord permissions.
+ */
+export async function canUserManageGuild(guildId: string, discordUserId: string) {
+  if (!DISCORD_SNOWFLAKE.test(guildId) || !DISCORD_SNOWFLAKE.test(discordUserId)) {
+    return false;
+  }
+  const token = process.env.DISCORD_TOKEN;
+  if (!token) return false;
+
+  try {
+    const [guildResponse, rolesResponse, memberResponse] = await Promise.all([
+      discordRequest(`/guilds/${guildId}`, token),
+      discordRequest(`/guilds/${guildId}/roles`, token),
+      discordRequest(`/guilds/${guildId}/members/${discordUserId}`, token)
+    ]);
+    if (!guildResponse.ok || !rolesResponse.ok || !memberResponse.ok) return false;
+
+    const guild = await guildResponse.json() as DiscordGuild;
+    const roles = await rolesResponse.json() as DiscordGuildRole[];
+    const member = await memberResponse.json() as DiscordGuildMember;
+    return guild.id === guildId && hasGuildManagementPermission({
+      guildId,
+      discordUserId,
+      ownerId: guild.owner_id,
+      memberRoleIds: member.roles,
+      roles
+    });
+  } catch {
+    return false;
+  }
 }

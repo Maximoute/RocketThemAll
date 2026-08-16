@@ -22,6 +22,7 @@ import { registerBossAnnouncementSynchronization } from "../boss-announcements.j
 import { registerServerStatusSynchronization } from "../server-status.js";
 
 const privateCommands = new Set([
+  "setup",
   "explore",
   "collection",
   "profile",
