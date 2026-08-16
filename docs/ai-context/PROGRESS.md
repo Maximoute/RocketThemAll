@@ -72,6 +72,7 @@ Dernière mise à jour : 13 août 2026.
 - Quêtes multi-mondes corrigées : l’éligibilité compare la cible exacte de difficulté au nombre de mondes accessibles et la réconciliation remplace les quêtes actives impossibles, y compris celles ayant déjà commencé.
 - Marché hebdomadaire de cartes ajouté au web et à `/shop` : six cartes Normal parmi les moins en circulation, prix élevés par tier, rotation du lundi en heure Paris/Belgique, achat personnel unique et transaction complète avec ledger/outbox.
 - Configuration déléguée du salon de jeu ajoutée : `/setup salon:#salon` et page web `/setup`, contrôle Discord propriétaire/`Gérer le serveur` réévalué à chaque mutation, validation des permissions du bot et modification auditée du seul `gameChannelId` de la guilde courante.
+- Builder Caddy relevé de Go 1.26.5 à 1.26.6 avec digest immuable après blocage CI des nouveaux CVE High de la bibliothèque standard.
 
 ## En cours
 
