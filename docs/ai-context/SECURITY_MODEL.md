@@ -47,7 +47,7 @@ Les imports distants n’acceptent que HTTPS, bloquent adresses privées/loopbac
 - Valeurs sensibles expurgées des logs.
 - `.env.example` contient seulement des marqueurs non fonctionnels.
 
-Les images de production sont épinglées par digest et refusées par la CI lorsqu’un scanner détecte une vulnérabilité High/Critical. Le binaire Caddy 2.11.4 est recompilé avec Go 1.26.6 afin d’intégrer les correctifs de la bibliothèque standard Go publiés en août 2026.
+Les images de production sont épinglées par digest et refusées par la CI lorsqu’un scanner détecte une vulnérabilité High/Critical. Le binaire Caddy 2.11.4 est recompilé avec Go 1.26.6 et le digest Chainguard MinIO est actualisé sur la révision corrigée afin d’intégrer les correctifs Go publiés en août 2026.
 
 ## Limitation d’abus
 

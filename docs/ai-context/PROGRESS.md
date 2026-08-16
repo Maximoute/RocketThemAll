@@ -73,6 +73,7 @@ Dernière mise à jour : 13 août 2026.
 - Marché hebdomadaire de cartes ajouté au web et à `/shop` : six cartes Normal parmi les moins en circulation, prix élevés par tier, rotation du lundi en heure Paris/Belgique, achat personnel unique et transaction complète avec ledger/outbox.
 - Configuration déléguée du salon de jeu ajoutée : `/setup salon:#salon` et page web `/setup`, contrôle Discord propriétaire/`Gérer le serveur` réévalué à chaque mutation, validation des permissions du bot et modification auditée du seul `gameChannelId` de la guilde courante.
 - Builder Caddy relevé de Go 1.26.5 à 1.26.6 avec digest immuable après blocage CI des nouveaux CVE High de la bibliothèque standard.
+- Digest Chainguard MinIO actualisé sur la révision corrigée après blocage des mêmes nouveaux CVE Go ; le digest Compose et celui scanné par la CI restent identiques.
 
 ## En cours
 

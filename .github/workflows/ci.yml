@@ -162,7 +162,7 @@ jobs:
         run: |
           for image in \
             "nginx:stable-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46" \
-            "cgr.dev/chainguard/minio:latest@sha256:d386393960d3126c034d6597b752bc33a02a2c237069788aabcf6d035c166b27"
+            "cgr.dev/chainguard/minio:latest@sha256:6196cddcef910805064796d4788785e591f896d3a1432755ac8a1f30cbb4b04b"
           do
             docker pull "$image"
             docker run --rm \

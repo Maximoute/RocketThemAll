@@ -53,7 +53,7 @@ services:
       - backend
 
   minio:
-    image: cgr.dev/chainguard/minio:latest@sha256:d386393960d3126c034d6597b752bc33a02a2c237069788aabcf6d035c166b27
+    image: cgr.dev/chainguard/minio:latest@sha256:6196cddcef910805064796d4788785e591f896d3a1432755ac8a1f30cbb4b04b
     restart: unless-stopped
     read_only: true
     cap_drop:
@@ -88,7 +88,7 @@ services:
       - backend
 
   minio-init:
-    image: cgr.dev/chainguard/minio:latest@sha256:d386393960d3126c034d6597b752bc33a02a2c237069788aabcf6d035c166b27
+    image: cgr.dev/chainguard/minio:latest@sha256:6196cddcef910805064796d4788785e591f896d3a1432755ac8a1f30cbb4b04b
     restart: "no"
     read_only: true
     cap_drop:
