@@ -57,6 +57,8 @@ La session dev utilise `__Secure-rta-dev.session-token`, un secret NextAuth et u
 
 Les versions transitives `browserslist 4.28.9`, `postcss-selector-parser 6.1.4` et `qs 6.16.0` sont imposées à la suite des avis publiés le 5 septembre 2026. `npm audit` revient ainsi à zéro vulnérabilité connue sans migration majeure d’Express.
 
+L’image PostgreSQL applique les mises à jour de sécurité Alpine au moment de sa construction avant de retirer `gosu` et de repasser sous l’UID non privilégié. Ce passage corrige notamment OpenSSL 3.5.8 et util-linux 2.42.3 lorsque l’image officielle épinglée n’a pas encore été reconstruite.
+
 ## Limitation d’abus
 
 Le rate limiting partagé utilise une identité fiable et une politique distincte par route/commande. La confiance proxy est configurée explicitement; un en-tête `x-forwarded-for` brut n’est pas une identité.
