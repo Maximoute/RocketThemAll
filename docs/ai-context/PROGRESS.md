@@ -81,6 +81,7 @@ Dernière mise à jour : 5 septembre 2026.
 - Les nouveaux avis npm sur Browserslist, PostCSS Selector Parser et qs sont neutralisés par des versions transitives corrigées ; audit local à zéro vulnérabilité connue.
 - Le build PostgreSQL met à niveau les paquets Alpine avant le passage en utilisateur non privilégié afin d’intégrer les correctifs OpenSSL/util-linux publiés après le dernier digest officiel.
 - Le build Caddy force les versions corrigées et compatibles de `x/crypto`, `x/text` et gRPC-Go détectées par le scan binaire CI. La copie de npm réservée à l’image de migration embarque explicitement la version corrigée de `node-tar` tout en conservant la commande de seed de production.
+- Les digests immuables Nginx et MinIO suivent leurs dernières révisions corrigées après publication de nouveaux avis OpenSSL/util-linux dans l’ancien socle Alpine.
 - L’environnement GitHub `development` est limité à la branche de travail et son déploiement distant reste désactivé jusqu’à l’installation de la configuration applicative VPS, de l’application OAuth Discord dédiée et au basculement du routage existant vers le port local `18081`.
 - Aucun écart gameplay connu dans le périmètre implémenté. Les validations d’infrastructure réelle restent listées ci-dessous.
 

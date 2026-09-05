@@ -46,7 +46,7 @@ services:
     networks: [backend]
 
   minio:
-    image: cgr.dev/chainguard/minio:latest@sha256:6196cddcef910805064796d4788785e591f896d3a1432755ac8a1f30cbb4b04b
+    image: cgr.dev/chainguard/minio:latest@sha256:617ff93bf711edab967765dcb8002bea6dc31e8584627cbd11008198466e0ae8
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
@@ -78,7 +78,7 @@ services:
     networks: [backend]
 
   minio-init:
-    image: cgr.dev/chainguard/minio:latest@sha256:6196cddcef910805064796d4788785e591f896d3a1432755ac8a1f30cbb4b04b
+    image: cgr.dev/chainguard/minio:latest@sha256:617ff93bf711edab967765dcb8002bea6dc31e8584627cbd11008198466e0ae8
     restart: "no"
     read_only: true
     cap_drop: [ALL]
@@ -167,7 +167,7 @@ services:
         condition: service_healthy
 
   nginx:
-    image: nginx:stable-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46
+    image: nginx:stable-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
