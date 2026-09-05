@@ -200,5 +200,5 @@ networks:
     name: rta-dev-backend
     internal: true
   edge:
-    name: rta_frontend
+    name: rta_edge
     external: true
