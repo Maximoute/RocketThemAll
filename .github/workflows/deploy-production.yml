@@ -116,6 +116,8 @@ jobs:
             dockerfile: docker/postgres/Dockerfile
           - component: caddy
             dockerfile: docker/caddy/Dockerfile
+          - component: nginx
+            dockerfile: docker/nginx/Dockerfile
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Compute immutable image name

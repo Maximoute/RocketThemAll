@@ -187,12 +187,23 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f \
             image --quiet --scanners vuln \
+          --exit-code 1 --severity HIGH,CRITICAL \
+          rta/caddy:${{ github.sha }}
+      - name: Build and reject vulnerable Nginx image
+        run: |
+          docker build \
+            --file docker/nginx/Dockerfile \
+            --tag rta/nginx:${{ github.sha }} \
+            .
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f \
+            image --quiet --scanners vuln \
             --exit-code 1 --severity HIGH,CRITICAL \
-            rta/caddy:${{ github.sha }}
+            rta/nginx:${{ github.sha }}
       - name: Reject vulnerable proxy and object-storage base images
         run: |
           for image in \
-            "nginx:stable-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c" \
             "cgr.dev/chainguard/minio:latest@sha256:617ff93bf711edab967765dcb8002bea6dc31e8584627cbd11008198466e0ae8"
           do
             docker pull "$image"

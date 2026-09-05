@@ -167,7 +167,7 @@ services:
         condition: service_healthy
 
   nginx:
-    image: nginx:stable-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-nginx:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
