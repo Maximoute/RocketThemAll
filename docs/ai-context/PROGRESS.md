@@ -78,6 +78,7 @@ Dernière mise à jour : 5 septembre 2026.
 ## En cours
 
 - RTA Web V2 est implémenté sur `codex/rta-web-v2` avec accueil et navigation remaniés, nouvelles pages de cadrage et environnement dev admin-only entièrement séparé. La production `RTAV2` n’est pas modifiée.
+- Les nouveaux avis npm sur Browserslist, PostCSS Selector Parser et qs sont neutralisés par des versions transitives corrigées ; audit local à zéro vulnérabilité connue.
 - L’environnement GitHub `development` est limité à la branche de travail et son déploiement distant reste désactivé jusqu’à l’installation de la configuration applicative VPS, de l’application OAuth Discord dédiée et au basculement du routage existant vers le port local `18081`.
 - Aucun écart gameplay connu dans le périmètre implémenté. Les validations d’infrastructure réelle restent listées ci-dessous.
 

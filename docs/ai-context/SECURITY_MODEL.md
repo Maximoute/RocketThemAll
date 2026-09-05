@@ -55,6 +55,8 @@ La branche RTA Web V2 applique une défense en profondeur sur `dev.rocketthemall
 
 La session dev utilise `__Secure-rta-dev.session-token`, un secret NextAuth et une application Discord dédiés. Le Compose `rta-dev` possède ses propres volumes et n’exécute ni bot, ni worker, ni seed. Le script de déploiement refuse les secrets critiques identiques à la production et une base dont le nom n’identifie pas explicitement l’environnement dev. Cette configuration est implémentée mais pas encore déclarée déployée.
 
+Les versions transitives `browserslist 4.28.9`, `postcss-selector-parser 6.1.4` et `qs 6.16.0` sont imposées à la suite des avis publiés le 5 septembre 2026. `npm audit` revient ainsi à zéro vulnérabilité connue sans migration majeure d’Express.
+
 ## Limitation d’abus
 
 Le rate limiting partagé utilise une identité fiable et une politique distincte par route/commande. La confiance proxy est configurée explicitement; un en-tête `x-forwarded-for` brut n’est pas une identité.
