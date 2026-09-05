@@ -75,8 +75,11 @@ CMD ["node", "apps/worker/dist/index.js"]
 
 FROM build AS migrate
 ENV NODE_ENV=production
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+        /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
 USER node
-CMD ["npm", "exec", "--", "prisma", "migrate", "deploy", "--schema", "packages/database/prisma/schema.prisma"]
+CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy", "--schema", "packages/database/prisma/schema.prisma"]
 
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web
 WORKDIR /app

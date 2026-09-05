@@ -80,7 +80,7 @@ Dernière mise à jour : 5 septembre 2026.
 - RTA Web V2 est implémenté sur `codex/rta-web-v2` avec accueil et navigation remaniés, nouvelles pages de cadrage et environnement dev admin-only entièrement séparé. La production `RTAV2` n’est pas modifiée.
 - Les nouveaux avis npm sur Browserslist, PostCSS Selector Parser et qs sont neutralisés par des versions transitives corrigées ; audit local à zéro vulnérabilité connue.
 - Le build PostgreSQL met à niveau les paquets Alpine avant le passage en utilisateur non privilégié afin d’intégrer les correctifs OpenSSL/util-linux publiés après le dernier digest officiel.
-- Le build Caddy force les versions corrigées de `x/crypto` et gRPC-Go détectées par le scan binaire CI.
+- Le build Caddy force les versions corrigées et compatibles de `x/crypto`, `x/text` et gRPC-Go détectées par le scan binaire CI. L’image de migration appelle Prisma directement avec Node et retire npm/Corepack de son runtime pour ne pas embarquer leurs dépendances inutiles.
 - L’environnement GitHub `development` est limité à la branche de travail et son déploiement distant reste désactivé jusqu’à l’installation de la configuration applicative VPS, de l’application OAuth Discord dédiée et au basculement du routage existant vers le port local `18081`.
 - Aucun écart gameplay connu dans le périmètre implémenté. Les validations d’infrastructure réelle restent listées ci-dessous.
 
