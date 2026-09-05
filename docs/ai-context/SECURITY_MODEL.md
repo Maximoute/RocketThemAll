@@ -59,6 +59,8 @@ Les versions transitives `browserslist 4.28.9`, `postcss-selector-parser 6.1.4` 
 
 L’image PostgreSQL applique les mises à jour de sécurité Alpine au moment de sa construction avant de retirer `gosu` et de repasser sous l’UID non privilégié. Ce passage corrige notamment OpenSSL 3.5.8 et util-linux 2.42.3 lorsque l’image officielle épinglée n’a pas encore été reconstruite.
 
+Le binaire Caddy force également `golang.org/x/crypto 0.55.0` et `google.golang.org/grpc 1.83.1` pour intégrer les correctifs publiés après Caddy 2.11.4.
+
 ## Limitation d’abus
 
 Le rate limiting partagé utilise une identité fiable et une politique distincte par route/commande. La confiance proxy est configurée explicitement; un en-tête `x-forwarded-for` brut n’est pas une identité.

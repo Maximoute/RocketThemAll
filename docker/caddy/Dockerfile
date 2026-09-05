@@ -15,7 +15,10 @@ RUN git init \
 
 # Caddy 2.11.4 predates these upstream security releases. Go module version
 # selection keeps the patched transitive dependencies in the final binary.
-RUN go get golang.org/x/text@v0.39.0 google.golang.org/grpc@v1.82.1 \
+RUN go get \
+      golang.org/x/crypto@v0.55.0 \
+      golang.org/x/text@v0.39.0 \
+      google.golang.org/grpc@v1.83.1 \
     && go mod tidy \
     && CGO_ENABLED=0 go build \
       -trimpath \
