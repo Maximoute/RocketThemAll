@@ -103,8 +103,16 @@ jobs:
           bash -n scripts/deploy-vps-development.sh
       - name: Validate edge proxy configurations
         run: |
+          cert_dir="$RUNNER_TEMP/caddy-certs"
+          mkdir -p "$cert_dir"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=dev.rocketthemall.com' \
+            -keyout "$cert_dir/dev.rocketthemall.com.key" \
+            -out "$cert_dir/dev.rocketthemall.com.crt" \
+            >/dev/null 2>&1
           docker run --rm \
             -v "$PWD/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$cert_dir:/etc/caddy/certs:ro" \
             caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           docker run --rm \

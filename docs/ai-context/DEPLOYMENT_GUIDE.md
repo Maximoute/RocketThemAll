@@ -70,6 +70,8 @@ L’environnement GitHub `development` existe et n’autorise que `codex/rta-web
 
 Les invariants obligatoires sont : volumes PostgreSQL/MinIO distincts, secrets et client OAuth différents de la production, aucun bot/worker/seed, bannière Development, cookies propres au domaine dev, `robots.txt` en `Disallow: /`, en-tête `X-Robots-Tag`, accès web/API/médias réservé à l’administrateur Discord configuré et sauvegarde de la base dev avant migration.
 
+La CI valide aussi le virtual host Caddy complet avec un certificat éphémère auto-signé uniquement dans le runner ; le certificat Cloudflare Origin réel reste exclusivement monté sur le VPS.
+
 ## Vérifications encore requises avant production
 
 - construire et scanner chaque image dans la CI;
