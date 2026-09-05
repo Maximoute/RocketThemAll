@@ -49,6 +49,12 @@ Les imports distants n’acceptent que HTTPS, bloquent adresses privées/loopbac
 
 Les images de production sont épinglées par digest et refusées par la CI lorsqu’un scanner détecte une vulnérabilité High/Critical. Le binaire Caddy 2.11.4 est recompilé avec Go 1.26.6 et le digest Chainguard MinIO est actualisé sur la révision corrigée afin d’intégrer les correctifs Go publiés en août 2026.
 
+### Développement privé du site
+
+La branche RTA Web V2 applique une défense en profondeur sur `dev.rocketthemall.com` : middleware Next signé, relecture de `User.isAdmin` côté serveur, garde globale de l’API Express et sous-requête d’autorisation Nginx devant les médias. Les endpoints de santé, la page de connexion et les callbacks OAuth restent les seules exceptions nécessaires. Une session authentifiée sans droit admin reçoit un refus 403.
+
+La session dev utilise `__Secure-rta-dev.session-token`, un secret NextAuth et une application Discord dédiés. Le Compose `rta-dev` possède ses propres volumes et n’exécute ni bot, ni worker, ni seed. Le script de déploiement refuse les secrets critiques identiques à la production et une base dont le nom n’identifie pas explicitement l’environnement dev. Cette configuration est implémentée mais pas encore déclarée déployée.
+
 ## Limitation d’abus
 
 Le rate limiting partagé utilise une identité fiable et une politique distincte par route/commande. La confiance proxy est configurée explicitement; un en-tête `x-forwarded-for` brut n’est pas une identité.

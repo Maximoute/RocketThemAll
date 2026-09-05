@@ -1,5 +1,12 @@
 # Fonctionnalités du site
 
+## RTA Web V2 — branche de développement, non déployée
+
+- Nouvelle navigation principale : Accueil, Jouer, Communauté, Classements et Boutique, avec « Ajouter RTA » séparé et les fonctions personnelles regroupées dans le menu du compte.
+- Accueil inspiré de la composition visuelle de Nuron `index-07` : grand hero sombre, statistiques de catalogue, cartes publiées à découvrir, accès rapides et appel vers Discord. Le code reste natif Next.js/React/Tailwind ; aucun composant Vue du template n’est importé.
+- Nouvelles pages de cadrage `/play`, `/community` et `/leaderboards`; elles n’ajoutent aucune mécanique au jeu Discord.
+- Sur `dev.rocketthemall.com`, toutes les surfaces hors connexion/OAuth/santé sont réservées aux administrateurs RTA, avec page 403, bannière visible et interdiction d’indexation.
+
 ## Joueur
 
 - Connexion Discord avec liaison à l’identifiant Discord stable.

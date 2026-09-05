@@ -82,6 +82,24 @@ jobs:
             -f docker-compose.registry.yml \
             config --quiet
           bash -n scripts/deploy-vps.sh
+      - name: Validate private development Compose
+        env:
+          POSTGRES_DB: rta_dev
+          POSTGRES_USER: rta_dev
+          POSTGRES_PASSWORD: ci-dev-compose-password
+          MINIO_ROOT_USER: ci-dev-minio
+          MINIO_ROOT_PASSWORD: ci-dev-minio-secret
+          S3_ACCESS_KEY: ci-dev-rta-app
+          S3_SECRET_KEY: ci-dev-rta-app-secret
+          DISCORD_CLIENT_ID_DEV: ci-dev-client
+          DISCORD_CLIENT_SECRET_DEV: ci-dev-secret
+          RTA_DEVELOPMENT_ADMIN_DISCORD_ID: "123456789012345678"
+          NEXTAUTH_SECRET: ci-dev-nextauth-secret
+          RTA_IMAGE_PREFIX: ghcr.io/maximoute/rocketthemall
+          RTA_IMAGE_TAG: 0000000000000000000000000000000000000000
+        run: |
+          docker compose -f docker-compose.development.yml config --quiet
+          bash -n scripts/deploy-vps-development.sh
       - name: Validate edge proxy configurations
         run: |
           docker run --rm \
@@ -90,6 +108,10 @@ jobs:
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           docker run --rm \
             -v "$PWD/docker/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:stable-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46 \
+            nginx -t
+          docker run --rm \
+            -v "$PWD/docker/nginx/development.conf:/etc/nginx/conf.d/default.conf:ro" \
             nginx:stable-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46 \
             nginx -t
 

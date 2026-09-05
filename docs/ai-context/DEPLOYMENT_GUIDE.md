@@ -62,6 +62,14 @@ Ne jamais conserver les valeurs d’exemple. Les secrets doivent provenir du ges
 
 Le serveur principal est enregistré en base et peut être changé depuis le panneau d’administration; il ne dépend d’aucune variable d’environnement. Le Hall of Fame est activable séparément pour chaque guilde. `DISCORD_TOKEN` reste une variable serveur non exposée au navigateur et permet au panneau de lister les salons Discord disponibles.
 
+### Développement privé RTA Web V2 — implémenté, non déployé
+
+La branche `codex/rta-web-v2` dispose de son propre pipeline `.github/workflows/deploy-development.yml`. Il construit seulement `web`, `api`, `migrate` et PostgreSQL, puis cible `/srv/rocketthemall-dev` avec le projet Compose `rta-dev`. La production continue exclusivement depuis `RTAV2` avec son workflow et son projet Compose `rta` actuels.
+
+L’environnement GitHub `development` existe et n’autorise que `codex/rta-web-v2`. Le déploiement distant reste volontairement désactivé tant que la variable de dépôt `RTA_DEV_DEPLOY_ENABLED` ne vaut pas `true`. Avant activation, installer `.env.development` depuis `.env.development.example`, créer une application OAuth Discord distincte avec le callback `https://dev.rocketthemall.com/api/auth/callback/discord`, puis faire pointer le routage VPS déjà existant vers le service dev local `127.0.0.1:18081`.
+
+Les invariants obligatoires sont : volumes PostgreSQL/MinIO distincts, secrets et client OAuth différents de la production, aucun bot/worker/seed, bannière Development, cookies propres au domaine dev, `robots.txt` en `Disallow: /`, en-tête `X-Robots-Tag`, accès web/API/médias réservé à l’administrateur Discord configuré et sauvegarde de la base dev avant migration.
+
 ## Vérifications encore requises avant production
 
 - construire et scanner chaque image dans la CI;

@@ -30,7 +30,7 @@ test("admin navigation and layouts fail closed for regular users", async () => {
     source("apps/web/src/app/admin/layout.tsx")
   ]);
 
-  assert.match(navigation, /session\?\.user\?\.isAdmin\s*===\s*true/);
+  assert.match(navigation, /session\.user\?\.isAdmin\s*===\s*true/);
   assert.doesNotMatch(navigation, /status\s*===\s*["']authenticated["']\s*&&\s*link\(["']\/admin/);
   assert.match(adminLayout, /await\s+requireAdmin\(\)/);
 });
@@ -53,7 +53,11 @@ test("arbitrary remote image download/import is absent", async () => {
 });
 
 test("development Compose does not hard-code credential fields", async () => {
-  const compose = await source("docker-compose.yml");
+  const [localCompose, privateCompose] = await Promise.all([
+    source("docker-compose.yml"),
+    source("docker-compose.development.yml")
+  ]);
+  const compose = `${localCompose}\n${privateCompose}`;
   assert.doesNotMatch(compose, /^\s*POSTGRES_PASSWORD:\s*collector\s*$/m);
   assert.doesNotMatch(compose, /^\s*MINIO_ROOT_PASSWORD:\s*minioadmin\s*$/m);
   assert.doesNotMatch(compose, /^\s*WORDPRESS_DB_PASSWORD:\s*wordpress\s*$/m);
@@ -90,7 +94,36 @@ test("anonymous landing pages do not preload player data", async () => {
   assert.match(guard, /cache\(sharedGetAuthSession\)/);
   assert.match(layout, /<Providers\s+session=\{session\}>/);
   assert.match(providers, /<SessionProvider\s+session=\{session\}>/);
-  assert.match(navigation, /link\("\/collection",\s*"Collection",\s*false,\s*true\)/);
+  assert.match(navigation, /href:\s*"\/play"/);
+  assert.match(navigation, /href:\s*"\/community"/);
+  assert.match(navigation, /href:\s*"\/leaderboards"/);
+  assert.match(navigation, /href:\s*"\/shop"/);
   assert.match(playerLink, /prefetch=\{isAuthenticated\}/);
   assert.doesNotMatch(home, /prisma\.inventoryItem|prisma\.user/);
+});
+
+test("private development is admin-only and isolated from production", async () => {
+  const [middleware, apiServer, deployment, compose, nginx, robots, workflow] = await Promise.all([
+    source("apps/web/src/middleware.ts"),
+    source("apps/api/src/server.ts"),
+    source("packages/auth/src/deployment.ts"),
+    source("docker-compose.development.yml"),
+    source("docker/nginx/development.conf"),
+    source("apps/web/src/app/robots.txt/route.ts"),
+    source(".github/workflows/deploy-development.yml")
+  ]);
+
+  assert.match(middleware, /token\.isAdmin\s*!==\s*true/);
+  assert.match(middleware, /status:\s*403/);
+  assert.match(apiServer, /app\.use\(requireAuth,\s*requireAdmin\)/);
+  assert.match(deployment, /__Secure-rta-dev\.session-token/);
+  assert.match(compose, /name:\s*rta-dev/);
+  assert.match(compose, /rta-dev-postgres-data/);
+  assert.doesNotMatch(compose, /^\s{2}(bot|worker|seed):/m);
+  assert.match(nginx, /auth_request \/_development\/authorize/);
+  assert.match(nginx, /X-Robots-Tag "noindex, nofollow, noarchive"/);
+  assert.match(robots, /Disallow: \//);
+  assert.match(workflow, /codex\/rta-web-v2/);
+  assert.match(workflow, /environment:\s*development/);
+  assert.doesNotMatch(workflow, /environment:\s*production/);
 });

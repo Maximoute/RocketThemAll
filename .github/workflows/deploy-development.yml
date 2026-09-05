@@ -1,0 +1,194 @@
+name: Deploy private development
+
+on:
+  push:
+    branches:
+      - codex/rta-web-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rta-private-development
+  cancel-in-progress: true
+
+env:
+  PUBLIC_BASE_URL: https://dev.rocketthemall.com
+
+jobs:
+  quality-gate:
+    name: Require successful CI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for CI on this commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          run_id=""
+          for _ in {1..36}; do
+            run_id="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs" \
+              -f head_sha="$GITHUB_SHA" -f event=push -f per_page=100 \
+              --jq '.workflow_runs | map(select(.name == "CI")) | .[0].id // empty')"
+            [[ -n "$run_id" ]] && break
+            sleep 5
+          done
+          [[ -n "$run_id" ]] || { echo "No CI run found for $GITHUB_SHA" >&2; exit 1; }
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status --interval 10
+
+  publish:
+    name: Publish development ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs: quality-gate
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [api, web, migrate]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Compute immutable image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build immutable development image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          build-args: RTA_PUBLIC_BASE_URL=${{ env.PUBLIC_BASE_URL }}
+          cache-from: type=gha,scope=development-${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=development-${{ matrix.target }}
+
+  publish-postgres:
+    name: Publish development postgres
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    needs: quality-gate
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Compute immutable image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-postgres" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: docker/postgres/Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=development-postgres
+          cache-to: type=gha,mode=max,scope=development-postgres
+
+  deploy:
+    name: Deploy private development release
+    if: vars.RTA_DEV_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: [publish, publish-postgres]
+    environment: development
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Validate development deployment secrets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${VPS_HOST:?Missing VPS_HOST development secret}"
+          : "${VPS_USER:?Missing VPS_USER development secret}"
+          : "${VPS_SSH_PRIVATE_KEY:?Missing VPS_SSH_PRIVATE_KEY development secret}"
+          : "${VPS_SSH_KNOWN_HOSTS:?Missing VPS_SSH_KNOWN_HOSTS development secret}"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "${VPS_SSH_PORT:-22}" =~ ^[0-9]{1,5}$ ]]
+      - name: Prepare SSH connection
+        id: ssh
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          key="$RUNNER_TEMP/rta-dev-key"
+          hosts="$RUNNER_TEMP/rta-dev-known-hosts"
+          install -m 0600 /dev/null "$key"
+          install -m 0600 /dev/null "$hosts"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" > "$hosts"
+          { echo "key=$key"; echo "hosts=$hosts"; echo "port=${VPS_SSH_PORT:-22}"; } >> "$GITHUB_OUTPUT"
+      - name: Package development release
+        shell: bash
+        run: |
+          tar -czf "$RUNNER_TEMP/rta-dev-release.tgz" \
+            docker-compose.development.yml \
+            docker/nginx/development.conf \
+            scripts/deploy-vps-development.sh
+      - name: Upload and deploy development
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          image_prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
+          remote="${VPS_USER}@${VPS_HOST}"
+          remote_archive="/srv/rocketthemall-dev/releases/${GITHUB_SHA}.tgz"
+          ssh_opts=(-i "${{ steps.ssh.outputs.key }}" -p "${{ steps.ssh.outputs.port }}" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${{ steps.ssh.outputs.hosts }}")
+          scp_opts=(-i "${{ steps.ssh.outputs.key }}" -P "${{ steps.ssh.outputs.port }}" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${{ steps.ssh.outputs.hosts }}")
+          trap 'ssh "${ssh_opts[@]}" "$remote" "docker logout ghcr.io >/dev/null 2>&1 || true" || true' EXIT
+          ssh "${ssh_opts[@]}" "$remote" 'install -d -m 0750 /srv/rocketthemall-dev/releases'
+          printf '%s' "$GHCR_TOKEN" | ssh "${ssh_opts[@]}" "$remote" docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          scp "${scp_opts[@]}" "$RUNNER_TEMP/rta-dev-release.tgz" "$remote:$remote_archive"
+          ssh "${ssh_opts[@]}" "$remote" bash -s -- "$GITHUB_SHA" "$image_prefix" <<'REMOTE'
+          set -Eeuo pipefail
+          sha="$1"
+          image_prefix="$2"
+          release_dir="/srv/rocketthemall-dev/releases/$sha"
+          install -d -m 0750 "$release_dir"
+          tar -xzf "/srv/rocketthemall-dev/releases/$sha.tgz" -C "$release_dir" --no-same-owner --no-same-permissions
+          rm -f "/srv/rocketthemall-dev/releases/$sha.tgz"
+          chmod 0750 "$release_dir/scripts/deploy-vps-development.sh"
+          exec "$release_dir/scripts/deploy-vps-development.sh" "$sha" "$image_prefix"
+          REMOTE
+      - name: Verify private development edge
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          payload="$(curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 5 https://dev.rocketthemall.com/api/health)"
+          [[ "$payload" == *"$GITHUB_SHA"* ]]
+          headers="$(curl --silent --show-error --head https://dev.rocketthemall.com/)"
+          grep -Eiq '^location: .*/login' <<<"$headers"
+          grep -Eiq '^x-robots-tag: noindex, nofollow, noarchive' <<<"$headers"
+      - name: Remove ephemeral SSH files
+        if: always()
+        shell: bash
+        run: rm -f "${{ steps.ssh.outputs.key }}" "${{ steps.ssh.outputs.hosts }}"

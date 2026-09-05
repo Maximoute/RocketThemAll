@@ -3,6 +3,10 @@ import type { NextAuthOptions, Session } from "next-auth";
 import * as DiscordProviderModule from "next-auth/providers/discord";
 import { redirect } from "next/navigation";
 import { prisma } from "@rta/database";
+import {
+  developmentSessionCookieName,
+  isPrivateDevelopmentEnvironment,
+} from "./deployment.js";
 import { isDiscordSnowflake, sessionMatchesPersistedIdentity } from "./identity.js";
 
 type NextAuthFactory = typeof import("next-auth").default;
@@ -33,6 +37,14 @@ type DiscordProfile = {
   avatar?: string;
 };
 
+const privateDevelopment = isPrivateDevelopmentEnvironment();
+const developmentCookieOptions = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  path: "/",
+  secure: true,
+};
+
 export const authOptions: NextAuthOptions = {
   providers: [
     DiscordProvider({
@@ -42,6 +54,25 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   secret: process.env.NEXTAUTH_SECRET,
+  ...(privateDevelopment
+    ? {
+        session: { strategy: "jwt" as const, maxAge: 8 * 60 * 60 },
+        cookies: {
+          sessionToken: {
+            name: developmentSessionCookieName()!,
+            options: developmentCookieOptions,
+          },
+          callbackUrl: {
+            name: "__Secure-rta-dev.callback-url",
+            options: developmentCookieOptions,
+          },
+          csrfToken: {
+            name: "__Host-rta-dev.csrf-token",
+            options: developmentCookieOptions,
+          },
+        },
+      }
+    : {}),
   callbacks: {
     async signIn({ profile }) {
       if (!profile) {
@@ -55,15 +86,27 @@ export const authOptions: NextAuthOptions = {
       }
       const username = String(p.username ?? "unknown");
       const avatar = p.avatar ? `https://cdn.discordapp.com/avatars/${discordId}/${p.avatar}.png` : null;
+      const developmentAdminDiscordId = privateDevelopment
+        ? process.env.RTA_DEVELOPMENT_ADMIN_DISCORD_ID
+        : undefined;
+      const grantDevelopmentAdmin =
+        developmentAdminDiscordId !== undefined &&
+        isDiscordSnowflake(developmentAdminDiscordId) &&
+        discordId === developmentAdminDiscordId;
       await prisma.user.upsert({
         where: { discordId },
-        update: { username, avatarUrl: avatar },
+        update: {
+          username,
+          avatarUrl: avatar,
+          ...(grantDevelopmentAdmin ? { isAdmin: true } : {}),
+        },
         create: {
           discordId,
           username,
           avatarUrl: avatar,
           level: 1,
-          xp: 0
+          xp: 0,
+          isAdmin: grantDevelopmentAdmin,
         }
       });
       return true;

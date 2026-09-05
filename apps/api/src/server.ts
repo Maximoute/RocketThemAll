@@ -16,6 +16,7 @@ import {
   securityHeaders
 } from "./middleware/security.js";
 import { logError, logInfo } from "./utils/logger.js";
+import { requireAdmin, requireAuth } from "./middleware/auth.js";
 
 const app = express();
 const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? "0");
@@ -53,6 +54,13 @@ app.get("/health/ready", async (_req, res) => {
     res.status(503).json({ ok: false, database: "unavailable" });
   }
 });
+
+// The staging API is private as a whole. It deliberately reuses the same
+// persisted User.isAdmin authority as the production admin panel. Health
+// endpoints remain public so the container and deploy pipeline can probe them.
+if (process.env.RTA_ENVIRONMENT === "development") {
+  app.use(requireAuth, requireAdmin);
+}
 
 app.use("/cards", cardsRoutes);
 app.use("/users", usersRoutes);

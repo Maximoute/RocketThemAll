@@ -1,0 +1,198 @@
+name: rta-dev
+
+x-app-security: &app-security
+  init: true
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  networks: [backend]
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  RTA_ENVIRONMENT: development
+  DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+  S3_ENDPOINT: http://minio:9000
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+  S3_BUCKET: card-images
+  S3_PUBLIC_URL: https://dev.rocketthemall.com/media
+  PUBLIC_BASE_URL: https://dev.rocketthemall.com
+  NEXTAUTH_URL: https://dev.rocketthemall.com
+  NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+
+services:
+  postgres:
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-postgres:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /var/run/postgresql:size=4m,uid=999,gid=70,mode=3775
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [backend]
+
+  minio:
+    image: cgr.dev/chainguard/minio:latest@sha256:6196cddcef910805064796d4788785e591f896d3a1432755ac8a1f30cbb4b04b
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      MINIO_BROWSER: "off"
+    volumes:
+      - minio-data:/data
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /home/nonroot:size=8m,uid=65532,gid=65532,mode=700
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000;
+          printf 'GET /minio/health/live HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3;
+          IFS= read -r status <&3;
+          [[ "$${status}" == *' 200 '* ]]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [backend]
+
+  minio-init:
+    image: cgr.dev/chainguard/minio:latest@sha256:6196cddcef910805064796d4788785e591f896d3a1432755ac8a1f30cbb4b04b
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: [/usr/bin/sh, -ec]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing local/card-images
+        mc anonymous set download local/card-images
+        if [ "$${S3_ACCESS_KEY}" = "$${MINIO_ROOT_USER}" ] || [ "$${S3_SECRET_KEY}" = "$${MINIO_ROOT_PASSWORD}" ]; then
+          echo "S3 application credentials must differ from MinIO root credentials" >&2
+          exit 1
+        fi
+        cat > /tmp/policy.json <<'JSON'
+        {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetBucketLocation","s3:ListBucket","s3:ListBucketMultipartUploads"],"Resource":["arn:aws:s3:::card-images"]},{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:AbortMultipartUpload","s3:ListMultipartUploadParts"],"Resource":["arn:aws:s3:::card-images/*"]}]}
+        JSON
+        mc admin policy create local rta-card-images /tmp/policy.json
+        mc admin user add local "$${S3_ACCESS_KEY}" "$${S3_SECRET_KEY}"
+        mc admin policy attach local rta-card-images --user "$${S3_ACCESS_KEY}"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+      - /home/nonroot:size=8m,uid=65532,gid=65532,mode=700
+    networks: [backend]
+
+  migrate:
+    <<: *app-security
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-migrate:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+    restart: "no"
+    environment:
+      <<: *app-environment
+    tmpfs: [/tmp:size=32m,mode=1777]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app-security
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-api:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+    environment:
+      <<: *app-environment
+      PORT: "4000"
+      TRUST_PROXY_HOPS: "1"
+      FRONTEND_ORIGIN: https://dev.rocketthemall.com
+      BUILD_SHA: ${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+    tmpfs: [/tmp:size=16m,mode=1777]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+
+  web:
+    <<: *app-security
+    image: ${RTA_IMAGE_PREFIX:?RTA_IMAGE_PREFIX is required}-web:${RTA_IMAGE_TAG:?RTA_IMAGE_TAG is required}
+    environment:
+      <<: *app-environment
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID_DEV:?DISCORD_CLIENT_ID_DEV is required}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET_DEV:?DISCORD_CLIENT_SECRET_DEV is required}
+      RTA_DEVELOPMENT_ADMIN_DISCORD_ID: ${RTA_DEVELOPMENT_ADMIN_DISCORD_ID:?RTA_DEVELOPMENT_ADMIN_DISCORD_ID is required}
+      API_INTERNAL_URL: http://api:4000
+      API_URL: http://api:4000
+      RTA_PAYMENTS_ENABLED: "false"
+      DISCORD_MONETIZATION_ENABLED: "false"
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /app/apps/web/.next/cache:size=64m,uid=1000,gid=1000
+    depends_on:
+      api:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:stable-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE, CHOWN, SETGID, SETUID]
+    security_opt: [no-new-privileges:true]
+    ports:
+      - 127.0.0.1:18081:8080
+    volumes:
+      - ./docker/nginx/development.conf:/etc/nginx/conf.d/default.conf:ro
+    tmpfs:
+      - /var/cache/nginx:size=16m
+      - /var/run:size=1m
+      - /tmp:size=4m
+    depends_on:
+      web:
+        condition: service_started
+    networks: [backend]
+
+volumes:
+  postgres-data:
+    name: rta-dev-postgres-data
+  minio-data:
+    name: rta-dev-minio-data
+
+networks:
+  backend:
+    name: rta-dev-backend
+    internal: true
