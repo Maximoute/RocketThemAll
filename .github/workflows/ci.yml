@@ -99,6 +99,7 @@ jobs:
           RTA_IMAGE_TAG: 0000000000000000000000000000000000000000
         run: |
           docker compose -f docker-compose.development.yml config --quiet
+          bash -n scripts/bootstrap-vps-development.sh
           bash -n scripts/deploy-vps-development.sh
       - name: Validate edge proxy configurations
         run: |

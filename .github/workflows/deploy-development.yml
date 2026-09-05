@@ -122,6 +122,9 @@ jobs:
       VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
       VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
       VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+      DISCORD_CLIENT_ID_DEV: ${{ secrets.DISCORD_CLIENT_ID_DEV }}
+      DISCORD_CLIENT_SECRET_DEV: ${{ secrets.DISCORD_CLIENT_SECRET_DEV }}
+      RTA_DEVELOPMENT_ADMIN_DISCORD_ID: ${{ secrets.RTA_DEVELOPMENT_ADMIN_DISCORD_ID }}
       GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -133,9 +136,15 @@ jobs:
           : "${VPS_USER:?Missing VPS_USER development secret}"
           : "${VPS_SSH_PRIVATE_KEY:?Missing VPS_SSH_PRIVATE_KEY development secret}"
           : "${VPS_SSH_KNOWN_HOSTS:?Missing VPS_SSH_KNOWN_HOSTS development secret}"
+          : "${DISCORD_CLIENT_ID_DEV:?Missing DISCORD_CLIENT_ID_DEV development secret}"
+          : "${DISCORD_CLIENT_SECRET_DEV:?Missing DISCORD_CLIENT_SECRET_DEV development secret}"
+          : "${RTA_DEVELOPMENT_ADMIN_DISCORD_ID:?Missing RTA_DEVELOPMENT_ADMIN_DISCORD_ID development secret}"
           [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
           [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
           [[ "${VPS_SSH_PORT:-22}" =~ ^[0-9]{1,5}$ ]]
+          [[ "$DISCORD_CLIENT_ID_DEV" =~ ^[0-9]{17,20}$ ]]
+          [[ "$DISCORD_CLIENT_SECRET_DEV" =~ ^[A-Za-z0-9._-]{20,128}$ ]]
+          [[ "$RTA_DEVELOPMENT_ADMIN_DISCORD_ID" =~ ^[0-9]{17,20}$ ]]
       - name: Prepare SSH connection
         id: ssh
         shell: bash
@@ -154,7 +163,15 @@ jobs:
           tar -czf "$RUNNER_TEMP/rta-dev-release.tgz" \
             docker-compose.development.yml \
             docker/nginx/development.conf \
+            scripts/bootstrap-vps-development.sh \
             scripts/deploy-vps-development.sh
+          bootstrap="$RUNNER_TEMP/rta-dev-oauth.env"
+          umask 077
+          printf '%s\n' \
+            "DISCORD_CLIENT_ID_DEV=$DISCORD_CLIENT_ID_DEV" \
+            "DISCORD_CLIENT_SECRET_DEV=$DISCORD_CLIENT_SECRET_DEV" \
+            "RTA_DEVELOPMENT_ADMIN_DISCORD_ID=$RTA_DEVELOPMENT_ADMIN_DISCORD_ID" \
+            > "$bootstrap"
       - name: Upload and deploy development
         shell: bash
         run: |
@@ -162,21 +179,27 @@ jobs:
           image_prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
           remote="${VPS_USER}@${VPS_HOST}"
           remote_archive="/srv/rocketthemall-dev/releases/${GITHUB_SHA}.tgz"
+          remote_bootstrap="/srv/rocketthemall-dev/shared/.oauth-bootstrap-${GITHUB_SHA}"
           ssh_opts=(-i "${{ steps.ssh.outputs.key }}" -p "${{ steps.ssh.outputs.port }}" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${{ steps.ssh.outputs.hosts }}")
           scp_opts=(-i "${{ steps.ssh.outputs.key }}" -P "${{ steps.ssh.outputs.port }}" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${{ steps.ssh.outputs.hosts }}")
           trap 'ssh "${ssh_opts[@]}" "$remote" "docker logout ghcr.io >/dev/null 2>&1 || true" || true' EXIT
-          ssh "${ssh_opts[@]}" "$remote" 'install -d -m 0750 /srv/rocketthemall-dev/releases'
+          ssh "${ssh_opts[@]}" "$remote" "sudo install -d -o '$VPS_USER' -g '$VPS_USER' -m 0750 /srv/rocketthemall-dev /srv/rocketthemall-dev/releases /srv/rocketthemall-dev/shared /srv/rocketthemall-dev/backups && install -m 0600 /dev/null '$remote_bootstrap'"
           printf '%s' "$GHCR_TOKEN" | ssh "${ssh_opts[@]}" "$remote" docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           scp "${scp_opts[@]}" "$RUNNER_TEMP/rta-dev-release.tgz" "$remote:$remote_archive"
-          ssh "${ssh_opts[@]}" "$remote" bash -s -- "$GITHUB_SHA" "$image_prefix" <<'REMOTE'
+          scp "${scp_opts[@]}" "$RUNNER_TEMP/rta-dev-oauth.env" "$remote:$remote_bootstrap"
+          ssh "${ssh_opts[@]}" "$remote" bash -s -- "$GITHUB_SHA" "$image_prefix" "$remote_bootstrap" <<'REMOTE'
           set -Eeuo pipefail
           sha="$1"
           image_prefix="$2"
+          bootstrap_file="$3"
           release_dir="/srv/rocketthemall-dev/releases/$sha"
+          trap 'rm -f "$bootstrap_file"' EXIT
           install -d -m 0750 "$release_dir"
           tar -xzf "/srv/rocketthemall-dev/releases/$sha.tgz" -C "$release_dir" --no-same-owner --no-same-permissions
           rm -f "/srv/rocketthemall-dev/releases/$sha.tgz"
-          chmod 0750 "$release_dir/scripts/deploy-vps-development.sh"
+          chmod 0750 "$release_dir/scripts/bootstrap-vps-development.sh" "$release_dir/scripts/deploy-vps-development.sh"
+          "$release_dir/scripts/bootstrap-vps-development.sh" "$bootstrap_file"
+          trap - EXIT
           exec "$release_dir/scripts/deploy-vps-development.sh" "$sha" "$image_prefix"
           REMOTE
       - name: Verify private development edge
@@ -191,4 +214,4 @@ jobs:
       - name: Remove ephemeral SSH files
         if: always()
         shell: bash
-        run: rm -f "${{ steps.ssh.outputs.key }}" "${{ steps.ssh.outputs.hosts }}"
+        run: rm -f "${{ steps.ssh.outputs.key }}" "${{ steps.ssh.outputs.hosts }}" "$RUNNER_TEMP/rta-dev-oauth.env"

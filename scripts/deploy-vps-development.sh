@@ -13,7 +13,11 @@ PRODUCTION_ENV_FILE="/srv/rocketthemall/shared/.env.production"
 read_env_value() {
   local file="$1"
   local key="$2"
-  sed -n "s/^${key}=//p" "${file}" | tail -n 1
+  if [[ "${file}" == "${PRODUCTION_ENV_FILE}" ]]; then
+    sudo sed -n "s/^${key}=//p" "${file}" | tail -n 1
+  else
+    sed -n "s/^${key}=//p" "${file}" | tail -n 1
+  fi
 }
 
 if [[ ! "${IMAGE_TAG}" =~ ^[0-9a-f]{40}$ ]]; then
@@ -54,7 +58,7 @@ if [[ ! "${admin_discord_id}" =~ ^[0-9]{17,20}$ ]]; then
 fi
 
 # Fail closed if any sensitive development credential was copied from production.
-if [[ -f "${PRODUCTION_ENV_FILE}" ]]; then
+if sudo test -f "${PRODUCTION_ENV_FILE}"; then
   while IFS=':' read -r development_key production_key; do
     development_value="$(read_env_value "${ENV_FILE}" "${development_key}")"
     production_value="$(read_env_value "${PRODUCTION_ENV_FILE}" "${production_key}")"
