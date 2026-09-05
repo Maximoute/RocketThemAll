@@ -19,3 +19,13 @@
 		header_up X-Forwarded-For {client_ip}
 	}
 }
+
+dev.rocketthemall.com {
+	tls /etc/caddy/certs/dev.rocketthemall.com.crt /etc/caddy/certs/dev.rocketthemall.com.key
+	reverse_proxy rta-dev-nginx:8080 {
+		header_up X-Real-IP {client_ip}
+		header_up X-Forwarded-For {client_ip}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+	}
+}

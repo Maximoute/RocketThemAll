@@ -124,6 +124,34 @@ if [[ "${health_payload}" != *"${IMAGE_TAG}"* ]]; then
   exit 4
 fi
 
+# The existing production Caddy owns ports 80/443. Only its dedicated dev
+# virtual host is retargeted; production hosts continue to use `nginx:8080`.
+CADDY_CONTAINER="${RTA_DEV_CADDY_CONTAINER:-rta-caddy-1}"
+caddy_config="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}' "${CADDY_CONTAINER}")"
+if [[ ! "${caddy_config}" =~ ^/srv/rocketthemall/releases/[0-9a-f]{40}/docker/caddy/Caddyfile$ ]]; then
+  echo "Unable to resolve the expected production Caddyfile mount safely." >&2
+  exit 4
+fi
+if ! sudo grep -q '^dev\.rocketthemall\.com {' "${caddy_config}"; then
+  echo "The production Caddyfile has no dedicated development virtual host." >&2
+  exit 4
+fi
+caddy_backup="${caddy_config}.before-rta-dev"
+sudo cp --preserve=mode,ownership "${caddy_config}" "${caddy_backup}"
+sudo sed -i '/^dev\.rocketthemall\.com {/,/^}/ s/reverse_proxy nginx:8080/reverse_proxy rta-dev-nginx:8080/' "${caddy_config}"
+if ! sudo grep -A8 '^dev\.rocketthemall\.com {' "${caddy_config}" | grep -q 'reverse_proxy rta-dev-nginx:8080'; then
+  sudo mv "${caddy_backup}" "${caddy_config}"
+  echo "Failed to retarget only the development virtual host." >&2
+  exit 4
+fi
+if ! docker exec "${CADDY_CONTAINER}" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
+  sudo mv "${caddy_backup}" "${caddy_config}"
+  echo "Retargeted Caddy configuration is invalid; original restored." >&2
+  exit 4
+fi
+docker kill --signal=SIGUSR1 "${CADDY_CONTAINER}" >/dev/null
+sudo rm -f "${caddy_backup}"
+
 ln -sfn "${RELEASE_DIR}" "${DEPLOY_ROOT}/.current-next"
 mv -Tf "${DEPLOY_ROOT}/.current-next" "${DEPLOY_ROOT}/current"
 printf '%s\n' "${IMAGE_TAG}" > "${DEPLOY_ROOT}/shared/.deployed-tag"

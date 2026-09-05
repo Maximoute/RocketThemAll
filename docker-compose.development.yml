@@ -184,7 +184,10 @@ services:
     depends_on:
       web:
         condition: service_started
-    networks: [backend]
+    networks:
+      backend:
+      edge:
+        aliases: [rta-dev-nginx]
 
 volumes:
   postgres-data:
@@ -196,3 +199,6 @@ networks:
   backend:
     name: rta-dev-backend
     internal: true
+  edge:
+    name: rta_frontend
+    external: true
