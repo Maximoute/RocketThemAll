@@ -125,6 +125,25 @@ jobs:
             else
               echo 'Obsolete development virtual host was already absent.'
             fi
+
+            if docker exec "$caddy_container" cat /etc/caddy/Caddyfile | grep -Eq 'dev\.rocketthemall\.com|rta-dev-nginx'; then
+              image_ref="$(docker inspect --format '{{.Config.Image}}' "$caddy_container")"
+              if [[ ! "$image_ref" =~ ^(ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+)-caddy:([0-9a-f]{40})$ ]]; then
+                echo "Refusing unexpected Caddy image: $image_ref" >&2
+                exit 4
+              fi
+              export RTA_IMAGE_PREFIX="${BASH_REMATCH[1]}"
+              export RTA_IMAGE_TAG="${BASH_REMATCH[2]}"
+              docker run --rm -v "$caddy_config:/etc/caddy/Caddyfile:ro" "$image_ref" \
+                caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+              docker compose \
+                --project-name rta \
+                --env-file /srv/rocketthemall/shared/.env.production \
+                --file /srv/rocketthemall/current/docker-compose.production.yml \
+                --file /srv/rocketthemall/current/docker-compose.registry.yml \
+                up -d --no-deps --force-recreate caddy
+              echo 'Recreated Caddy so the cleaned bind mount is active.'
+            fi
           fi
 
           sudo rm -rf -- /srv/rocketthemall-dev
@@ -136,7 +155,7 @@ jobs:
           if docker volume inspect rta-dev-minio-data >/dev/null 2>&1; then echo 'rta-dev MinIO volume remains' >&2; exit 5; fi
           if docker network inspect rta-dev-backend >/dev/null 2>&1; then echo 'rta-dev network remains' >&2; exit 5; fi
           if docker inspect "$caddy_container" >/dev/null 2>&1; then
-            if docker exec "$caddy_container" grep -Eq 'dev\.rocketthemall\.com|rta-dev-nginx' /etc/caddy/Caddyfile; then
+            if docker exec "$caddy_container" cat /etc/caddy/Caddyfile | grep -Eq 'dev\.rocketthemall\.com|rta-dev-nginx'; then
               echo 'Obsolete development route remains in Caddy' >&2
               exit 5
             fi
