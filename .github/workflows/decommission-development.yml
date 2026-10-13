@@ -82,15 +82,17 @@ jobs:
           if docker network inspect rta-dev-backend >/dev/null 2>&1; then
             docker network rm rta-dev-backend
           fi
+          echo 'Obsolete rta-dev Docker resources are absent.'
 
           if docker inspect "$caddy_container" >/dev/null 2>&1; then
             caddy_config="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}' "$caddy_container")"
-            resolved_caddy_config="$(readlink -f "$caddy_config")"
+            resolved_caddy_config="$(sudo readlink -f "$caddy_config")"
             if [[ "$caddy_config" != "/srv/rocketthemall/current/docker/caddy/Caddyfile" ]] ||
                [[ ! "$resolved_caddy_config" =~ ^/srv/rocketthemall/releases/[0-9a-f]{40}/docker/caddy/Caddyfile$ ]]; then
-              echo "Refusing unexpected Caddyfile path: $caddy_config" >&2
+              echo "Refusing unexpected Caddyfile path: $caddy_config -> $resolved_caddy_config" >&2
               exit 4
             fi
+            echo "Validated active production Caddyfile path: $caddy_config"
 
             if sudo grep -q '^dev\.rocketthemall\.com[[:space:]]*{' "$caddy_config"; then
               candidate="${caddy_config}.without-rta-dev"
@@ -119,19 +121,27 @@ jobs:
               fi
               docker kill --signal=SIGUSR1 "$caddy_container" >/dev/null
               sudo rm -f "$backup"
+              echo 'Removed obsolete development virtual host and reloaded Caddy.'
+            else
+              echo 'Obsolete development virtual host was already absent.'
             fi
           fi
 
           sudo rm -rf -- /srv/rocketthemall-dev
+          echo 'Removed /srv/rocketthemall-dev.'
 
-          [[ ! -e "$deploy_root" ]]
-          [[ -z "$(docker ps -aq --filter "label=com.docker.compose.project=$project")" ]]
-          ! docker volume inspect rta-dev-postgres-data >/dev/null 2>&1
-          ! docker volume inspect rta-dev-minio-data >/dev/null 2>&1
-          ! docker network inspect rta-dev-backend >/dev/null 2>&1
+          if sudo test -e "$deploy_root"; then echo "$deploy_root still exists" >&2; exit 5; fi
+          if [[ -n "$(docker ps -aq --filter "label=com.docker.compose.project=$project")" ]]; then echo 'rta-dev containers remain' >&2; exit 5; fi
+          if docker volume inspect rta-dev-postgres-data >/dev/null 2>&1; then echo 'rta-dev PostgreSQL volume remains' >&2; exit 5; fi
+          if docker volume inspect rta-dev-minio-data >/dev/null 2>&1; then echo 'rta-dev MinIO volume remains' >&2; exit 5; fi
+          if docker network inspect rta-dev-backend >/dev/null 2>&1; then echo 'rta-dev network remains' >&2; exit 5; fi
           if docker inspect "$caddy_container" >/dev/null 2>&1; then
-            ! docker exec "$caddy_container" grep -q 'dev\.rocketthemall\.com\|rta-dev-nginx' /etc/caddy/Caddyfile
+            if docker exec "$caddy_container" grep -Eq 'dev\.rocketthemall\.com|rta-dev-nginx' /etc/caddy/Caddyfile; then
+              echo 'Obsolete development route remains in Caddy' >&2
+              exit 5
+            fi
           fi
+          echo 'Remote development decommission verified.'
           REMOTE
 
       - name: Verify production is still healthy
