@@ -77,12 +77,12 @@ Dernière mise à jour : 5 septembre 2026.
 
 ## En cours
 
-- RTA Web V2 est implémenté sur `codex/rta-web-v2` avec accueil et navigation remaniés, nouvelles pages de cadrage et environnement dev admin-only entièrement séparé. La production `RTAV2` n’est pas modifiée.
+- RTA Web V2 est implémenté sur `codex/rta-web-v2` avec accueil et navigation remaniés, nouvelles pages de cadrage et bac à sable Docker exclusivement local. La production `RTAV2` n’est pas modifiée.
 - Les nouveaux avis npm sur Browserslist, PostCSS Selector Parser et qs sont neutralisés par des versions transitives corrigées ; audit local à zéro vulnérabilité connue.
 - Le build PostgreSQL met à niveau les paquets Alpine avant le passage en utilisateur non privilégié afin d’intégrer les correctifs OpenSSL/util-linux publiés après le dernier digest officiel.
 - Le build Caddy force les versions corrigées et compatibles de `x/crypto`, `x/text` et gRPC-Go détectées par le scan binaire CI. La copie de npm réservée à l’image de migration embarque explicitement la version corrigée de `node-tar` tout en conservant la commande de seed de production.
 - MinIO suit sa dernière révision immuable. Nginx est désormais reconstruit depuis son digest immuable avec les mises à jour de sécurité Alpine, puis publié et scanné comme image RTA dédiée, car le tag officiel restait en retard sur les correctifs util-linux.
-- L’environnement GitHub `development` est limité à la branche de travail. L’application OAuth Discord dédiée et ses secrets sont configurés ; le premier lancement VPS a identifié sans impact production le nom réel du réseau frontal Compose (`rta_edge`), corrigé avant une nouvelle tentative.
+- Le déploiement Internet de développement a été abandonné : aucun workflow dev, réseau frontal partagé ou virtual host dev ne subsiste dans le dépôt. Le bac à sable local utilise ses propres images, volumes, réseau et ports loopback.
 - Aucun écart gameplay connu dans le périmètre implémenté. Les validations d’infrastructure réelle restent listées ci-dessous.
 
 ## Prochain

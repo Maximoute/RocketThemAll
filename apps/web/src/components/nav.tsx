@@ -48,7 +48,7 @@ export default function Nav({ isDevelopment = false }: { isDevelopment?: boolean
     <header className="sticky top-0 z-40 border-b border-rta-border/80 bg-[#100a1d]/95 shadow-[0_12px_35px_rgba(0,0,0,0.28)] backdrop-blur-xl">
       {isDevelopment && (
         <div className="border-b border-cyan-400/30 bg-cyan-400/10 px-4 py-1.5 text-center text-[0.65rem] font-black uppercase tracking-[0.28em] text-cyan-200">
-          RTA Web V2 — Development
+          RTA Web V2 — Bac à sable local
         </div>
       )}
 

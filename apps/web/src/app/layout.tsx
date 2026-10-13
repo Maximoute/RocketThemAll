@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: {
-      default: isDevelopment ? "Rocket Them All — Development" : "Rocket Them All",
+      default: isDevelopment ? "Rocket Them All — Bac à sable local" : "Rocket Them All",
       template: "%s",
     },
     description:

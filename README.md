@@ -31,7 +31,34 @@ docs/
 - un stockage S3 compatible, MinIO en local;
 - Docker Compose pour la stack conteneurisée.
 
-## Installation locale
+## Bac à sable local Docker
+
+La version de développement est exclusivement locale. Elle utilise le projet Compose `rta-sandbox`, des images `rta-sandbox-*`, un réseau interne et des volumes dédiés. Elle ne rejoint aucun réseau de production et n'utilise aucune image du registre de production.
+
+```bash
+npm run sandbox:up
+```
+
+Une fois les images construites et les migrations/imports terminés :
+
+- site et passerelle API : `http://localhost:3100` ;
+- API directe : `http://localhost:4100/health/ready` ;
+- PostgreSQL : `127.0.0.1:55432` ;
+- MinIO : `127.0.0.1:59000` ;
+- console MinIO : `http://localhost:59001`.
+
+Les ports peuvent être changés dans une copie locale de `.env.sandbox.example`. Pour utiliser OAuth Discord, créer `.env.sandbox` avec une application Discord dédiée et le callback `http://localhost:3100/api/auth/callback/discord`.
+
+```bash
+npm run sandbox:status
+npm run sandbox:logs
+npm run sandbox:down
+npm run sandbox:reset   # supprime uniquement les volumes rta-sandbox
+```
+
+Le worker est optionnel (`npm run sandbox:full`). Le bot est volontairement désactivé par défaut ; `npm run sandbox:discord` exige `.env.sandbox` afin d'éviter de connecter accidentellement les identifiants de production.
+
+## Installation locale sans Docker
 
 ```bash
 cp .env.example .env
@@ -117,7 +144,7 @@ La composition:
 - expose Nginx sur `HTTP_PORT`, 3000 par défaut;
 - ne contient ni WordPress ni MySQL.
 
-Le fichier `docker-compose.yml` historique reste réservé au développement.
+Le fichier `docker-compose.yml` est le bac à sable local. Il ne doit jamais être lancé sur le VPS de production.
 
 ## Santé et exploitation
 
@@ -136,7 +163,7 @@ L’outbox est durable. Son adaptateur actuel publie dans les logs structurés; 
 - les droits admin sont rechargés depuis PostgreSQL;
 - les mutations économiques critiques sont conditionnelles, journalisées et idempotentes;
 - les médias proviennent uniquement du Vault, sans import serveur depuis une URL distante, et l’optimiseur Next.js refuse les URL distantes;
-- le Compose de développement lit ses identifiants depuis l’environnement et n’expose PostgreSQL, MinIO et MySQL que sur la boucle locale;
+- le Compose local utilise uniquement `127.0.0.1`, des ports non standards et des ressources préfixées `rta-sandbox`;
 - l’API borne les corps, le débit, les proxys de confiance et les logs sensibles;
 - les images applicatives et PostgreSQL sont refusées par la CI si Trivy trouve une vulnérabilité haute ou critique corrigeable;
 - aucun secret réel ne doit être versionné.

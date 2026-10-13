@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@rta/database";
-import { developmentSessionCookieName } from "./deployment.js";
 import { isDiscordSnowflake } from "./identity.js";
 
 export type RequestUser = {
@@ -28,12 +27,7 @@ export async function resolveRequestUser(req: Request): Promise<RequestUser | nu
     return null;
   }
 
-  const cookieName = developmentSessionCookieName();
-  const token = await getToken({
-    req: req as any,
-    secret,
-    ...(cookieName ? { cookieName } : {}),
-  });
+  const token = await getToken({ req: req as any, secret });
   if (!isDiscordSnowflake(token?.sub)) {
     return null;
   }

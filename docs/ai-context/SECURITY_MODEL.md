@@ -49,11 +49,9 @@ Les imports distants n’acceptent que HTTPS, bloquent adresses privées/loopbac
 
 Les images de production sont épinglées par digest et refusées par la CI lorsqu’un scanner détecte une vulnérabilité High/Critical. Le binaire Caddy 2.11.4 est recompilé avec Go 1.26.6 et le digest Chainguard MinIO est actualisé sur la révision corrigée afin d’intégrer les correctifs Go publiés en août 2026.
 
-### Développement privé du site
+### Bac à sable local
 
-La branche RTA Web V2 applique une défense en profondeur sur `dev.rocketthemall.com` : middleware Next signé, relecture de `User.isAdmin` côté serveur, garde globale de l’API Express et sous-requête d’autorisation Nginx devant les médias. Les endpoints de santé, la page de connexion et les callbacks OAuth restent les seules exceptions nécessaires. Une session authentifiée sans droit admin reçoit un refus 403.
-
-La session dev utilise `__Secure-rta-dev.session-token`, un secret NextAuth et une application Discord dédiés. Le Compose `rta-dev` possède ses propres volumes et n’exécute ni bot, ni worker, ni seed. Le script de déploiement refuse les secrets critiques identiques à la production et une base dont le nom n’identifie pas explicitement l’environnement dev. Cette configuration est implémentée mais pas encore déclarée déployée.
+Le développement ne possède aucun point d'entrée Internet. Le projet Compose `rta-sandbox` lie ses ports uniquement à `127.0.0.1` et utilise un réseau, des volumes et des images propres, sans rejoindre aucun réseau Docker de production ni charger ses secrets. Le bot Discord est derrière un profil explicite afin qu'un démarrage normal ne contacte aucun service Discord avec des identifiants sensibles. Les valeurs intégrées par défaut sont locales et ne doivent jamais être réutilisées ailleurs.
 
 Les versions transitives `browserslist 4.28.9`, `postcss-selector-parser 6.1.4` et `qs 6.16.0` sont imposées à la suite des avis publiés le 5 septembre 2026. `npm audit` revient ainsi à zéro vulnérabilité connue sans migration majeure d’Express.
 

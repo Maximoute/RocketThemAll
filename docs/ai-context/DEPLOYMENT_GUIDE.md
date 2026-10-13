@@ -2,7 +2,7 @@
 
 ## Environnements
 
-Développement, préproduction et production utilisent des bases, buckets, applications Discord et secrets distincts. Aucune donnée de production n’est copiée en clair en développement.
+Le développement s'exécute exclusivement sur la machine locale dans le projet Compose `rta-sandbox`. La production utilise sa propre base, son bucket, son application Discord et ses secrets. Aucune donnée ou valeur de production n'est copiée dans le bac à sable.
 
 ## Préparation
 
@@ -47,7 +47,7 @@ Geler via feature flags la mutation concernée, préserver logs/audits, identifi
 
 ## État actuel
 
-Le `docker-compose.yml` initial reste un environnement de développement et ne doit pas être utilisé en production.
+Le `docker-compose.yml` est le bac à sable local et ne doit pas être utilisé en production. `npm run sandbox:up` construit les images locales, applique les migrations, importe le Vault puis expose uniquement la boucle locale. Le projet, les images, le réseau et les volumes portent tous le préfixe `rta-sandbox`; les ports par défaut sont 3100, 4100, 55432, 59000 et 59001. Le bot Discord est derrière un profil explicite et ne démarre jamais avec la stack par défaut.
 
 La cible de production est `docker-compose.production.yml`. Elle construit les cibles `api`, `bot`, `worker`, `web` et `migrate` du `Dockerfile`, supprime MySQL/WordPress, exécute les processus avec un utilisateur non-root et un système de fichiers applicatif en lecture seule, attend les health checks et impose une migration réussie avant le trafic.
 
@@ -62,15 +62,11 @@ Ne jamais conserver les valeurs d’exemple. Les secrets doivent provenir du ges
 
 Le serveur principal est enregistré en base et peut être changé depuis le panneau d’administration; il ne dépend d’aucune variable d’environnement. Le Hall of Fame est activable séparément pour chaque guilde. `DISCORD_TOKEN` reste une variable serveur non exposée au navigateur et permet au panneau de lister les salons Discord disponibles.
 
-### Développement privé RTA Web V2 — implémenté, non déployé
+### Développement RTA Web V2 — local uniquement
 
-La branche `codex/rta-web-v2` dispose de son propre pipeline `.github/workflows/deploy-development.yml`. Il construit seulement `web`, `api`, `migrate` et PostgreSQL, puis cible `/srv/rocketthemall-dev` avec le projet Compose `rta-dev`. La production continue exclusivement depuis `RTAV2` avec son workflow et son projet Compose `rta` actuels.
+Il n'existe plus de workflow GitHub de déploiement développement, de Compose VPS développement, de virtual host Caddy développement ni de rattachement au réseau frontal de production. La CI valide seulement la syntaxe du bac à sable local. La production continue exclusivement depuis `RTAV2` avec `docker-compose.production.yml` et le projet Compose `rta`.
 
-L’environnement GitHub `development` existe et n’autorise que `codex/rta-web-v2`. La variable de dépôt `RTA_DEV_DEPLOY_ENABLED` doit valoir `true` pour autoriser le déploiement. L’application OAuth Discord distincte utilise le callback `https://dev.rocketthemall.com/api/auth/callback/discord`; son ID, son secret et l’ID Discord administrateur résident dans les secrets de cet environnement. Le pipeline transmet ces trois valeurs par un fichier éphémère mode `0600` ; le VPS génère ou préserve localement les autres secrets indépendants dans `.env.development`, puis supprime le fichier éphémère. Le Nginx dev rejoint uniquement le réseau edge de production `rta_edge` sous l’alias `rta-dev-nginx` ; le déploiement retargete puis recharge sans interruption le seul virtual host `dev.rocketthemall.com` du Caddy existant. Les hôtes de production restent sur `nginx:8080` et la pile dev conserve en plus son contrôle local sur `127.0.0.1:18081`.
-
-Les invariants obligatoires sont : volumes PostgreSQL/MinIO distincts, secrets et client OAuth différents de la production, aucun bot/worker/seed, bannière Development, cookies propres au domaine dev, `robots.txt` en `Disallow: /`, en-tête `X-Robots-Tag`, accès web/API/médias réservé à l’administrateur Discord configuré et sauvegarde de la base dev avant migration.
-
-La CI valide aussi le virtual host Caddy complet avec un certificat éphémère auto-signé uniquement dans le runner ; le certificat Cloudflare Origin réel reste exclusivement monté sur le VPS.
+Le site local affiche une bannière « Bac à sable local » et son `robots.txt` interdit l'indexation. L'OAuth est facultatif et doit utiliser une application Discord non-production avec le callback `http://localhost:3100/api/auth/callback/discord`.
 
 ## Vérifications encore requises avant production
 

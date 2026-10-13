@@ -53,11 +53,7 @@ test("arbitrary remote image download/import is absent", async () => {
 });
 
 test("development Compose does not hard-code credential fields", async () => {
-  const [localCompose, privateCompose] = await Promise.all([
-    source("docker-compose.yml"),
-    source("docker-compose.development.yml")
-  ]);
-  const compose = `${localCompose}\n${privateCompose}`;
+  const compose = await source("docker-compose.yml");
   assert.doesNotMatch(compose, /^\s*POSTGRES_PASSWORD:\s*collector\s*$/m);
   assert.doesNotMatch(compose, /^\s*MINIO_ROOT_PASSWORD:\s*minioadmin\s*$/m);
   assert.doesNotMatch(compose, /^\s*WORDPRESS_DB_PASSWORD:\s*wordpress\s*$/m);
@@ -102,28 +98,23 @@ test("anonymous landing pages do not preload player data", async () => {
   assert.doesNotMatch(home, /prisma\.inventoryItem|prisma\.user/);
 });
 
-test("private development is admin-only and isolated from production", async () => {
-  const [middleware, apiServer, deployment, compose, nginx, robots, workflow] = await Promise.all([
-    source("apps/web/src/middleware.ts"),
-    source("apps/api/src/server.ts"),
-    source("packages/auth/src/deployment.ts"),
-    source("docker-compose.development.yml"),
-    source("docker/nginx/development.conf"),
+test("the development sandbox is local and isolated from production", async () => {
+  const [compose, caddy, robots, ci] = await Promise.all([
+    source("docker-compose.yml"),
+    source("docker/caddy/Caddyfile"),
     source("apps/web/src/app/robots.txt/route.ts"),
-    source(".github/workflows/deploy-development.yml")
+    source(".github/workflows/ci.yml")
   ]);
 
-  assert.match(middleware, /token\.isAdmin\s*!==\s*true/);
-  assert.match(middleware, /status:\s*403/);
-  assert.match(apiServer, /app\.use\(requireAuth,\s*requireAdmin\)/);
-  assert.match(deployment, /__Secure-rta-dev\.session-token/);
-  assert.match(compose, /name:\s*rta-dev/);
-  assert.match(compose, /rta-dev-postgres-data/);
-  assert.doesNotMatch(compose, /^\s{2}(bot|worker|seed):/m);
-  assert.match(nginx, /auth_request \/_development\/authorize/);
-  assert.match(nginx, /X-Robots-Tag "noindex, nofollow, noarchive"/);
+  assert.match(compose, /name:\s*rta-sandbox/);
+  assert.match(compose, /RTA_ENVIRONMENT:\s*sandbox/);
+  assert.match(compose, /127\.0\.0\.1:\$\{RTA_SANDBOX_PORT:-3100\}:8080/);
+  assert.match(compose, /profiles:\s*\[discord\]/);
+  assert.doesNotMatch(compose, /external:\s*true/);
+  assert.doesNotMatch(compose, /ghcr\.io/);
+  assert.doesNotMatch(compose, /rocketthemall\.com/);
+  assert.doesNotMatch(caddy, /dev\.rocketthemall\.com|rta-dev-nginx/);
   assert.match(robots, /Disallow: \//);
-  assert.match(workflow, /codex\/rta-web-v2/);
-  assert.match(workflow, /environment:\s*development/);
-  assert.doesNotMatch(workflow, /environment:\s*production/);
+  assert.match(ci, /docker compose config --quiet/);
+  assert.doesNotMatch(ci, /deploy-vps-development|docker-compose\.development/);
 });

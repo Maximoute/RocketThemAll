@@ -1,0 +1,142 @@
+name: Decommission obsolete development VPS
+
+on:
+  push:
+    branches:
+      - codex/rta-web-v2
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rta-development-decommission
+  cancel-in-progress: false
+
+jobs:
+  decommission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: development
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+    steps:
+      - name: Validate SSH secrets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${VPS_HOST:?Missing VPS_HOST development secret}"
+          : "${VPS_USER:?Missing VPS_USER development secret}"
+          : "${VPS_SSH_PRIVATE_KEY:?Missing VPS_SSH_PRIVATE_KEY development secret}"
+          : "${VPS_SSH_KNOWN_HOSTS:?Missing VPS_SSH_KNOWN_HOSTS development secret}"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "${VPS_SSH_PORT:-22}" =~ ^[0-9]{1,5}$ ]]
+
+      - name: Prepare SSH connection
+        id: ssh
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          key="$RUNNER_TEMP/rta-dev-decommission-key"
+          hosts="$RUNNER_TEMP/rta-dev-decommission-known-hosts"
+          install -m 0600 /dev/null "$key"
+          install -m 0600 /dev/null "$hosts"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" > "$hosts"
+          { echo "key=$key"; echo "hosts=$hosts"; echo "port=${VPS_SSH_PORT:-22}"; } >> "$GITHUB_OUTPUT"
+
+      - name: Remove only obsolete development resources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          remote="${VPS_USER}@${VPS_HOST}"
+          ssh_opts=(-i "${{ steps.ssh.outputs.key }}" -p "${{ steps.ssh.outputs.port }}" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${{ steps.ssh.outputs.hosts }}")
+          ssh "${ssh_opts[@]}" "$remote" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+
+          project=rta-dev
+          deploy_root=/srv/rocketthemall-dev
+          caddy_container=rta-caddy-1
+
+          [[ "$project" == "rta-dev" ]]
+          [[ "$deploy_root" == "/srv/rocketthemall-dev" ]]
+
+          mapfile -t containers < <(docker ps -aq --filter "label=com.docker.compose.project=$project")
+          if ((${#containers[@]})); then
+            printf 'Removing rta-dev containers: %s\n' "${containers[*]}"
+            docker rm --force "${containers[@]}"
+          fi
+
+          mapfile -t labelled_volumes < <(docker volume ls -q --filter "label=com.docker.compose.project=$project")
+          for volume in rta-dev-postgres-data rta-dev-minio-data "${labelled_volumes[@]}"; do
+            [[ -n "$volume" ]] || continue
+            if docker volume inspect "$volume" >/dev/null 2>&1; then
+              docker volume rm "$volume"
+            fi
+          done
+
+          if docker network inspect rta-dev-backend >/dev/null 2>&1; then
+            docker network rm rta-dev-backend
+          fi
+
+          if docker inspect "$caddy_container" >/dev/null 2>&1; then
+            caddy_config="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}' "$caddy_container")"
+            if [[ ! "$caddy_config" =~ ^/srv/rocketthemall/releases/[0-9a-f]{40}/docker/caddy/Caddyfile$ ]]; then
+              echo "Refusing unexpected Caddyfile path: $caddy_config" >&2
+              exit 4
+            fi
+
+            if sudo grep -q '^dev\.rocketthemall\.com[[:space:]]*{' "$caddy_config"; then
+              candidate="${caddy_config}.without-rta-dev"
+              backup="${caddy_config}.before-rta-dev-removal"
+              sudo cp --preserve=mode,ownership "$caddy_config" "$backup"
+              sudo awk '
+                BEGIN { skipping=0; depth=0 }
+                !skipping && /^dev\.rocketthemall\.com[[:space:]]*\{/ { skipping=1; depth=1; next }
+                skipping {
+                  counted=$0
+                  opens=gsub(/\{/, "{", counted)
+                  closes=gsub(/\}/, "}", counted)
+                  depth += opens - closes
+                  if (depth <= 0) skipping=0
+                  next
+                }
+                { print }
+              ' "$caddy_config" | sudo tee "$candidate" >/dev/null
+              sudo chown --reference="$caddy_config" "$candidate"
+              sudo chmod --reference="$caddy_config" "$candidate"
+              sudo mv "$candidate" "$caddy_config"
+              if ! docker exec "$caddy_container" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
+                sudo mv "$backup" "$caddy_config"
+                echo 'Caddy validation failed; original configuration restored.' >&2
+                exit 4
+              fi
+              docker kill --signal=SIGUSR1 "$caddy_container" >/dev/null
+              sudo rm -f "$backup"
+            fi
+          fi
+
+          sudo rm -rf -- /srv/rocketthemall-dev
+
+          [[ ! -e "$deploy_root" ]]
+          [[ -z "$(docker ps -aq --filter "label=com.docker.compose.project=$project")" ]]
+          ! docker volume inspect rta-dev-postgres-data >/dev/null 2>&1
+          ! docker volume inspect rta-dev-minio-data >/dev/null 2>&1
+          ! docker network inspect rta-dev-backend >/dev/null 2>&1
+          if docker inspect "$caddy_container" >/dev/null 2>&1; then
+            ! docker exec "$caddy_container" grep -q 'dev\.rocketthemall\.com\|rta-dev-nginx' /etc/caddy/Caddyfile
+          fi
+          REMOTE
+
+      - name: Verify production is still healthy
+        shell: bash
+        run: curl --fail --show-error --silent --retry 12 --retry-all-errors --retry-delay 5 --max-time 15 https://rocketthemall.com/api/health/ready
+
+      - name: Remove ephemeral SSH files
+        if: always()
+        shell: bash
+        run: rm -f "${{ steps.ssh.outputs.key }}" "${{ steps.ssh.outputs.hosts }}"
