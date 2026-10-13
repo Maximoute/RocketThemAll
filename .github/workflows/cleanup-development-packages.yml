@@ -1,0 +1,60 @@
+name: Remove obsolete development images
+
+on:
+  push:
+    branches:
+      - codex/rta-web-v2
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - rocketthemall-api
+          - rocketthemall-web
+          - rocketthemall-migrate
+          - rocketthemall-postgres
+          - rocketthemall-nginx
+    steps:
+      - name: Delete versions tagged only by obsolete development commits
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -Eeuo pipefail
+          allowed_tags='[
+            "56b0a433faf1b3ba1306f4aa6a622ed006a078e3",
+            "b90d142cdd018aa28ce10b525ffaa1447da043e9",
+            "057dbbd924e7ffdef8d4327bafe01ac895e1ca99",
+            "68a98b39159accb4e902b0bed25c1639ac882648",
+            "996190c55581f838a5d42beb1f8993561a0e7cb5",
+            "efd20a6a1d7db9de38a75443c380658f89e8fafe",
+            "a1a9f3c9e25e33b3b2c2ebba844cda626369e6fb",
+            "690729972baed7f22d3e71d14383fc67a6918c4c",
+            "11da7a1dd649f91161bc5ba94441e28554b420c6",
+            "5e9824f40731bfb5dc205a781152c45a821e91b6",
+            "ce54f14ff3ed4c2f1688af71c3d78641f73222bd",
+            "b208385438492f4281237f10ce0b6adf61a9b723"
+          ]'
+
+          gh api --paginate "/users/${GITHUB_REPOSITORY_OWNER}/packages/container/${PACKAGE}/versions?per_page=100" |
+            jq -cs 'add | .[]' |
+            while IFS= read -r version; do
+              id="$(jq -r '.id' <<<"$version")"
+              tags="$(jq -c '.metadata.container.tags // []' <<<"$version")"
+              obsolete_count="$(jq --argjson allowed "$allowed_tags" '[.[] | select(. as $tag | $allowed | index($tag))] | length' <<<"$tags")"
+              foreign_count="$(jq --argjson allowed "$allowed_tags" '[.[] | select(. as $tag | ($allowed | index($tag) | not))] | length' <<<"$tags")"
+              if (( obsolete_count > 0 && foreign_count == 0 )); then
+                echo "Deleting ${PACKAGE} version ${id} with tags ${tags}"
+                gh api --method DELETE "/users/${GITHUB_REPOSITORY_OWNER}/packages/container/${PACKAGE}/versions/${id}"
+              fi
+            done
