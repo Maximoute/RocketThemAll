@@ -12,7 +12,7 @@ const contentSecurityPolicy = [
   `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
-  `img-src 'self' data: blob: https://cdn.discordapp.com https://media.discordapp.net${isDevelopment ? " http://localhost:* http://127.0.0.1:*" : ""}`,
+  `img-src 'self' data: blob: https://authjs.dev https://cdn.discordapp.com https://media.discordapp.net${isDevelopment ? " http://localhost:* http://127.0.0.1:*" : ""}`,
   `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
   "media-src 'self'",
   "worker-src 'self' blob:"

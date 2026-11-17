@@ -41,6 +41,18 @@ test("the web image optimizer cannot fetch remote URLs", async () => {
   assert.doesNotMatch(nextConfig, /hostname\s*:/);
 });
 
+test("Discord OAuth validates the RFC 9207 issuer and its provider icon is CSP-allowed", async () => {
+  const [webAuth, nextConfig, nginx] = await Promise.all([
+    source("packages/auth/src/web-auth.ts"),
+    source("apps/web/next.config.mjs"),
+    source("docker/nginx/production.conf")
+  ]);
+
+  assert.match(webAuth, /issuer:\s*["']https:\/\/discord\.com["']/);
+  assert.match(nextConfig, /img-src[^`\n]*https:\/\/authjs\.dev/);
+  assert.match(nginx, /img-src[^"\n]*https:\/\/authjs\.dev/);
+});
+
 test("arbitrary remote image download/import is absent", async () => {
   const [serviceExports, cardRoutes] = await Promise.all([
     source("packages/services/src/index.ts"),

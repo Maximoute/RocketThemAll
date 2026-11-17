@@ -78,6 +78,7 @@ Dernière mise à jour : 17 novembre 2026.
 ## En cours
 
 - Correctif OAuth Discord préparé : Caddy canonicalise désormais `www.rocketthemall.com` vers `rocketthemall.com` en 308 afin que le cookie d'état NextAuth et le callback Discord restent sur le même hôte. Le déploiement et la vérification publique restent à effectuer.
+- Cause serveur du callback identifiée dans les logs : Discord fournit désormais l'issuer RFC 9207, mais le provider NextAuth v4 ne le déclarait pas. Le hotfix ajoute `issuer: https://discord.com`; son déploiement Web isolé reste à effectuer.
 - Aucun écart gameplay connu dans le périmètre implémenté. Les validations d’infrastructure réelle restent listées ci-dessous.
 
 ## Prochain
