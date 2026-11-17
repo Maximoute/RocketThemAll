@@ -51,6 +51,8 @@ Le `docker-compose.yml` initial reste un environnement de développement et ne d
 
 La cible de production est `docker-compose.production.yml`. Elle construit les cibles `api`, `bot`, `worker`, `web` et `migrate` du `Dockerfile`, supprime MySQL/WordPress, exécute les processus avec un utilisateur non-root et un système de fichiers applicatif en lecture seule, attend les health checks et impose une migration réussie avant le trafic.
 
+Le seul origin web de production est `https://rocketthemall.com`. Caddy redirige `www.rocketthemall.com` vers cet origin en 308, chemin et paramètres conservés. Cette canonicalisation est requise pour NextAuth : le cookie d'état OAuth créé avant le départ vers Discord et le callback `https://rocketthemall.com/api/auth/callback/discord` doivent utiliser exactement le même hôte.
+
 ```bash
 cp .env.production.example .env.production
 docker compose --env-file .env.production -f docker-compose.production.yml config --quiet

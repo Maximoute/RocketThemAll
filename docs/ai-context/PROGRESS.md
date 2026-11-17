@@ -1,6 +1,6 @@
 # Progression
 
-Dernière mise à jour : 13 août 2026.
+Dernière mise à jour : 17 novembre 2026.
 
 ## Terminé
 
@@ -77,6 +77,7 @@ Dernière mise à jour : 13 août 2026.
 
 ## En cours
 
+- Correctif OAuth Discord préparé : Caddy canonicalise désormais `www.rocketthemall.com` vers `rocketthemall.com` en 308 afin que le cookie d'état NextAuth et le callback Discord restent sur le même hôte. Le déploiement et la vérification publique restent à effectuer.
 - Aucun écart gameplay connu dans le périmètre implémenté. Les validations d’infrastructure réelle restent listées ci-dessous.
 
 ## Prochain
