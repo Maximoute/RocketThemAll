@@ -77,8 +77,8 @@ Dernière mise à jour : 17 novembre 2026.
 
 ## En cours
 
-- Correctif OAuth Discord préparé : Caddy canonicalise désormais `www.rocketthemall.com` vers `rocketthemall.com` en 308 afin que le cookie d'état NextAuth et le callback Discord restent sur le même hôte. Le déploiement et la vérification publique restent à effectuer.
-- Cause serveur du callback identifiée dans les logs : Discord fournit désormais l'issuer RFC 9207, mais le provider NextAuth v4 ne le déclarait pas. Le hotfix ajoute `issuer: https://discord.com`; son déploiement Web isolé reste à effectuer.
+- Incident OAuth Discord corrigé : Cloudflare canonicalise `www.rocketthemall.com` vers `rocketthemall.com` en 308 et le correctif équivalent reste versionné dans Caddy.
+- Le Web hotfix `b3dca5ed2f0ebfd45990c392f87b71db6a4c0588` déclare l'issuer RFC 9207 de Discord. L'image a été construite et validée localement puis déployée isolément sur le VPS; API/base prêtes en HTTP 200 et callback synthétique passé sans l'ancienne erreur d'issuer. Nginx autorise également l'icône Auth.js dans la CSP.
 - Aucun écart gameplay connu dans le périmètre implémenté. Les validations d’infrastructure réelle restent listées ci-dessous.
 
 ## Prochain
