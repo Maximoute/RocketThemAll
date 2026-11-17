@@ -11,6 +11,8 @@ La production utilise des images immuables construites par GitHub Actions. Le VP
 5. En cas d'échec, le script tente de redémarrer la version précédente.
 6. Caddy gère automatiquement HTTPS sur 80/443. Nginx applique les limites, les en-têtes de sécurité et distribue les requêtes vers le web, l'API et MinIO.
 
+Le domaine canonique de l'application est `https://rocketthemall.com`. Caddy redirige systématiquement `https://www.rocketthemall.com/*` vers le même chemin sur le domaine canonique avec un statut 308. Cette redirection doit rester en amont de NextAuth : les cookies OAuth sont liés à l'hôte et le callback Discord est enregistré sur le domaine sans `www`.
+
 PostgreSQL, MinIO, l'API et les services applicatifs ne publient aucun port sur Internet.
 
 ## État préparé sur le VPS
@@ -103,6 +105,7 @@ Les sauvegardes PostgreSQL créées avant migration sont stockées dans `/srv/ro
 ## DNS et Cloudflare
 
 - Les entrées `A` du domaine et de `www` doivent pointer vers `137.74.173.219`.
+- `www` doit répondre par une redirection 308 vers le domaine sans `www`; il ne doit jamais servir directement l'application.
 - Le proxy Cloudflare peut rester activé.
 - Après le premier certificat valide, utiliser le mode TLS **Full (strict)** dans Cloudflare.
 - Ne jamais utiliser le mode **Flexible**, incompatible avec une origine HTTPS correctement sécurisée.

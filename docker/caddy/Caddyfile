@@ -13,7 +13,14 @@
 	}
 }
 
-{$RTA_DOMAIN:rocketthemall.com}, www.{$RTA_DOMAIN:rocketthemall.com} {
+# Keep OAuth cookies and callbacks on one origin. NextAuth uses the apex URL from
+# NEXTAUTH_URL, so serving the application on www as well would split the state
+# cookie from Discord's callback and make the OAuth exchange fail.
+www.{$RTA_DOMAIN:rocketthemall.com} {
+	redir https://{$RTA_DOMAIN:rocketthemall.com}{uri} 308
+}
+
+{$RTA_DOMAIN:rocketthemall.com} {
 	reverse_proxy nginx:8080 {
 		header_up X-Real-IP {client_ip}
 		header_up X-Forwarded-For {client_ip}
