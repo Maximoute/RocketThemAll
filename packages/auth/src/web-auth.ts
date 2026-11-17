@@ -38,6 +38,11 @@ export const authOptions: NextAuthOptions = {
     DiscordProvider({
       clientId: process.env.DISCORD_CLIENT_ID ?? "",
       clientSecret: process.env.DISCORD_CLIENT_SECRET ?? "",
+      // Discord now includes `iss=https://discord.com` in every OAuth
+      // authorization response (RFC 9207). next-auth v4 delegates validation
+      // to openid-client, which rejects that response unless the provider's
+      // issuer is explicitly configured.
+      issuer: "https://discord.com",
       authorization: { params: { scope: "identify" } }
     })
   ],

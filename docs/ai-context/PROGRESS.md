@@ -78,6 +78,7 @@ Dernière mise à jour : 17 novembre 2026.
 ## En cours
 
 - Incident OAuth Discord corrigé au niveau Cloudflare : `www.rocketthemall.com` est redirigé publiquement en 308 vers `rocketthemall.com`, chemin et paramètres conservés. Le flux d'initialisation NextAuth rejoint Discord avec le callback canonique. La même canonicalisation Caddy est versionnée pour le prochain déploiement applicatif.
+- Le Web de production utilise le hotfix `b3dca5ed2f0ebfd45990c392f87b71db6a4c0588`, qui déclare l'issuer RFC 9207 de Discord. API/base sont prêtes en HTTP 200 et le callback synthétique franchit le contrôle d'issuer; Nginx et Next.js autorisent aussi l'icône Auth.js dans la CSP.
 - RTA Web V2 est implémenté sur `codex/rta-web-v2` avec accueil et navigation remaniés, nouvelles pages de cadrage et bac à sable Docker exclusivement local. La production `RTAV2` n’est pas modifiée.
 - Les nouveaux avis npm sur Browserslist, PostCSS Selector Parser et qs sont neutralisés par des versions transitives corrigées ; audit local à zéro vulnérabilité connue.
 - Le build PostgreSQL met à niveau les paquets Alpine avant le passage en utilisateur non privilégié afin d’intégrer les correctifs OpenSSL/util-linux publiés après le dernier digest officiel.

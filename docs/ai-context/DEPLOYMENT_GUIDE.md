@@ -53,6 +53,8 @@ La cible de production est `docker-compose.production.yml`. Elle construit les c
 
 Le seul origin web de production est `https://rocketthemall.com`. Caddy redirige `www.rocketthemall.com` vers cet origin en 308, chemin et paramètres conservés. Cette canonicalisation est requise pour NextAuth : le cookie d'état OAuth créé avant le départ vers Discord et le callback `https://rocketthemall.com/api/auth/callback/discord` doivent utiliser exactement le même hôte.
 
+Le fournisseur Discord déclare explicitement `issuer: https://discord.com`. Discord ajoute ce paramètre `iss` à toutes ses réponses d'autorisation conformément à RFC 9207; sans cette déclaration, `openid-client` refuse le callback avant l'échange du code. La CSP web autorise `authjs.dev` uniquement pour l'icône du fournisseur affichée par la page NextAuth intégrée.
+
 ```bash
 cp .env.production.example .env.production
 docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
