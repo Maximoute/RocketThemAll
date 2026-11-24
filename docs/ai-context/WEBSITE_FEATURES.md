@@ -3,7 +3,11 @@
 ## RTA Web V2 — branche de développement, non déployée
 
 - Nouvelle navigation principale : Accueil, Jouer, Communauté, Classements et Boutique, avec « Ajouter RTA » séparé et les fonctions personnelles regroupées dans le menu du compte.
-- Accueil inspiré de la composition visuelle de Nuron `index-07` : grand hero sombre, statistiques de catalogue, cartes publiées à découvrir, accès rapides et appel vers Discord. Le code reste natif Next.js/React/Tailwind ; aucun composant Vue du template n’est importé.
+- La navigation principale expose aussi les Decks. Après connexion, la photo Discord mène directement au profil tandis que le menu de compte conserve Inventaire, Compétences, Achievements, Échanges et Administration pour les admins.
+- « Ajouter RTA à votre serveur » reste l’action prioritaire dans la navigation, le hero et la fermeture de l’accueil.
+- Accueil recomposé comme un « centre de lancement de collection » : promesse de jeu immédiate, orbite interactive mettant en avant Inoxtag, ChatGPT, Zen, Cybermen et Doge, statistiques réelles du catalogue, récit en trois temps et appel vers Discord. Le langage visuel rétablit les violets historiques de RTA et réserve l’orange aux actions.
+- L’accueil expose aussi la boutique avec ses vrais boosters, encens et artefacts, puis le jeu communautaire avec les visuels réels d’Aurex et d’Anomalie Zéro. Ces blocs renvoient aux routes fonctionnelles existantes ; ils ne simulent aucun achat ni combat.
+- L’animation au pointeur est progressive et la narration utilise les scroll timelines natives quand elles sont disponibles. Le contenu reste complet sans animation, avec une composition mobile dédiée et un mode `prefers-reduced-motion` statique.
 - Nouvelles pages de cadrage `/play`, `/community` et `/leaderboards`; elles n’ajoutent aucune mécanique au jeu Discord.
 - Le site de développement s'exécute uniquement sur `http://localhost:3100`, affiche une bannière « Bac à sable local » et interdit l'indexation.
 
@@ -55,6 +59,10 @@ L’identité applicative provient du `sub` Discord vérifié, résolu vers l’
 ## Classement Discord des serveurs
 
 Le message central du serveur principal ne liste que les guildes à la fois actives en base et réellement connectées au client Discord. Elles sont classées par `100 × mondes terminés + progression du monde courant`. Le top 3 utilise un podium, chaque serveur affiche son icône Discord, son monde, sa jauge, sa maîtrise et ses boss actifs. Le top 10 est affiché au maximum à cause de la limite Discord de dix embeds.
+
+## Visual system (local Web V2 branch)
+
+Web V2 local uses one shared RTA visual shell across player, catalogue, commerce and admin routes: purple ambient background, editorial headers, consistent cards, forms, tables and stats. This is branch-local and not production behavior yet.
 
 ## Hors navigateur
 

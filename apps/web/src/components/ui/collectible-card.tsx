@@ -40,7 +40,7 @@ export default function CollectibleCard({ name, rarity, deck, imageUrl, count, h
   const badgeClass = rarityBadge[r] ?? "bg-rta-surface2 text-rta-muted";
 
   const card = (
-    <article className={`bg-rta-surface border rounded-xl overflow-hidden transition-transform duration-200 hover:-translate-y-1 cursor-pointer relative ${glowClass}`}>
+    <article className={`rta-collectible bg-rta-surface border rounded-xl overflow-hidden transition-transform duration-200 hover:-translate-y-1 cursor-pointer relative ${glowClass}`}>
       <div className="aspect-[3/4] w-full bg-gradient-to-b from-rta-surface2 to-rta-bg flex items-center justify-center relative">
         {imageUrl ? (
           <Image src={imageUrl} alt={name} fill className="object-cover" sizes="220px" />

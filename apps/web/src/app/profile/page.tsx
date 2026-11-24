@@ -34,7 +34,7 @@ export default async function ProfilePage() {
   return (
     <div>
       {/* Header */}
-      <div className="bg-gradient-to-br from-rta-surface to-rta-surface2 border border-rta-border rounded-2xl p-6 flex items-center gap-5 mb-4">
+      <div className="rta-profile-hero bg-gradient-to-br from-rta-surface to-rta-surface2 border border-rta-border rounded-2xl p-6 flex items-center gap-5 mb-4">
         <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-rta-accent to-rta-success border-2 border-rta-cta shadow-[0_0_16px_rgba(242,130,65,0.4)] shrink-0">
           <DiscordAvatar
             avatarUrl={user.avatarUrl}

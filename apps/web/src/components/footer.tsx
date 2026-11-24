@@ -11,10 +11,10 @@ const legalLinks = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-rta-border bg-rta-surface/70 px-6 py-7">
-      <div className="mx-auto flex max-w-[1200px] flex-col gap-5 md:flex-row md:items-end md:justify-between">
+    <footer className="border-t border-rta-border bg-rta-bg px-6 py-10">
+      <div className="mx-auto flex max-w-[1360px] flex-col gap-8 md:flex-row md:items-end md:justify-between">
         <div>
-          <Link href="/" className="font-black tracking-tight text-rta-ink">
+          <Link href="/" className="text-xl font-black uppercase tracking-[-0.04em] text-rta-ink">
             Rocket <span className="text-rta-cta">Them All</span>
           </Link>
           <p className="mt-1 max-w-xl text-xs leading-5 text-rta-muted">

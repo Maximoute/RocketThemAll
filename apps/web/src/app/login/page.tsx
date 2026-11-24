@@ -1,4 +1,5 @@
 import AuthButton from "../../components/auth-button";
+import Image from "next/image";
 
 export default async function LoginPage({
   searchParams,
@@ -11,11 +12,18 @@ export default async function LoginPage({
     : "/";
 
   return (
-    <section className="max-w-lg mx-auto bg-rta-surface border border-rta-border rounded-xl p-6 shadow-[0_0_28px_rgba(72,28,166,0.25)]">
-      <div className="text-4xl mb-4">🚀</div>
-      <h1 className="text-2xl font-black tracking-tight mb-1">Connexion</h1>
-      <p className="text-rta-muted text-sm mb-5">Authentification Discord OAuth2.</p>
-      <AuthButton connectLabel="Se connecter avec Discord" logoutLabel="Log out" callbackUrl={callbackUrl} />
+    <section className="rta-login bg-rta-surface border border-rta-border">
+      <div className="rta-login__visual" aria-hidden="true">
+        <Image src="/showcase/doge.webp" alt="" fill sizes="(max-width: 768px) 100vw, 42vw" />
+        <span>TA COLLECTION T’ATTEND.</span>
+      </div>
+      <div className="rta-login__copy">
+        <p className="home-kicker">Espace joueur</p>
+        <h1>Connexion</h1>
+        <p>Retrouve tes captures, tes decks, ta progression et la boutique avec ton identité Discord.</p>
+        <AuthButton connectLabel="Se connecter avec Discord" logoutLabel="Se déconnecter" callbackUrl={callbackUrl} />
+        <small>RTA utilise Discord uniquement pour reconnaître ton compte et tes serveurs autorisés.</small>
+      </div>
     </section>
   );
 }

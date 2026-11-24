@@ -215,19 +215,21 @@ export default async function ShopPage({
   }
 
   return (
-    <div>
-      <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
+    <div className="rta-shop-page">
+      <div className="shop-page-hero">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">
+          <p className="home-kicker">Arsenal du collectionneur</p>
+          <h1 className="shop-page-hero__title">
             {section === "premium" ? "Boutique €" : "Boutique en crédits"}
           </h1>
-          <p className="text-rta-muted text-sm mt-1">
+          <p className="shop-page-hero__lede">
             {section === "premium"
               ? "VIP, Fondateur et packs de crédits payés en argent réel"
               : `${catalog.length} objets du jeu achetables avec tes crédits RTA`}
           </p>
         </div>
-        <div className="bg-rta-surface border border-rta-border rounded-xl px-5 py-3 text-right">
+        <img src="/showcase/booster-legendary.webp" alt="" className="shop-page-hero__object" />
+        <div className="shop-page-balance">
           <div className="text-[0.65rem] uppercase tracking-widest text-rta-muted">
             {section === "premium" ? "Paiements" : "Ton solde"}
           </div>

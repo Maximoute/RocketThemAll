@@ -36,12 +36,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   return (
     <html lang="fr">
-      <body className="bg-rta-bg text-rta-ink font-sans min-h-screen flex flex-col">
+      <body className="rta-app bg-rta-bg text-rta-ink font-sans min-h-screen flex flex-col">
         <Providers session={session}>
           <Suspense fallback={<div className="h-16 border-b border-rta-border bg-rta-surface" />}>
             <Nav isDevelopment={isDevelopment} />
           </Suspense>
-          <main className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 py-7 flex-1">
+          <main className="rta-main w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-5 sm:py-8 flex-1">
             {children}
           </main>
           <Footer />

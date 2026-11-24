@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "../../components/ui/page-header";
 
 const destinations = [
   { href: "/collection", eyebrow: "Découvrir", title: "Collection", description: "Parcours les cartes et les univers disponibles." },
@@ -10,11 +11,7 @@ const destinations = [
 export default function PlayPage() {
   return (
     <div>
-      <header className="mb-8 max-w-3xl">
-        <p className="text-xs font-black uppercase tracking-[0.28em] text-rta-cta">Centre de jeu</p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Jouer à Rocket Them All</h1>
-        <p className="mt-4 text-lg leading-8 text-rta-muted">Le gameplay reste sur Discord. Le web rassemble ici ta collection, ta progression et tes outils.</p>
-      </header>
+      <PageHeader title="Centre de jeu" subtitle="Le gameplay vit sur Discord. Ici, organise ta collection, prépare tes transformations et façonne ta progression." />
       <div className="grid gap-4 md:grid-cols-2">
         {destinations.map((item, index) => (
           <Link key={item.href} href={item.href} className="group relative overflow-hidden rounded-2xl border border-rta-border bg-rta-surface p-6 transition hover:-translate-y-1 hover:border-rta-accentHi">

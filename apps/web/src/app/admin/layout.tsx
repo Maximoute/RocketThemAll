@@ -7,9 +7,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   await requireAdmin();
 
   return (
-    <div className="-mx-6 -mt-7 flex min-h-screen">
+    <div className="rta-admin-shell -mx-6 -mt-7 flex min-h-screen">
       {/* Top bar */}
-      <div className="fixed top-0 left-0 right-0 z-30 bg-rta-surface border-b border-rta-border px-6 py-2.5 flex items-center justify-between">
+      <div className="rta-admin-topbar fixed top-0 left-0 right-0 z-30 bg-rta-surface border-b border-rta-border px-6 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-3 font-extrabold text-rta-ink">
           <span className="text-xl">🚀</span>
           Rocket Them All
@@ -25,7 +25,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       {/* Body */}
       <div className="flex flex-1 pt-[53px]">
         <AdminSidebar />
-        <main className="flex-1 min-w-0 p-6 overflow-y-auto">{children}</main>
+        <main className="rta-admin-content flex-1 min-w-0 p-6 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

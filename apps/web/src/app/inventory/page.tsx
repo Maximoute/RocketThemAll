@@ -8,6 +8,7 @@ import { getUserFragmentBalances } from "../../lib/fragments";
 import { getDynamicCardValue, getDynamicCardValuesBatch, getUserInventoryValue } from "../../lib/economy";
 import { requireUser } from "../../lib/guard";
 import { cardVariantImageUrl } from "../../lib/card-variant";
+import PageHeader from "../../components/ui/page-header";
 
 const recycleService = new RecycleService();
 const sellService = new SellService();
@@ -218,13 +219,10 @@ export default async function InventoryPage({
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight">Mon Inventaire</h1>
-          <p className="text-rta-muted text-sm mt-1">Toutes tes cartes collectées via Discord</p>
-        </div>
-        <div className="flex gap-6">
+      <PageHeader
+        title="Mon inventaire"
+        subtitle="Tes captures Discord, tes variantes et toute la valeur accumulée au fil des apparitions."
+        right={<div className="flex gap-6">
           {[
             { value: totalItems, label: "total",      color: "text-rta-success" },
             { value: user.credits, label: "crédits",  color: "text-rta-gold"   },
@@ -235,8 +233,8 @@ export default async function InventoryPage({
               <div className="text-[0.65rem] uppercase tracking-widest text-rta-muted">{label}</div>
             </div>
           ))}
-        </div>
-      </div>
+        </div>}
+      />
 
       {/* Fragment reactor */}
       <div className="bg-rta-surface border border-rta-border rounded-xl p-4 mb-5">

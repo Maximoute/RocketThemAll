@@ -3,6 +3,7 @@ import { RARITIES } from "@rta/shared";
 import CollectionFiltersClient from "./filters.client";
 import CollectionSubnav from "./collection-subnav";
 import { resolveSessionUser } from "../../lib/guard";
+import PageHeader from "../../components/ui/page-header";
 
 const DECKS_PER_PAGE = 3;
 
@@ -176,14 +177,11 @@ export default async function CollectionPage({
 
   return (
     <div>
-      <div className="mb-4 flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight">Collection</h1>
-          <p className="text-rta-muted text-sm mt-1">
-            3 decks par page · cartes classées de Common à Black Market
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Collection"
+        subtitle="Explore les mondes, complète chaque deck et traque les cartes qui manquent encore à ton histoire."
+        right={<div className="rta-header-metric"><strong>{allDecks.length}</strong><span>decks publiés</span></div>}
+      />
 
       {user && <CollectionSubnav active="collection" />}
 
