@@ -6,23 +6,7 @@ ENV CI=true
 
 RUN apk upgrade --no-cache \
     && apk add --no-cache ca-certificates openssl \
-    && npm install --global npm@12.0.2 \
-    && npm pack --silent --pack-destination /tmp brace-expansion@5.0.9 \
-    && npm pack --silent --pack-destination /tmp ip-address@10.3.1 \
-    && npm pack --silent --pack-destination /tmp tar@7.5.21 \
-    && rm -rf /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
-    && mkdir -p /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
-    && tar -xzf /tmp/brace-expansion-5.0.9.tgz --strip-components=1 \
-        -C /usr/local/lib/node_modules/npm/node_modules/brace-expansion \
-    && rm -rf /usr/local/lib/node_modules/npm/node_modules/ip-address \
-    && mkdir -p /usr/local/lib/node_modules/npm/node_modules/ip-address \
-    && tar -xzf /tmp/ip-address-10.3.1.tgz --strip-components=1 \
-        -C /usr/local/lib/node_modules/npm/node_modules/ip-address \
-    && rm -rf /usr/local/lib/node_modules/npm/node_modules/tar \
-    && mkdir -p /usr/local/lib/node_modules/npm/node_modules/tar \
-    && tar -xzf /tmp/tar-7.5.21.tgz --strip-components=1 \
-        -C /usr/local/lib/node_modules/npm/node_modules/tar \
-    && rm /tmp/brace-expansion-5.0.9.tgz /tmp/ip-address-10.3.1.tgz /tmp/tar-7.5.21.tgz
+    && npm install --global npm@12.2.3
 
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
