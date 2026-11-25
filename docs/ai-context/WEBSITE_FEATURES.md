@@ -1,6 +1,6 @@
 # Fonctionnalités du site
 
-## RTA Web V2 — branche de développement, non déployée
+## RTA Web V2 — production
 
 - Nouvelle navigation principale : Accueil, Jouer, Communauté, Classements et Boutique, avec « Ajouter RTA » séparé et les fonctions personnelles regroupées dans le menu du compte.
 - La navigation principale expose aussi les Decks. Après connexion, la photo Discord mène directement au profil tandis que le menu de compte conserve Inventaire, Compétences, Achievements, Échanges et Administration pour les admins.
@@ -9,7 +9,7 @@
 - L’accueil expose aussi la boutique avec ses vrais boosters, encens et artefacts, puis le jeu communautaire avec les visuels réels d’Aurex et d’Anomalie Zéro. Ces blocs renvoient aux routes fonctionnelles existantes ; ils ne simulent aucun achat ni combat.
 - L’animation au pointeur est progressive et la narration utilise les scroll timelines natives quand elles sont disponibles. Le contenu reste complet sans animation, avec une composition mobile dédiée et un mode `prefers-reduced-motion` statique.
 - Nouvelles pages de cadrage `/play`, `/community` et `/leaderboards`; elles n’ajoutent aucune mécanique au jeu Discord.
-- Le site de développement s'exécute uniquement sur `http://localhost:3100`, affiche une bannière « Bac à sable local » et interdit l'indexation.
+- La refonte est déployée sur `https://rocketthemall.com`. Le bac à sable reste disponible sur `http://localhost:3100`, avec sa bannière locale et l’indexation interdite.
 
 ## Joueur
 
@@ -60,9 +60,9 @@ L’identité applicative provient du `sub` Discord vérifié, résolu vers l’
 
 Le message central du serveur principal ne liste que les guildes à la fois actives en base et réellement connectées au client Discord. Elles sont classées par `100 × mondes terminés + progression du monde courant`. Le top 3 utilise un podium, chaque serveur affiche son icône Discord, son monde, sa jauge, sa maîtrise et ses boss actifs. Le top 10 est affiché au maximum à cause de la limite Discord de dix embeds.
 
-## Visual system (local Web V2 branch)
+## Système visuel Web V2
 
-Web V2 local uses one shared RTA visual shell across player, catalogue, commerce and admin routes: purple ambient background, editorial headers, consistent cards, forms, tables and stats. This is branch-local and not production behavior yet.
+Web V2 utilise une coque visuelle RTA partagée entre les routes joueur, catalogue, commerce et administration : fond violet spatial, grands en-têtes éditoriaux, cartes, formulaires, tableaux et statistiques cohérents. Ce système est déployé en production depuis le commit `23b32e5`.
 
 ## Hors navigateur
 
