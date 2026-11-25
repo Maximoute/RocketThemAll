@@ -69,4 +69,6 @@ Le prototype présente des risques confirmés : mutations économiques non atomi
 
 ## Vérification
 
+La candidate Web V2 relève les correctifs de sécurité applicatifs vers Next.js 15.5.29, Express 4.22.3, body-parser 1.20.9, Sharp 0.35.5, Undici 6.29.1, Vitest 4.1.12 et les versions corrigées de `qs`, `proxy-addr`, `postcss-selector-parser` et `source-map-js`. Zod passe en 4.6.7 après validation de compilation et des tests API. `npm audit --audit-level=high` ne remonte plus aucune vulnérabilité sur le lockfile de la release.
+
 La CI exécute tests d’autorisation, concurrence, idempotence, entrées malveillantes, dépendances et recherche de secrets. Un test négatif est requis pour chaque frontière privilégiée.
