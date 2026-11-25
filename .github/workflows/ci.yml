@@ -177,7 +177,7 @@ jobs:
       - name: Reject vulnerable proxy and object-storage base images
         run: |
           for image in \
-            "cgr.dev/chainguard/minio:latest@sha256:617ff93bf711edab967765dcb8002bea6dc31e8584627cbd11008198466e0ae8"
+            "cgr.dev/chainguard/minio:latest@sha256:f6243be11aaaa2fe654d260558e2b3fcef50135e78a3abfd0db802b13444f059"
           do
             docker pull "$image"
             docker run --rm \
