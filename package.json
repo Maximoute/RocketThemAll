@@ -49,6 +49,8 @@
     "@prisma/client": "5.22.0"
   },
   "optionalDependencies": {
+    "@next/swc-linux-x64-gnu": "15.5.29",
+    "@next/swc-linux-x64-musl": "15.5.29",
     "@rolldown/binding-linux-x64-gnu": "1.2.19",
     "@rolldown/binding-wasm32-wasi": "1.2.19"
   },
