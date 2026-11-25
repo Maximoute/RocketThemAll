@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM nginx:stable-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
+FROM nginx:1.30.7-alpine@sha256:caf4e1e032a20f9c3c5e28fc7f25ffd768ad8677b4975c54193075997b3a97e3
 
 # The upstream immutable image can lag Alpine security repository updates.
 RUN apk upgrade --no-cache

@@ -48,6 +48,7 @@ Les imports distants n’acceptent que HTTPS, bloquent adresses privées/loopbac
 - `.env.example` contient seulement des marqueurs non fonctionnels.
 
 Les images de production sont épinglées par digest et refusées par la CI lorsqu’un scanner détecte une vulnérabilité High/Critical. Le binaire Caddy 2.11.9 est recompilé avec Go 1.26.10 et le digest Chainguard MinIO est actualisé sur la révision corrigée afin d’intégrer les correctifs de sécurité publiés après les images amont.
+Le frontal Nginx est épinglé sur la release de sécurité 1.30.7.
 
 ### Bac à sable local
 
