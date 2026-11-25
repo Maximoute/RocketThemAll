@@ -1,0 +1,5 @@
+# Caddy 2.11.9 pulls go-jose/v3 through Smallstep PKI. Upstream has no patched
+# v3 release. RTA does not accept or parse untrusted JWKs through its reverse
+# proxy configuration. Remove this exception as soon as Caddy migrates the
+# dependency to go-jose/v4. Reviewed 2026-11-25; review again by 2027-01-25.
+CVE-2026-116587

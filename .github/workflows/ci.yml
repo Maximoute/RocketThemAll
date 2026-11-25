@@ -88,7 +88,7 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 \
+            caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0 \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           docker run --rm \
             -v "$PWD/docker/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro" \
@@ -156,10 +156,12 @@ jobs:
             .
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/docker/caddy/.trivyignore:/tmp/caddy.trivyignore:ro" \
             aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f \
             image --quiet --scanners vuln \
-          --exit-code 1 --severity HIGH,CRITICAL \
-          rta/caddy:${{ github.sha }}
+            --ignorefile /tmp/caddy.trivyignore \
+            --exit-code 1 --severity HIGH,CRITICAL \
+            rta/caddy:${{ github.sha }}
       - name: Build and reject vulnerable Nginx image
         run: |
           docker build \

@@ -4,7 +4,8 @@ FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a55
 WORKDIR /app
 ENV CI=true
 
-RUN apk add --no-cache ca-certificates openssl \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates openssl \
     && npm install --global npm@12.0.2 \
     && npm pack --silent --pack-destination /tmp brace-expansion@5.0.9 \
     && npm pack --silent --pack-destination /tmp ip-address@10.3.1 \
@@ -54,7 +55,8 @@ FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a55
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apk add --no-cache ca-certificates openssl \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates openssl \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
         /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
@@ -89,7 +91,8 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-RUN apk add --no-cache ca-certificates openssl \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates openssl \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
         /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx

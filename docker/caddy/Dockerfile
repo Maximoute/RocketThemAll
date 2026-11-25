@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1.7
 
-FROM golang:1.26.6-alpine3.24@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
+FROM golang:1.26.10-alpine3.24@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
 
-ARG CADDY_COMMIT=e2eee6a7fce366321294c9c2a79f3146891dcbdf
-ARG CADDY_VERSION=v2.11.4
+ARG CADDY_COMMIT=0d98caea58f794f88e709b1bef2880996a471bca
+ARG CADDY_VERSION=v2.11.9
 
-RUN apk add --no-cache ca-certificates git tzdata
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates git tzdata
 WORKDIR /src
 RUN git init \
     && git remote add origin https://github.com/caddyserver/caddy.git \
@@ -13,12 +14,14 @@ RUN git init \
     && git checkout --detach FETCH_HEAD \
     && test "$(git rev-parse HEAD)" = "${CADDY_COMMIT}"
 
-# Caddy 2.11.4 predates these upstream security releases. Go module version
-# selection keeps the patched transitive dependencies in the final binary.
+# Go module version selection keeps the patched transitive dependencies in the
+# final binary when the Caddy release predates their security releases.
 RUN go get \
-      golang.org/x/crypto@v0.55.0 \
-      golang.org/x/text@v0.41.0 \
-      google.golang.org/grpc@v1.83.1 \
+      golang.org/x/crypto@v0.58.0 \
+      golang.org/x/net@v0.62.0 \
+      golang.org/x/text@v0.43.0 \
+      github.com/go-jose/go-jose/v4@v4.1.6 \
+      google.golang.org/grpc@v1.83.2 \
     && go mod tidy \
     && CGO_ENABLED=0 go build \
       -trimpath \

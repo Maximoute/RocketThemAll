@@ -47,7 +47,7 @@ Les imports distants n’acceptent que HTTPS, bloquent adresses privées/loopbac
 - Valeurs sensibles expurgées des logs.
 - `.env.example` contient seulement des marqueurs non fonctionnels.
 
-Les images de production sont épinglées par digest et refusées par la CI lorsqu’un scanner détecte une vulnérabilité High/Critical. Le binaire Caddy 2.11.4 est recompilé avec Go 1.26.6 et le digest Chainguard MinIO est actualisé sur la révision corrigée afin d’intégrer les correctifs Go publiés en août 2026.
+Les images de production sont épinglées par digest et refusées par la CI lorsqu’un scanner détecte une vulnérabilité High/Critical. Le binaire Caddy 2.11.9 est recompilé avec Go 1.26.10 et le digest Chainguard MinIO est actualisé sur la révision corrigée afin d’intégrer les correctifs de sécurité publiés après les images amont.
 
 ### Bac à sable local
 
@@ -57,7 +57,7 @@ Les versions transitives `browserslist 4.28.9`, `postcss-selector-parser 6.1.4` 
 
 L’image PostgreSQL applique les mises à jour de sécurité Alpine au moment de sa construction avant de retirer `gosu` et de repasser sous l’UID non privilégié. Ce passage corrige notamment OpenSSL 3.5.8 et util-linux 2.42.3 lorsque l’image officielle épinglée n’a pas encore été reconstruite.
 
-Le binaire Caddy force également `golang.org/x/crypto 0.55.0` et `google.golang.org/grpc 1.83.1` pour intégrer les correctifs publiés après Caddy 2.11.4.
+Le binaire Caddy force également `golang.org/x/crypto 0.58.0`, `golang.org/x/net 0.62.0`, `go-jose/v4 4.1.6` et `google.golang.org/grpc 1.83.2`. L’avis `CVE-2026-116587` reste sans correctif pour `go-jose/v3`, dépendance transitive du module PKI Smallstep de Caddy. Une exception Trivy ciblée, documentée et limitée à cet identifiant est acceptée jusqu’au 25 janvier 2027 : la configuration reverse-proxy RTA n’expose aucune ingestion de JWK non fiable. Toutes les autres vulnérabilités High/Critical restent bloquantes.
 
 ## Limitation d’abus
 
