@@ -7,6 +7,7 @@ import {
   canUserManageGuild,
   fetchGuildGameChannels
 } from "../../lib/discord-admin";
+import { DISCORD_BOT_INSTALL_URL } from "../../lib/discord";
 
 const DISCORD_SNOWFLAKE = /^\d{17,20}$/;
 const configService = new ConfigService();
@@ -134,6 +135,14 @@ export default async function GuildSetupPage({
             Vérifie que Rocket Them All est présent sur ton serveur et que ton compte possède la
             permission <strong>Gérer le serveur</strong>, puis recharge cette page.
           </p>
+          <a
+            href={DISCORD_BOT_INSTALL_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-flex rounded-xl bg-rta-cta px-4 py-2 font-black text-rta-bg transition hover:bg-rta-cta/90"
+          >
+            Ajouter RTA à un serveur Discord
+          </a>
         </article>
       ) : (
         <div className="grid gap-5 md:grid-cols-2">

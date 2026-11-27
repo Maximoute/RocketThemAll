@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DISCORD_BOT_INSTALL_URL } from "../../lib/discord";
 
 export default function CommunityPage() {
   return (
@@ -10,7 +11,8 @@ export default function CommunityPage() {
       </section>
       <div className="grid gap-4">
         <Link href="/trades" className="rounded-2xl border border-rta-border bg-rta-surface p-6 hover:border-rta-cta"><h2 className="text-xl font-black">Échanges</h2><p className="mt-2 text-sm text-rta-muted">Proposer et confirmer des échanges sécurisés.</p></Link>
-        <Link href="/setup" className="rounded-2xl border border-rta-border bg-rta-surface p-6 hover:border-rta-cta"><h2 className="text-xl font-black">Ajouter RTA</h2><p className="mt-2 text-sm text-rta-muted">Configurer Rocket Them All sur un serveur autorisé.</p></Link>
+        <a href={DISCORD_BOT_INSTALL_URL} target="_blank" rel="noreferrer" className="rounded-2xl border border-rta-border bg-rta-surface p-6 hover:border-rta-cta"><h2 className="text-xl font-black">Ajouter RTA</h2><p className="mt-2 text-sm text-rta-muted">Choisir un serveur Discord et y installer Rocket Them All.</p></a>
+        <Link href="/setup" className="rounded-2xl border border-rta-border bg-rta-surface p-6 hover:border-rta-cta"><h2 className="text-xl font-black">Configurer le salon</h2><p className="mt-2 text-sm text-rta-muted">Choisir le salon de jeu d’un serveur où RTA est déjà installé.</p></Link>
         <Link href="/achievements" className="rounded-2xl border border-rta-border bg-rta-surface p-6 hover:border-rta-cta"><h2 className="text-xl font-black">Achievements</h2><p className="mt-2 text-sm text-rta-muted">Découvrir les objectifs et la progression.</p></Link>
       </div>
     </div>

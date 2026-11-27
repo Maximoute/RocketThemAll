@@ -4,7 +4,7 @@
 
 - Nouvelle navigation principale : Accueil, Jouer, Communauté, Classements et Boutique, avec « Ajouter RTA » séparé et les fonctions personnelles regroupées dans le menu du compte.
 - La navigation principale expose aussi les Decks. Après connexion, la photo Discord mène directement au profil tandis que le menu de compte conserve Inventaire, Compétences, Achievements, Échanges et Administration pour les admins.
-- « Ajouter RTA à votre serveur » reste l’action prioritaire dans la navigation, le hero et la fermeture de l’accueil.
+- « Ajouter RTA à votre serveur » reste l’action prioritaire dans la navigation, le hero et la fermeture de l’accueil. Elle ouvre directement l’autorisation Discord de l’application `1499478184968720495`, où l’utilisateur choisit un serveur qu’il peut gérer. « Configurer le salon » reste une action distincte vers `/setup` pour les serveurs où le bot est déjà installé.
 - Accueil recomposé comme un « centre de lancement de collection » : promesse de jeu immédiate, orbite interactive mettant en avant Inoxtag, ChatGPT, Zen, Cybermen et Doge, statistiques réelles du catalogue, récit en trois temps et appel vers Discord. Le langage visuel rétablit les violets historiques de RTA et réserve l’orange aux actions.
 - L’accueil expose aussi la boutique avec ses vrais boosters, encens et artefacts, puis le jeu communautaire avec les visuels réels d’Aurex et d’Anomalie Zéro. Ces blocs renvoient aux routes fonctionnelles existantes ; ils ne simulent aucun achat ni combat.
 - L’animation au pointeur est progressive et la narration utilise les scroll timelines natives quand elles sont disponibles. Le contenu reste complet sans animation, avec une composition mobile dédiée et un mode `prefers-reduced-motion` statique.
@@ -27,6 +27,7 @@
 ## Guilde
 
 - Configuration autonome sur `/setup` pour le propriétaire ou les membres ayant `Gérer le serveur`. La liste est limitée aux guildes actives où Discord confirme ce droit, et la Server Action le revérifie avant de modifier uniquement le salon de jeu.
+- Si aucun serveur configurable n’est trouvé, `/setup` propose aussi l’installation Discord du bot sans confondre ce parcours avec la configuration du salon.
 - Progression communautaire et mondes débloqués.
 - État du boss, calendrier, contributions et récompenses.
 - Classements bornés et calculés depuis des vues dédiées.

@@ -26,3 +26,15 @@ www.{$RTA_DOMAIN:rocketthemall.com} {
 		header_up X-Forwarded-For {client_ip}
 	}
 }
+
+# Independent WordPress site hosted on the same VPS.
+www.maximelecomte.com {
+	redir https://maximelecomte.com{uri} 308
+}
+
+maximelecomte.com {
+	reverse_proxy maximelecomte-wordpress:80 {
+		header_up X-Real-IP {client_ip}
+		header_up X-Forwarded-For {client_ip}
+	}
+}

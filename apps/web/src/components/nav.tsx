@@ -5,6 +5,7 @@ import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { DISCORD_BOT_INSTALL_URL } from "../lib/discord";
 import DiscordAvatar from "./discord-avatar";
 
 const MAIN_LINKS = [
@@ -79,11 +80,19 @@ export default function Nav({ isDevelopment = false }: { isDevelopment?: boolean
         </nav>
 
         <div className="ml-auto hidden items-center gap-2 lg:flex">
-          <Link
-            href={destination("/setup", true)}
+          <a
+            href={DISCORD_BOT_INSTALL_URL}
+            target="_blank"
+            rel="noreferrer"
             className="rounded-lg border border-rta-cta/70 px-3.5 py-2 text-sm font-black text-rta-cta transition-colors hover:bg-rta-cta hover:text-rta-bg"
           >
             Ajouter RTA au serveur
+          </a>
+          <Link
+            href={destination("/setup", true)}
+            className="rounded-lg px-3 py-2 text-sm font-bold text-rta-muted transition-colors hover:bg-white/5 hover:text-rta-ink"
+          >
+            Configurer le salon
           </Link>
 
           {status === "loading" ? (
@@ -126,7 +135,8 @@ export default function Nav({ isDevelopment = false }: { isDevelopment?: boolean
             {MAIN_LINKS.map(({ href, label, ...item }) => (
               <Link key={href} href={destination(href, "playerOnly" in item && item.playerOnly)} className="rounded-lg bg-rta-surface px-3 py-3 text-sm font-bold text-rta-ink">{label}</Link>
             ))}
-            <Link href={destination("/setup", true)} className="rounded-lg bg-rta-cta px-3 py-3 text-sm font-black text-rta-bg">Ajouter RTA au serveur</Link>
+            <a href={DISCORD_BOT_INSTALL_URL} target="_blank" rel="noreferrer" className="rounded-lg bg-rta-cta px-3 py-3 text-sm font-black text-rta-bg">Ajouter RTA au serveur</a>
+            <Link href={destination("/setup", true)} className="rounded-lg border border-rta-cta px-3 py-3 text-sm font-black text-rta-cta">Configurer le salon</Link>
             {session ? (
               <>
                 {ACCOUNT_LINKS.map((item) => (

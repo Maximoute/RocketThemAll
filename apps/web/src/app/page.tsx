@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@rta/database";
 import PlayerLink from "../components/player-link";
 import HomeExperience from "../components/home-experience";
+import { DISCORD_BOT_INSTALL_URL } from "../lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,7 @@ export default async function HomePage() {
       <section className="home-close" aria-labelledby="close-title">
         <p>Ta prochaine carte peut apparaître maintenant.</p>
         <h2 id="close-title">Le serveur est déjà en jeu.</h2>
-        <div className="home-close__actions"><Link href="/setup" className="rta-button rta-button--light">Ajouter RTA à votre serveur</Link><Link href="/play" className="rta-text-link">Voir comment jouer <span aria-hidden="true">↗</span></Link></div>
+        <div className="home-close__actions"><a href={DISCORD_BOT_INSTALL_URL} target="_blank" rel="noreferrer" className="rta-button rta-button--light">Ajouter RTA à votre serveur</a><Link href="/setup" className="rta-text-link">Configurer le salon <span aria-hidden="true">↗</span></Link><Link href="/play" className="rta-text-link">Voir comment jouer <span aria-hidden="true">↗</span></Link></div>
       </section>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
+import { DISCORD_BOT_INSTALL_URL } from "../lib/discord";
 
 type Card = { id: string; name: string; imageUrl: string | null; deck: { name: string }; rarity: { name: string } };
 
@@ -34,7 +35,7 @@ export default function HomeExperience({ cards, cardCount, worldCount }: { cards
         <p className="home-kicker">Jeu de collection communautaire</p>
         <h1 id="home-title"><span>Ton serveur.</span><span>Ta chasse.</span><span>Ta collection.</span></h1>
         <p className="home-hero__lede">Des cartes apparaissent sur Discord. Capture-les avant les autres et construis une collection qui raconte vraiment ton parcours.</p>
-        <div className="home-hero__actions"><Link href="/setup" className="rta-button">Ajouter RTA à votre serveur</Link><Link href="/collection" className="rta-text-link">Explorer les decks <span aria-hidden="true">↗</span></Link></div>
+        <div className="home-hero__actions"><a href={DISCORD_BOT_INSTALL_URL} target="_blank" rel="noreferrer" className="rta-button">Ajouter RTA à votre serveur</a><Link href="/setup" className="rta-text-link">Configurer le salon <span aria-hidden="true">↗</span></Link><Link href="/collection" className="rta-text-link">Explorer les decks <span aria-hidden="true">↗</span></Link></div>
         <dl className="home-facts"><div><dt>Cartes publiées</dt><dd>{cardCount.toLocaleString("fr-FR")}</dd></div><div><dt>Mondes à explorer</dt><dd>{worldCount.toLocaleString("fr-FR")}</dd></div><div><dt>Terrain de jeu</dt><dd>Discord</dd></div></dl>
       </div>
       <div ref={sceneRef} className="card-orbit" aria-label="Aperçu de cartes de la collection">
